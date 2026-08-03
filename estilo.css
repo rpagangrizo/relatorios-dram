@@ -1,0 +1,144 @@
+/* Mesmo estilo visual dos relatórios em PDF do DRAM, adaptado pra tela de celular */
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: Arial, sans-serif;
+  color: #222;
+  margin: 0;
+  padding: 20px 16px 40px;
+  background: #f7f7f5;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.logo {
+  display: block;
+  margin: 0 auto 14px;
+  max-width: 220px;
+  max-height: 90px;
+}
+
+h1 {
+  font-size: 19px;
+  margin: 0 0 2px;
+  text-align: center;
+}
+
+.subtitulo {
+  color: #666;
+  font-size: 13px;
+  margin-bottom: 22px;
+  text-align: center;
+}
+
+.cartoes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.cartao {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.cartao .rotulo {
+  font-size: 12px;
+  color: #666;
+}
+
+.cartao .valor {
+  font-size: 24px;
+  font-weight: bold;
+  margin-top: 4px;
+}
+
+.botoes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.botao {
+  display: block;
+  text-align: center;
+  background: #1B4F72;
+  color: #fff;
+  text-decoration: none;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.botao:active {
+  opacity: 0.85;
+}
+
+.botao-voltar {
+  display: inline-block;
+  margin-bottom: 18px;
+  color: #1B4F72;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+h2 {
+  font-size: 15px;
+  margin-top: 26px;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 6px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 13px;
+  background: #fff;
+}
+
+th, td {
+  border-bottom: 1px solid #ddd;
+  padding: 8px 6px;
+  text-align: left;
+}
+
+th {
+  background: #f2f2f2;
+  font-size: 11px;
+  color: #555;
+  text-transform: uppercase;
+}
+
+.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.linha-total {
+  font-weight: bold;
+  border-top: 2px solid #1B4F72;
+}
+
+.rodape-dram {
+  text-align: center;
+  color: #999;
+  font-size: 11px;
+  margin-top: 36px;
+}
+
+.atualizado-em {
+  text-align: center;
+  color: #999;
+  font-size: 11px;
+  margin-top: 4px;
+}
