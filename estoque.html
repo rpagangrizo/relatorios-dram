@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Estoque</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<style>
+  :root {
+    --azul: #1B4F72;
+    --azul-escuro: #123551;
+    --laranja: #D9662F;
+    --laranja-claro: #F2A671;
+    --fundo: #EEF2F4;
+    --papel: #FFFFFF;
+    --texto: #1E2328;
+    --texto-suave: #5C6870;
+    --linha: #DCE3E7;
+    --verde: #2F8F4E;
+    --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: var(--azul);
+    color: #fff;
+    padding: 18px 20px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  header .logo-caixa {
+    background: #fff;
+    border-radius: 8px;
+    padding: 5px 10px;
+    display: inline-flex;
+    align-items: center;
+  }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 {
+    font-family: "IBM Plex Sans", Arial, sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 0.2px;
+  }
+  header .titulos p {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    color: #C9DCEA;
+  }
+
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 18px 16px 60px;
+  }
+
+  .barra-busca {
+    position: relative;
+    margin-bottom: 18px;
+  }
+  .barra-busca input {
+    width: 100%;
+    padding: 13px 16px 13px 40px;
+    border-radius: 10px;
+    border: 1.5px solid var(--linha);
+    background: var(--papel);
+    font-size: 15px;
+    color: var(--texto);
+  }
+  .barra-busca input:focus {
+    outline: none;
+    border-color: var(--azul);
+  }
+  .barra-busca::before {
+    content: "";
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    width: 15px;
+    height: 15px;
+    transform: translateY(-50%);
+    border: 2px solid var(--texto-suave);
+    border-radius: 50%;
+    box-shadow: 8px 8px 0 -5.5px var(--texto-suave);
+  }
+
+  .abas {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .abas button {
+    border: none;
+    background: var(--papel);
+    color: var(--texto-suave);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid var(--linha);
+  }
+  .abas button.ativa {
+    background: var(--azul);
+    color: #fff;
+    border-color: var(--azul);
+  }
+
+  .cartao-secao {
+    background: var(--papel);
+    border-radius: 12px;
+    border: 1px solid var(--linha);
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .cartao-secao h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--texto-suave);
+    margin: 0;
+    padding: 14px 16px 10px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--texto-suave);
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--linha);
+    white-space: nowrap;
+  }
+  thead th.num, td.num { text-align: right; }
+  tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--linha);
+    font-size: 14px;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #F6F9FA; }
+  td.total { font-weight: 700; }
+
+  .selo {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 100px;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .selo.tem { background: #E4F3E8; color: var(--verde); }
+  .selo.zerado { background: #FBE7E4; color: var(--vermelho); }
+  .selo::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .vazio, .carregando, .erro {
+    padding: 30px 16px;
+    text-align: center;
+    color: var(--texto-suave);
+    font-size: 14px;
+  }
+  .erro { color: var(--vermelho); }
+
+  .rodape {
+    text-align: center;
+    color: #93A0A8;
+    font-size: 11.5px;
+    margin-top: 26px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Estoque</h1>
+    <p>Atualizado em tempo real</p>
+  </div>
+</header>
+
+<main>
+  <div class="barra-busca">
+    <input type="text" id="campo-busca" placeholder="Buscar item...">
+  </div>
+
+  <div class="abas">
+    <button class="ativa" data-aba="acabado">Produto Acabado</button>
+    <button data-aba="materia">Matéria-Prima</button>
+  </div>
+
+  <div class="cartao-secao" id="secao-acabado">
+    <h2>Produto acabado - por depósito e total</h2>
+    <div id="conteudo-acabado" class="carregando">Carregando...</div>
+  </div>
+
+  <div class="cartao-secao" id="secao-materia" style="display:none">
+    <h2>Matéria-prima</h2>
+    <div id="conteudo-materia" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+    },
+  });
+  if (!resposta.ok) {
+    throw new Error(`Erro ${resposta.status} ao buscar ${caminho}`);
+  }
+  return resposta.json();
+}
+
+function celulaSelo(qtd) {
+  const classe = qtd > 0 ? "tem" : "zerado";
+  const texto = qtd.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return `<span class="selo ${classe}">${texto}</span>`;
+}
+
+let dadosProdutoAcabado = null; // { itens: [...], depositos: [...], saldos: Map }
+let dadosMateriaPrima = null;   // { itens: [...], saldos: Map }
+
+async function carregarProdutoAcabado() {
+  const alvo = document.getElementById("conteudo-acabado");
+  try {
+    const [itens, depositos, estoque] = await Promise.all([
+      chamarSupabase("itens?select=id,nome&order=nome"),
+      chamarSupabase("depositos?select=id,nome&order=id"),
+      chamarSupabase("estoque_produto_acabado?select=item_id,deposito_id,quantidade"),
+    ]);
+
+    const saldos = new Map(); // "itemId-depositoId" -> quantidade
+    for (const linha of estoque) {
+      saldos.set(`${linha.item_id}-${linha.deposito_id}`, Number(linha.quantidade));
+    }
+
+    dadosProdutoAcabado = { itens, depositos, saldos };
+    desenharProdutoAcabado("");
+  } catch (erro) {
+    alvo.innerHTML = `<div class="erro">Não consegui carregar o estoque. ${erro.message}</div>`;
+  }
+}
+
+function desenharProdutoAcabado(filtro) {
+  const alvo = document.getElementById("conteudo-acabado");
+  const { itens, depositos, saldos } = dadosProdutoAcabado;
+  const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
+
+  if (itensFiltrados.length === 0) {
+    alvo.innerHTML = `<div class="vazio">Nenhum item encontrado.</div>`;
+    return;
+  }
+
+  let html = `<table><thead><tr><th>Item</th>`;
+  for (const dep of depositos) {
+    html += `<th class="num">${dep.nome}</th>`;
+  }
+  html += `<th class="num">Total</th></tr></thead><tbody>`;
+
+  for (const item of itensFiltrados) {
+    html += `<tr><td>${item.nome}</td>`;
+    let total = 0;
+    for (const dep of depositos) {
+      const qtd = saldos.get(`${item.id}-${dep.id}`) || 0;
+      total += qtd;
+      html += `<td class="num">${celulaSelo(qtd)}</td>`;
+    }
+    html += `<td class="num total">${celulaSelo(total)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.innerHTML = html;
+}
+
+async function carregarMateriaPrima() {
+  const alvo = document.getElementById("conteudo-materia");
+  try {
+    const [itens, estoque] = await Promise.all([
+      chamarSupabase("itens_materia_prima?select=id,nome&order=nome"),
+      chamarSupabase("estoque_materia_prima?select=item_id,quantidade"),
+    ]);
+    const saldos = new Map();
+    for (const linha of estoque) {
+      saldos.set(linha.item_id, Number(linha.quantidade));
+    }
+    dadosMateriaPrima = { itens, saldos };
+    desenharMateriaPrima("");
+  } catch (erro) {
+    alvo.innerHTML = `<div class="erro">Não consegui carregar a matéria-prima. ${erro.message}</div>`;
+  }
+}
+
+function desenharMateriaPrima(filtro) {
+  const alvo = document.getElementById("conteudo-materia");
+  const { itens, saldos } = dadosMateriaPrima;
+  const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
+
+  if (itensFiltrados.length === 0) {
+    alvo.innerHTML = itens.length === 0
+      ? `<div class="vazio">Nenhum item de matéria-prima cadastrado ainda.</div>`
+      : `<div class="vazio">Nenhum item encontrado.</div>`;
+    return;
+  }
+
+  let html = `<table><thead><tr><th>Item</th><th class="num">Quantidade</th></tr></thead><tbody>`;
+  for (const item of itensFiltrados) {
+    const qtd = saldos.get(item.id) || 0;
+    html += `<tr><td>${item.nome}</td><td class="num">${celulaSelo(qtd)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.innerHTML = html;
+}
+
+document.getElementById("campo-busca").addEventListener("input", (evento) => {
+  const filtro = evento.target.value;
+  if (dadosProdutoAcabado) desenharProdutoAcabado(filtro);
+  if (dadosMateriaPrima) desenharMateriaPrima(filtro);
+});
+
+document.querySelectorAll(".abas button").forEach((botao) => {
+  botao.addEventListener("click", () => {
+    document.querySelectorAll(".abas button").forEach(b => b.classList.remove("ativa"));
+    botao.classList.add("ativa");
+    const aba = botao.dataset.aba;
+    document.getElementById("secao-acabado").style.display = aba === "acabado" ? "" : "none";
+    document.getElementById("secao-materia").style.display = aba === "materia" ? "" : "none";
+  });
+});
+
+carregarProdutoAcabado();
+carregarMateriaPrima();
+</script>
+</body>
+</html>
