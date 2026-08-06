@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Ajustar Estoque</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<style>
+  :root {
+    --azul: #1B4F72;
+    --laranja: #D9662F;
+    --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4;
+    --papel: #FFFFFF;
+    --texto: #1E2328;
+    --texto-suave: #5C6870;
+    --linha: #DCE3E7;
+    --verde: #2F8F4E;
+    --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: var(--azul);
+    color: #fff;
+    padding: 18px 20px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  header .logo-caixa {
+    background: #fff;
+    border-radius: 8px;
+    padding: 5px 10px;
+    display: inline-flex;
+    align-items: center;
+  }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .passo {
+    background: var(--papel);
+    border-radius: 12px;
+    border: 1px solid var(--linha);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .passo.desabilitado { opacity: 0.45; pointer-events: none; }
+  .passo h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--texto-suave);
+    margin: 0 0 10px;
+  }
+  .passo .selecionado {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--azul);
+  }
+
+  .opcoes-estoque { display: flex; flex-direction: column; gap: 8px; }
+  .opcao-estoque {
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 9px;
+    border: 1.5px solid var(--linha);
+    background: #fff;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--texto);
+    cursor: pointer;
+  }
+  .opcao-estoque.ativa { border-color: var(--azul); background: #EAF1F6; color: var(--azul); }
+
+  input[type=text], input[type=number] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 9px;
+    border: 1.5px solid var(--linha);
+    font-size: 15px;
+    color: var(--texto);
+  }
+  input:focus { outline: none; border-color: var(--azul); }
+
+  .lista-produtos {
+    max-height: 220px;
+    overflow-y: auto;
+    margin-top: 8px;
+    border-radius: 9px;
+    border: 1px solid var(--linha);
+  }
+  .item-produto {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--linha);
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .item-produto:last-child { border-bottom: none; }
+  .item-produto:hover { background: #F6F9FA; }
+  .item-produto .saldo-atual { color: var(--texto-suave); font-size: 12.5px; }
+
+  .botoes-tipo { display: flex; gap: 10px; }
+  .botao-tipo {
+    flex: 1;
+    padding: 16px;
+    border-radius: 10px;
+    border: 1.5px solid var(--linha);
+    background: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    color: var(--texto-suave);
+  }
+  .botao-tipo.entrada.ativa { border-color: var(--verde); background: #E4F3E8; color: var(--verde); }
+  .botao-tipo.saida.ativa { border-color: var(--vermelho); background: #FBE7E4; color: var(--vermelho); }
+
+  .botao-confirmar {
+    width: 100%;
+    padding: 15px;
+    border-radius: 10px;
+    border: none;
+    background: var(--laranja);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 6px;
+  }
+  .botao-confirmar:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao-confirmar:not(:disabled):active { background: var(--laranja-escuro); }
+
+  .mensagem {
+    margin-top: 14px;
+    padding: 13px 15px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 600;
+    display: none;
+  }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .aviso-pessoa {
+    background: #FFF3E0;
+    color: #92600C;
+    border-radius: 9px;
+    padding: 11px 14px;
+    font-size: 13.5px;
+    margin-bottom: 14px;
+  }
+
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Ajustar Estoque</h1>
+    <p id="texto-pessoa">Identificando...</p>
+  </div>
+</header>
+
+<main>
+  <div id="aviso-pessoa" class="aviso-pessoa" style="display:none">
+    Não identifiquei quem está fazendo esse ajuste pelo link. Confirme seu nome abaixo antes de continuar.
+    <div style="margin-top:8px"><input type="text" id="campo-pessoa-manual" placeholder="Seu nome"></div>
+  </div>
+
+  <div class="passo" id="passo-1">
+    <h2>1. Qual estoque?</h2>
+    <div class="opcoes-estoque" id="opcoes-estoque"></div>
+  </div>
+
+  <div class="passo desabilitado" id="passo-2">
+    <h2>2. Qual produto?</h2>
+    <input type="text" id="campo-busca-produto" placeholder="Buscar produto...">
+    <div class="lista-produtos" id="lista-produtos"></div>
+    <div class="selecionado" id="produto-selecionado" style="margin-top:8px; display:none"></div>
+  </div>
+
+  <div class="passo desabilitado" id="passo-3">
+    <h2>3. Entrada ou saída?</h2>
+    <div class="botoes-tipo">
+      <button class="botao-tipo entrada" id="botao-entrada">↓ Entrada</button>
+      <button class="botao-tipo saida" id="botao-saida">↑ Saída</button>
+    </div>
+  </div>
+
+  <div class="passo desabilitado" id="passo-4">
+    <h2>4. Quantidade</h2>
+    <input type="number" id="campo-quantidade" placeholder="0" min="0" step="0.01">
+  </div>
+
+  <button class="botao-confirmar" id="botao-confirmar" disabled>Confirmar ajuste</button>
+  <div class="mensagem" id="mensagem"></div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+const parametros = new URLSearchParams(window.location.search);
+let pessoa = parametros.get("pessoa");
+
+const textoPessoa = document.getElementById("texto-pessoa");
+const avisoPessoa = document.getElementById("aviso-pessoa");
+if (pessoa) {
+  textoPessoa.textContent = `Identificado(a) como ${pessoa}`;
+} else {
+  textoPessoa.textContent = "Identificação não encontrada";
+  avisoPessoa.style.display = "block";
+  document.getElementById("campo-pessoa-manual").addEventListener("input", (e) => {
+    pessoa = e.target.value.trim() || null;
+  });
+}
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...(opcoes.headers || {}),
+    },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(`Erro ${resposta.status}: ${corpoErro}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+let estoques = [];          // [{id, nome, tipo:'materia'|'acabado'}]
+let estoqueEscolhido = null;
+let itensDoEstoque = [];    // itens do catalogo certo, com saldo
+let produtoEscolhido = null;
+let tipoEscolhido = null;   // 'entrada' | 'saida'
+
+async function carregarEstoques() {
+  const depositos = await chamarSupabase("depositos?select=id,nome&order=id");
+  estoques = [
+    { id: "materia", nome: "Matéria-Prima", tipo: "materia" },
+    ...depositos.map(d => ({ id: d.id, nome: d.nome, tipo: "acabado" })),
+  ];
+  const alvo = document.getElementById("opcoes-estoque");
+  alvo.innerHTML = estoques.map(e =>
+    `<button class="opcao-estoque" data-id="${e.id}" data-tipo="${e.tipo}">${e.nome}</button>`
+  ).join("");
+  alvo.querySelectorAll(".opcao-estoque").forEach(botao => {
+    botao.addEventListener("click", () => escolherEstoque(botao));
+  });
+}
+
+async function escolherEstoque(botao) {
+  document.querySelectorAll(".opcao-estoque").forEach(b => b.classList.remove("ativa"));
+  botao.classList.add("ativa");
+  estoqueEscolhido = { id: botao.dataset.id, tipo: botao.dataset.tipo };
+
+  produtoEscolhido = null;
+  document.getElementById("produto-selecionado").style.display = "none";
+  document.getElementById("passo-2").classList.remove("desabilitado");
+  document.getElementById("campo-busca-produto").value = "";
+  atualizarBotaoConfirmar();
+
+  if (estoqueEscolhido.tipo === "materia") {
+    const [itens, saldos] = await Promise.all([
+      chamarSupabase("itens_materia_prima?select=id,nome&order=nome"),
+      chamarSupabase("estoque_materia_prima?select=item_id,quantidade"),
+    ]);
+    const mapaSaldo = new Map(saldos.map(s => [s.item_id, Number(s.quantidade)]));
+    itensDoEstoque = itens.map(i => ({ id: i.id, nome: i.nome, saldo: mapaSaldo.get(i.id) || 0 }));
+  } else {
+    const depositoId = Number(estoqueEscolhido.id);
+    const [itens, saldos] = await Promise.all([
+      chamarSupabase("itens?select=id,nome&order=nome"),
+      chamarSupabase(`estoque_produto_acabado?select=item_id,quantidade&deposito_id=eq.${depositoId}`),
+    ]);
+    const mapaSaldo = new Map(saldos.map(s => [s.item_id, Number(s.quantidade)]));
+    itensDoEstoque = itens.map(i => ({ id: i.id, nome: i.nome, saldo: mapaSaldo.get(i.id) || 0 }));
+  }
+  desenharListaProdutos("");
+}
+
+function desenharListaProdutos(filtro) {
+  const alvo = document.getElementById("lista-produtos");
+  const filtrados = itensDoEstoque.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
+  if (filtrados.length === 0) {
+    alvo.innerHTML = `<div class="item-produto">Nenhum produto encontrado.</div>`;
+    return;
+  }
+  alvo.innerHTML = filtrados.map(i =>
+    `<div class="item-produto" data-id="${i.id}" data-nome="${i.nome}">
+       <span>${i.nome}</span><span class="saldo-atual">${i.saldo.toLocaleString("pt-BR")} em estoque</span>
+     </div>`
+  ).join("");
+  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+    linha.addEventListener("click", () => {
+      produtoEscolhido = { id: Number(linha.dataset.id), nome: linha.dataset.nome };
+      const rotulo = document.getElementById("produto-selecionado");
+      rotulo.textContent = `Selecionado: ${produtoEscolhido.nome}`;
+      rotulo.style.display = "block";
+      document.getElementById("passo-3").classList.remove("desabilitado");
+      atualizarBotaoConfirmar();
+    });
+  });
+}
+
+document.getElementById("campo-busca-produto").addEventListener("input", (e) => {
+  desenharListaProdutos(e.target.value);
+});
+
+document.getElementById("botao-entrada").addEventListener("click", () => escolherTipo("entrada"));
+document.getElementById("botao-saida").addEventListener("click", () => escolherTipo("saida"));
+
+function escolherTipo(tipo) {
+  tipoEscolhido = tipo;
+  document.getElementById("botao-entrada").classList.toggle("ativa", tipo === "entrada");
+  document.getElementById("botao-saida").classList.toggle("ativa", tipo === "saida");
+  document.getElementById("passo-4").classList.remove("desabilitado");
+  atualizarBotaoConfirmar();
+}
+
+document.getElementById("campo-quantidade").addEventListener("input", atualizarBotaoConfirmar);
+
+function atualizarBotaoConfirmar() {
+  const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
+  const tudoPreenchido = estoqueEscolhido && produtoEscolhido && tipoEscolhido && quantidade > 0 && pessoa;
+  document.getElementById("botao-confirmar").disabled = !tudoPreenchido;
+}
+
+document.getElementById("botao-confirmar").addEventListener("click", async () => {
+  const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
+  const mensagem = document.getElementById("mensagem");
+  const botao = document.getElementById("botao-confirmar");
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+
+  try {
+    if (estoqueEscolhido.tipo === "materia") {
+      await chamarSupabase("rpc/ajustar_estoque_materia_prima", {
+        method: "POST",
+        body: JSON.stringify({
+          p_item_id: produtoEscolhido.id, p_tipo: tipoEscolhido,
+          p_quantidade: quantidade, p_pessoa: pessoa,
+        }),
+      });
+    } else {
+      await chamarSupabase("rpc/ajustar_estoque_produto_acabado", {
+        method: "POST",
+        body: JSON.stringify({
+          p_item_id: produtoEscolhido.id, p_deposito_id: Number(estoqueEscolhido.id),
+          p_tipo: tipoEscolhido, p_quantidade: quantidade, p_pessoa: pessoa,
+        }),
+      });
+    }
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `Ajuste salvo: ${tipoEscolhido === "entrada" ? "+" : "-"}${quantidade} em ${produtoEscolhido.nome}.`;
+
+    // reseta pra proximo lancamento, mantendo o mesmo estoque escolhido (uso repetido)
+    produtoEscolhido = null;
+    tipoEscolhido = null;
+    document.getElementById("produto-selecionado").style.display = "none";
+    document.getElementById("campo-busca-produto").value = "";
+    document.getElementById("campo-quantidade").value = "";
+    document.getElementById("botao-entrada").classList.remove("ativa");
+    document.getElementById("botao-saida").classList.remove("ativa");
+    document.getElementById("passo-3").classList.add("desabilitado");
+    document.getElementById("passo-4").classList.add("desabilitado");
+    await escolherEstoque(document.querySelector(`.opcao-estoque[data-id="${estoqueEscolhido.id}"]`));
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.textContent = "Confirmar ajuste";
+    atualizarBotaoConfirmar();
+  }
+});
+
+carregarEstoques();
+</script>
+</body>
+</html>
