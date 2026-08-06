@@ -143,7 +143,7 @@
     border-bottom: 1px solid var(--linha);
     white-space: nowrap;
   }
-  thead th.num, td.num { text-align: right; }
+  thead th.num, td.num { text-align: center; }
   tbody td {
     padding: 12px 14px;
     border-bottom: 1px solid var(--linha);
@@ -152,6 +152,17 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: #F6F9FA; }
   td.total { font-weight: 700; }
+
+  tbody tr.linha-categoria td {
+    background: #F6F9FA;
+    font-weight: 700;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--azul);
+    padding: 9px 14px;
+  }
+  tbody tr.linha-categoria:hover { background: #F6F9FA; }
 
   .selo {
     display: inline-flex;
@@ -245,10 +256,11 @@ let dadosMateriaPrima = null;   // { itens: [...], saldos: Map }
 async function carregarProdutoAcabado() {
   const alvo = document.getElementById("conteudo-acabado");
   try {
-    const [itens, depositos, estoque] = await Promise.all([
-      chamarSupabase("itens?select=id,nome&order=nome"),
+    const [itens, depositos, estoque, categorias] = await Promise.all([
+      chamarSupabase("itens?select=id,nome,categoria_produto_id&order=nome"),
       chamarSupabase("depositos?select=id,nome&order=id"),
       chamarSupabase("estoque_produto_acabado?select=item_id,deposito_id,quantidade"),
+      chamarSupabase("categorias_produto?select=id,nome&order=id"),
     ]);
 
     const saldos = new Map(); // "itemId-depositoId" -> quantidade
@@ -256,7 +268,7 @@ async function carregarProdutoAcabado() {
       saldos.set(`${linha.item_id}-${linha.deposito_id}`, Number(linha.quantidade));
     }
 
-    dadosProdutoAcabado = { itens, depositos, saldos };
+    dadosProdutoAcabado = { itens, depositos, saldos, categorias };
     desenharProdutoAcabado("");
   } catch (erro) {
     alvo.innerHTML = `<div class="erro">Não consegui carregar o estoque. ${erro.message}</div>`;
@@ -265,7 +277,7 @@ async function carregarProdutoAcabado() {
 
 function desenharProdutoAcabado(filtro) {
   const alvo = document.getElementById("conteudo-acabado");
-  const { itens, depositos, saldos } = dadosProdutoAcabado;
+  const { itens, depositos, saldos, categorias } = dadosProdutoAcabado;
   const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
 
   if (itensFiltrados.length === 0) {
@@ -273,21 +285,43 @@ function desenharProdutoAcabado(filtro) {
     return;
   }
 
+  // agrupa por categoria (na ordem em que as categorias foram cadastradas,
+  // igual ja fazemos nos outros relatorios: Polpas, Frutas, Salgados...),
+  // e ordena os itens em ordem alfabetica dentro de cada categoria
+  const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
+  const gruposPorCategoria = new Map(); // categoria_id (ou 'sem') -> [itens]
+  for (const item of itensFiltrados) {
+    const chave = item.categoria_produto_id ?? "sem";
+    if (!gruposPorCategoria.has(chave)) gruposPorCategoria.set(chave, []);
+    gruposPorCategoria.get(chave).push(item);
+  }
+  for (const lista of gruposPorCategoria.values()) {
+    lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }
+
+  const ordemCategorias = [...categorias.map(c => c.id), "sem"].filter(id => gruposPorCategoria.has(id));
+
   let html = `<table><thead><tr><th>Item</th>`;
   for (const dep of depositos) {
     html += `<th class="num">${dep.nome}</th>`;
   }
   html += `<th class="num">Total</th></tr></thead><tbody>`;
 
-  for (const item of itensFiltrados) {
-    html += `<tr><td>${item.nome}</td>`;
-    let total = 0;
-    for (const dep of depositos) {
-      const qtd = saldos.get(`${item.id}-${dep.id}`) || 0;
-      total += qtd;
-      html += `<td class="num">${celulaSelo(qtd)}</td>`;
+  for (const categoriaId of ordemCategorias) {
+    const nomeCategoria = categoriaId === "sem" ? "Sem categoria" : nomeCategoriaPorId.get(categoriaId);
+    const numColunas = depositos.length + 2;
+    html += `<tr class="linha-categoria"><td colspan="${numColunas}">${nomeCategoria}</td></tr>`;
+
+    for (const item of gruposPorCategoria.get(categoriaId)) {
+      html += `<tr><td>${item.nome}</td>`;
+      let total = 0;
+      for (const dep of depositos) {
+        const qtd = saldos.get(`${item.id}-${dep.id}`) || 0;
+        total += qtd;
+        html += `<td class="num">${celulaSelo(qtd)}</td>`;
+      }
+      html += `<td class="num total">${celulaSelo(total)}</td></tr>`;
     }
-    html += `<td class="num total">${celulaSelo(total)}</td></tr>`;
   }
   html += `</tbody></table>`;
   alvo.innerHTML = html;
