@@ -78,6 +78,27 @@
   .barra-final { position: sticky; bottom: 0; background: var(--papel); border-top: 1px solid var(--linha);
     padding: 14px 16px; margin: 14px -16px -16px; border-radius: 0 0 12px 12px; }
   a.link-discreto { color: var(--azul); font-size: 13.5px; text-decoration: none; font-weight: 700; }
+
+  nav.nav-dram {
+    background: #123551;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px;
+  }
+  nav.nav-dram a {
+    color: #C9DCEA;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 14px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+  }
+  nav.nav-dram a.ativa {
+    color: #fff;
+    border-bottom-color: #D9662F;
+  }
 </style>
 </head>
 <body>
@@ -89,6 +110,14 @@
     <p id="texto-pessoa">Identificando...</p>
   </div>
 </header>
+<nav class="nav-dram">
+  <a href="estoque.html">Estoque</a>
+  <a href="ajustar-estoque.html">Ajustar Estoque</a>
+  <a href="tabelas-preco.html">Tabelas de Preço</a>
+  <a href="novo-pedido.html">Novo Pedido</a>
+  <a href="pedidos.html">Pedidos</a>
+</nav>
+
 
 <main>
   <div id="aviso-pessoa" class="aviso-pessoa" style="display:none">
