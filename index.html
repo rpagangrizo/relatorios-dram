@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<style>
+  :root {
+    --azul: #1B4F72; --azul-escuro: #123551; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870;
+    --linha: #DCE3E7; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: linear-gradient(180deg, var(--azul) 0%, var(--azul-escuro) 100%);
+    color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    min-height: 100vh; padding: 30px 18px;
+  }
+
+  .topo { text-align: center; margin-top: 20px; }
+  .logo-caixa { background: #fff; border-radius: 10px; padding: 10px 18px; display: inline-flex; align-items: center; }
+  .logo-caixa img { height: 30px; display: block; }
+  .topo h1 { color: #fff; font-size: 22px; font-weight: 700; margin: 16px 0 4px; }
+  .topo p { color: #C9DCEA; font-size: 13px; margin: 0; }
+
+  .miolo { width: 100%; max-width: 380px; margin: 30px 0; }
+
+  .cartao-login { background: var(--papel); border-radius: 14px; padding: 26px 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+  .cartao-login h2 { font-size: 15px; color: var(--azul); margin: 0 0 18px; text-align: center; font-weight: 700; }
+
+  .campo { margin-bottom: 14px; }
+  .campo label { display: block; font-size: 11.5px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; margin-bottom: 5px; }
+  .campo input {
+    width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 14.5px; color: var(--texto);
+  }
+  .campo input:focus { outline: none; border-color: var(--azul); }
+
+  .botao-entrar {
+    width: 100%; padding: 13px; border-radius: 9px; border: none; background: var(--laranja);
+    color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px;
+  }
+  .botao-entrar:active { background: var(--laranja-escuro); }
+  .botao-entrar:disabled { background: #C9CFD3; cursor: not-allowed; }
+
+  .mensagem-erro {
+    margin-top: 12px; padding: 11px 13px; border-radius: 9px; background: #FBE7E4; color: var(--vermelho);
+    font-size: 13px; font-weight: 600; display: none;
+  }
+
+  /* --- painel apos login --- */
+  .painel { display: none; width: 100%; max-width: 460px; }
+  .painel .saudacao { text-align: center; color: #fff; margin-bottom: 20px; }
+  .painel .saudacao .nome { font-size: 18px; font-weight: 700; }
+  .painel .saudacao .sub { font-size: 12.5px; color: #C9DCEA; margin-top: 2px; }
+
+  .grade-links { display: flex; flex-wrap: wrap; gap: 12px; }
+  .link-app {
+    background: var(--papel); border-radius: 12px; padding: 18px 14px; text-decoration: none;
+    color: var(--texto); text-align: center; font-weight: 700; font-size: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.10);
+    flex: 1 1 calc(50% - 6px);
+    display: block;
+  }
+  .link-app .emoji { font-size: 24px; display: block; margin-bottom: 8px; }
+
+  .botao-sair {
+    display: block; margin: 20px auto 0; background: none; border: none; color: #C9DCEA;
+    font-size: 13px; text-decoration: underline; cursor: pointer;
+  }
+
+  .rodape { color: #9FB4C4; font-size: 11.5px; text-align: center; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+
+  <div class="topo">
+    <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+    <h1>DRAM Web</h1>
+    <p>Estoque, pedidos e cadastros</p>
+  </div>
+
+  <div class="miolo">
+    <div class="cartao-login" id="cartao-login">
+      <h2>Entrar</h2>
+      <div class="campo">
+        <label>E-mail</label>
+        <input type="email" id="campo-email" autocomplete="username">
+      </div>
+      <div class="campo">
+        <label>Senha</label>
+        <input type="password" id="campo-senha" autocomplete="current-password">
+      </div>
+      <button class="botao-entrar" id="botao-entrar">Entrar</button>
+      <div class="mensagem-erro" id="mensagem-erro"></div>
+    </div>
+
+    <div class="painel" id="painel">
+      <div class="saudacao">
+        <div class="nome" id="nome-usuario"></div>
+        <div class="sub">Conectado ao DRAM Web</div>
+      </div>
+      <div class="grade-links">
+        <a class="link-app" href="estoque.html"><span class="emoji">📦</span>Estoque</a>
+        <a class="link-app" href="ajustar-estoque.html"><span class="emoji">✏️</span>Ajustar Estoque</a>
+        <a class="link-app" href="tabelas-preco.html"><span class="emoji">💲</span>Tabelas de Preço</a>
+        <a class="link-app" href="clientes.html"><span class="emoji">👤</span>Clientes</a>
+        <a class="link-app" href="novo-pedido.html"><span class="emoji">🧾</span>Novo Pedido</a>
+        <a class="link-app" href="pedidos.html"><span class="emoji">📋</span>Pedidos</a>
+      </div>
+      <button class="botao-sair" id="botao-sair">Sair</button>
+    </div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const CHAVE_LOCAL = "dram_auth";
+
+function salvarSessao(dados) {
+  localStorage.setItem(CHAVE_LOCAL, JSON.stringify(dados));
+}
+function lerSessao() {
+  try {
+    const texto = localStorage.getItem(CHAVE_LOCAL);
+    return texto ? JSON.parse(texto) : null;
+  } catch { return null; }
+}
+function limparSessao() {
+  localStorage.removeItem(CHAVE_LOCAL);
+}
+
+function mostrarPainel(sessao) {
+  document.getElementById("cartao-login").style.display = "none";
+  document.getElementById("painel").style.display = "block";
+  document.getElementById("nome-usuario").textContent = sessao.email;
+}
+
+function mostrarLogin() {
+  document.getElementById("cartao-login").style.display = "block";
+  document.getElementById("painel").style.display = "none";
+}
+
+const sessaoAtual = lerSessao();
+if (sessaoAtual && sessaoAtual.expira_em > Date.now()) {
+  mostrarPainel(sessaoAtual);
+} else {
+  mostrarLogin();
+}
+
+document.getElementById("botao-entrar").addEventListener("click", fazerLogin);
+document.getElementById("campo-senha").addEventListener("keydown", (e) => { if (e.key === "Enter") fazerLogin(); });
+
+async function fazerLogin() {
+  const email = document.getElementById("campo-email").value.trim();
+  const senha = document.getElementById("campo-senha").value;
+  const botao = document.getElementById("botao-entrar");
+  const mensagemErro = document.getElementById("mensagem-erro");
+  mensagemErro.style.display = "none";
+
+  if (!email || !senha) {
+    mensagemErro.textContent = "Preencha e-mail e senha.";
+    mensagemErro.style.display = "block";
+    return;
+  }
+
+  botao.disabled = true;
+  botao.textContent = "Entrando...";
+
+  try {
+    const resposta = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password: senha }),
+    });
+    const dados = await resposta.json();
+    if (!resposta.ok) {
+      throw new Error(dados.error_description || dados.msg || "E-mail ou senha incorretos.");
+    }
+    const sessao = {
+      access_token: dados.access_token,
+      email: dados.user.email,
+      expira_em: Date.now() + (dados.expires_in * 1000),
+    };
+    salvarSessao(sessao);
+    mostrarPainel(sessao);
+  } catch (erro) {
+    mensagemErro.textContent = erro.message;
+    mensagemErro.style.display = "block";
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Entrar";
+  }
+}
+
+document.getElementById("botao-sair").addEventListener("click", () => {
+  limparSessao();
+  document.getElementById("campo-email").value = "";
+  document.getElementById("campo-senha").value = "";
+  mostrarLogin();
+});
+</script>
+</body>
+</html>
