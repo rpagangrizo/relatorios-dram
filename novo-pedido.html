@@ -170,17 +170,40 @@ const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
 const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito" };
 
+// --- identificação: primeiro tenta a sessão de login (localStorage),
+// depois o parâmetro ?pessoa= da URL, depois pede manualmente ---
+const CHAVE_LOCAL_AUTH = "dram_auth";
+
+function lerSessaoDram() {
+  try {
+    const texto = localStorage.getItem(CHAVE_LOCAL_AUTH);
+    if (!texto) return null;
+    const sessao = JSON.parse(texto);
+    if (sessao && sessao.expira_em > Date.now()) return sessao;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const parametros = new URLSearchParams(window.location.search);
-let pessoa = parametros.get("pessoa");
+const sessaoDram = lerSessaoDram();
+let pessoa = null;
 const textoPessoa = document.getElementById("texto-pessoa");
 const avisoPessoa = document.getElementById("aviso-pessoa");
-if (pessoa) {
+
+if (sessaoDram && sessaoDram.email) {
+  pessoa = sessaoDram.email;
+  textoPessoa.textContent = `Lançado por ${sessaoDram.email}`;
+} else if (parametros.get("pessoa")) {
+  pessoa = parametros.get("pessoa");
   textoPessoa.textContent = `Lançado por ${pessoa}`;
 } else {
   textoPessoa.textContent = "Identificação não encontrada";
   avisoPessoa.style.display = "block";
   document.getElementById("campo-pessoa-manual").addEventListener("input", (e) => {
     pessoa = e.target.value.trim() || null;
+    atualizarBotaoConfirmar();
   });
 }
 
