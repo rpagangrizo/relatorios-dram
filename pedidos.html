@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Pedidos</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 130px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro input { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); }
+  .campo-filtro input:focus { outline: none; border-color: var(--azul); }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 10px 14px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #F6F9FA; }
+  .numero-pedido { font-weight: 700; color: var(--azul); }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: #C0392B; }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Pedidos</h1>
+    <p>Histórico de pedidos lançados</p>
+  </div>
+</header>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro">
+        <label>Cliente</label>
+        <input type="text" id="filtro-cliente" placeholder="Buscar cliente...">
+      </div>
+      <div class="campo-filtro">
+        <label>Nº do pedido</label>
+        <input type="text" id="filtro-numero" placeholder="Ex: 47">
+      </div>
+      <div class="campo-filtro">
+        <label>De</label>
+        <input type="text" id="filtro-data-de" placeholder="DD/MM/AAAA">
+      </div>
+      <div class="campo-filtro">
+        <label>Até</label>
+        <input type="text" id="filtro-data-ate" placeholder="DD/MM/AAAA">
+      </div>
+      <button class="botao" id="botao-limpar">Limpar filtros</button>
+    </div>
+  </div>
+
+  <div class="cartao-secao">
+    <table>
+      <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th class="num">Valor</th></tr></thead>
+      <tbody id="corpo-tabela"></tbody>
+    </table>
+    <div id="area-mensagem"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function dataBrParaIso(texto) {
+  const partes = texto.trim().split("/");
+  if (partes.length !== 3) return null;
+  const [d, m, a] = partes;
+  if (!d || !m || !a) return null;
+  return `${a.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+
+let pedidos = [];
+
+async function carregarPedidos() {
+  const corpo = document.getElementById("corpo-tabela");
+  const mensagem = document.getElementById("area-mensagem");
+  mensagem.innerHTML = `<div class="carregando">Carregando pedidos...</div>`;
+  corpo.innerHTML = "";
+  try {
+    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,clientes(nome)&order=criado_em.desc");
+    mensagem.innerHTML = "";
+    desenharTabela();
+  } catch (erro) {
+    mensagem.innerHTML = `<div class="erro">Não consegui carregar os pedidos: ${erro.message}</div>`;
+  }
+}
+
+function desenharTabela() {
+  const corpo = document.getElementById("corpo-tabela");
+  const mensagem = document.getElementById("area-mensagem");
+
+  const filtroCliente = document.getElementById("filtro-cliente").value.trim().toLowerCase();
+  const filtroNumero = document.getElementById("filtro-numero").value.trim();
+  const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
+  const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
+
+  const filtrados = pedidos.filter(p => {
+    if (filtroCliente && !p.clientes.nome.toLowerCase().includes(filtroCliente)) return false;
+    if (filtroNumero && String(p.id) !== filtroNumero) return false;
+    const dataPedidoIso = p.criado_em.slice(0, 10);
+    if (dataDeIso && dataPedidoIso < dataDeIso) return false;
+    if (dataAteIso && dataPedidoIso > dataAteIso) return false;
+    return true;
+  });
+
+  if (filtrados.length === 0) {
+    corpo.innerHTML = "";
+    mensagem.innerHTML = `<div class="vazio">Nenhum pedido encontrado.</div>`;
+    return;
+  }
+  mensagem.innerHTML = "";
+
+  corpo.innerHTML = filtrados.map(p => {
+    const data = new Date(p.criado_em);
+    const dataTexto = data.toLocaleDateString("pt-BR") + " " + data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return `<tr data-id="${p.id}">
+      <td class="numero-pedido">Nº ${p.id}</td>
+      <td>${p.clientes.nome}</td>
+      <td>${dataTexto}</td>
+      <td class="num">${formatarMoeda(p.total)}</td>
+    </tr>`;
+  }).join("");
+
+  corpo.querySelectorAll("tr[data-id]").forEach(linha => {
+    linha.addEventListener("click", () => {
+      window.open(`recibo-pedido.html?pedido=${linha.dataset.id}`, "_blank");
+    });
+  });
+}
+
+document.getElementById("filtro-cliente").addEventListener("input", desenharTabela);
+document.getElementById("filtro-numero").addEventListener("input", desenharTabela);
+document.getElementById("filtro-data-de").addEventListener("input", desenharTabela);
+document.getElementById("filtro-data-ate").addEventListener("input", desenharTabela);
+document.getElementById("botao-limpar").addEventListener("click", () => {
+  document.getElementById("filtro-cliente").value = "";
+  document.getElementById("filtro-numero").value = "";
+  document.getElementById("filtro-data-de").value = "";
+  document.getElementById("filtro-data-ate").value = "";
+  desenharTabela();
+});
+
+carregarPedidos();
+</script>
+</body>
+</html>
