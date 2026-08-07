@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Recibo do Pedido</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .barra-acoes { max-width: 720px; margin: 0 auto; padding: 16px 16px 0; display: flex; justify-content: flex-end; gap: 8px; }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+
+  .folha { max-width: 720px; margin: 16px auto 60px; background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 30px 34px; }
+  .cabecalho-folha { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--azul); padding-bottom: 16px; margin-bottom: 20px; }
+  .cabecalho-folha img { height: 34px; }
+  .cabecalho-folha .numero { text-align: right; }
+  .cabecalho-folha .numero .rotulo { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.5px; }
+  .cabecalho-folha .numero .valor { font-size: 22px; font-weight: 700; color: var(--azul); }
+
+  .grade-info { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .bloco-info .rotulo { font-size: 10.5px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.5px; margin-bottom: 3px; }
+  .bloco-info .valor { font-size: 14px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 4px; border-bottom: 1.5px solid var(--azul); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 4px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; }
+
+  .linha-total { display: flex; justify-content: flex-end; padding: 14px 4px 0; font-size: 17px; font-weight: 700; color: var(--azul); }
+  .linha-total span:first-child { margin-right: 20px; }
+
+  .rodape-folha { text-align: center; color: #93A0A8; font-size: 11px; margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--linha); }
+
+  .carregando, .erro { padding: 40px; text-align: center; color: var(--texto-suave); }
+
+  @media print {
+    body { background: #fff; }
+    .barra-acoes { display: none; }
+    .folha { border: none; margin: 0; max-width: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barra-acoes"><button class="botao" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div>
+
+<div class="folha" id="folha">
+  <div class="carregando">Carregando pedido...</div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatarData(isoTexto) {
+  const data = new Date(isoTexto);
+  return data.toLocaleDateString("pt-BR") + " às " + data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito em conta" };
+
+async function carregarRecibo() {
+  const alvo = document.getElementById("folha");
+  const parametros = new URLSearchParams(window.location.search);
+  const pedidoId = parametros.get("pedido");
+  if (!pedidoId) {
+    alvo.innerHTML = `<div class="erro">Nenhum pedido informado no link.</div>`;
+    return;
+  }
+
+  try {
+    const [pedidos, itens] = await Promise.all([
+      chamarSupabase(`pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,clientes(nome),depositos(nome)&id=eq.${pedidoId}`),
+      chamarSupabase(`pedido_itens?select=quantidade,preco_unitario,itens(nome)&pedido_id=eq.${pedidoId}`),
+    ]);
+
+    if (pedidos.length === 0) {
+      alvo.innerHTML = `<div class="erro">Pedido nº ${pedidoId} não encontrado.</div>`;
+      return;
+    }
+    const pedido = pedidos[0];
+
+    const linhasItens = itens.map(i => `
+      <tr>
+        <td>${i.itens.nome}</td>
+        <td class="num">${Number(i.quantidade).toLocaleString("pt-BR")}</td>
+        <td class="num">${formatarMoeda(i.preco_unitario)}</td>
+        <td class="num">${formatarMoeda(i.quantidade * i.preco_unitario)}</td>
+      </tr>
+    `).join("");
+
+    const formaPagTexto = pedido.forma_pagamento ? (FORMAS_PAGAMENTO[pedido.forma_pagamento] || pedido.forma_pagamento) : "—";
+    const prazoTexto = pedido.prazo_dias ? `${pedido.prazo_dias} dia(s)` + (pedido.parcelas > 1 ? `, ${pedido.parcelas}x` : "") : "—";
+
+    alvo.innerHTML = `
+      <div class="cabecalho-folha">
+        <img src="logo.png" alt="Arco Íris" onerror="this.style.display='none'">
+        <div class="numero">
+          <div class="rotulo">Pedido de Venda</div>
+          <div class="valor">Nº ${pedido.id}</div>
+        </div>
+      </div>
+
+      <div class="grade-info">
+        <div class="bloco-info"><div class="rotulo">Cliente</div><div class="valor">${pedido.clientes.nome}</div></div>
+        <div class="bloco-info"><div class="rotulo">Data</div><div class="valor">${formatarData(pedido.criado_em)}</div></div>
+        <div class="bloco-info"><div class="rotulo">Depósito de origem</div><div class="valor">${pedido.depositos.nome}</div></div>
+        <div class="bloco-info"><div class="rotulo">Pagamento</div><div class="valor">${formaPagTexto} — ${prazoTexto}</div></div>
+      </div>
+
+      <table>
+        <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Preço unit.</th><th class="num">Subtotal</th></tr></thead>
+        <tbody>${linhasItens}</tbody>
+      </table>
+      <div class="linha-total"><span>Total</span><span>${formatarMoeda(pedido.total)}</span></div>
+
+      <div class="rodape-folha">
+        Este é um Pedido de Venda, sem valor fiscal (não é Nota Fiscal).<br>
+        Powered by DRAM
+      </div>
+    `;
+  } catch (erro) {
+    alvo.innerHTML = `<div class="erro">Não consegui carregar o pedido: ${erro.message}</div>`;
+  }
+}
+
+carregarRecibo();
+</script>
+</body>
+</html>
