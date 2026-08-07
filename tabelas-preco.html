@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Tabelas de Preço</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<style>
+  :root {
+    --azul: #1B4F72;
+    --laranja: #D9662F;
+    --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4;
+    --papel: #FFFFFF;
+    --texto: #1E2328;
+    --texto-suave: #5C6870;
+    --linha: #DCE3E7;
+    --verde: #2F8F4E;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: var(--azul);
+    color: #fff;
+    padding: 18px 20px 22px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 720px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao {
+    background: var(--papel);
+    border-radius: 12px;
+    border: 1px solid var(--linha);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .cartao h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--texto-suave);
+    margin: 0 0 10px;
+  }
+
+  .lista-tabelas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip-tabela {
+    padding: 9px 14px;
+    border-radius: 100px;
+    border: 1.5px solid var(--linha);
+    background: #fff;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--texto);
+  }
+  .chip-tabela.ativa { border-color: var(--azul); background: #EAF1F6; color: var(--azul); }
+
+  .linha-nova-tabela { display: flex; gap: 8px; }
+  input[type=text], input[type=number] {
+    padding: 11px 13px;
+    border-radius: 9px;
+    border: 1.5px solid var(--linha);
+    font-size: 14.5px;
+    color: var(--texto);
+  }
+  input[type=text] { flex: 1; }
+  input:focus { outline: none; border-color: var(--azul); }
+
+  .botao {
+    padding: 11px 16px;
+    border-radius: 9px;
+    border: none;
+    background: var(--laranja);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: var(--azul); }
+
+  .barra-busca { margin-bottom: 10px; }
+  .barra-busca input { width: 100%; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--texto-suave);
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--linha);
+  }
+  thead th.num { text-align: center; width: 130px; }
+  tbody td { padding: 9px 6px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: center; }
+  tbody tr.linha-categoria td { background: #F6F9FA; font-weight: 700; font-size: 11px; text-transform: uppercase; color: var(--azul); }
+  tbody tr:last-child td { border-bottom: none; }
+  .campo-preco { width: 110px; text-align: right; }
+  .campo-preco.alterado { border-color: var(--laranja); background: #FFF6F0; }
+
+  .rodape-salvar {
+    position: sticky;
+    bottom: 0;
+    background: var(--papel);
+    border-top: 1px solid var(--linha);
+    padding: 12px 16px;
+    margin: 14px -16px -16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 0 0 12px 12px;
+  }
+  .rodape-salvar .contador { font-size: 13px; color: var(--texto-suave); }
+
+  .mensagem { margin-top: 10px; padding: 11px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: #C0392B; }
+
+  .vazio { padding: 20px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .rodape-app { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Tabelas de Preço</h1>
+    <p>Cadastro e edição</p>
+  </div>
+</header>
+
+<main>
+  <div class="cartao">
+    <h2>Suas tabelas</h2>
+    <div class="lista-tabelas" id="lista-tabelas"></div>
+    <div class="linha-nova-tabela">
+      <input type="text" id="campo-nova-tabela" placeholder="Nome da nova tabela (ex: Supermercados)">
+      <button class="botao secundario" id="botao-nova-tabela">+ Criar</button>
+    </div>
+  </div>
+
+  <div class="cartao" id="cartao-precos" style="display:none">
+    <h2 id="titulo-tabela-selecionada">Preços</h2>
+    <div class="barra-busca"><input type="text" id="campo-busca-item" placeholder="Buscar item..."></div>
+    <div id="conteudo-precos"></div>
+    <div class="rodape-salvar">
+      <span class="contador" id="contador-alteracoes">Nenhuma alteração</span>
+      <button class="botao" id="botao-salvar-precos" disabled>Salvar alterações</button>
+    </div>
+    <div class="mensagem" id="mensagem"></div>
+  </div>
+
+  <p class="rodape-app">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...(opcoes.headers || {}),
+    },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(`Erro ${resposta.status}: ${corpoErro}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+let tabelas = [];
+let tabelaSelecionadaId = null;
+let itensCatalogo = [];       // [{id, nome, categoria_produto_id}]
+let categorias = [];          // [{id, nome}]
+let precosAtuais = new Map(); // item_id -> preco (o que ja esta salvo)
+let precosEditados = new Map(); // item_id -> novo preco (so' o que foi alterado nesta sessao)
+
+async function carregarTabelas() {
+  tabelas = await chamarSupabase("tabelas_preco?select=id,nome&order=nome");
+  desenharListaTabelas();
+}
+
+function desenharListaTabelas() {
+  const alvo = document.getElementById("lista-tabelas");
+  if (tabelas.length === 0) {
+    alvo.innerHTML = `<span style="color:#93A0A8; font-size:13.5px;">Nenhuma tabela criada ainda.</span>`;
+    return;
+  }
+  alvo.innerHTML = tabelas.map(t =>
+    `<button class="chip-tabela ${t.id === tabelaSelecionadaId ? 'ativa' : ''}" data-id="${t.id}">${t.nome}</button>`
+  ).join("");
+  alvo.querySelectorAll(".chip-tabela").forEach(chip => {
+    chip.addEventListener("click", () => selecionarTabela(Number(chip.dataset.id), chip.textContent));
+  });
+}
+
+document.getElementById("botao-nova-tabela").addEventListener("click", async () => {
+  const campo = document.getElementById("campo-nova-tabela");
+  const nome = campo.value.trim();
+  if (!nome) return;
+  try {
+    const criada = await chamarSupabase("tabelas_preco", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ nome }),
+    });
+    campo.value = "";
+    await carregarTabelas();
+    selecionarTabela(criada[0].id, criada[0].nome);
+  } catch (erro) {
+    alert(`Não consegui criar a tabela: ${erro.message}`);
+  }
+});
+
+async function selecionarTabela(id, nome) {
+  tabelaSelecionadaId = id;
+  precosEditados.clear();
+  desenharListaTabelas();
+  document.getElementById("cartao-precos").style.display = "block";
+  document.getElementById("titulo-tabela-selecionada").textContent = `Preços — ${nome}`;
+  document.getElementById("mensagem").className = "mensagem";
+
+  if (itensCatalogo.length === 0) {
+    [itensCatalogo, categorias] = await Promise.all([
+      chamarSupabase("itens?select=id,nome,categoria_produto_id&order=nome"),
+      chamarSupabase("categorias_produto?select=id,nome&order=id"),
+    ]);
+  }
+
+  const precos = await chamarSupabase(`tabela_preco_itens?select=item_id,preco&tabela_id=eq.${id}`);
+  precosAtuais = new Map(precos.map(p => [p.item_id, p.preco]));
+
+  desenharTabelaPrecos("");
+  atualizarContadorEBotao();
+}
+
+function desenharTabelaPrecos(filtro) {
+  const alvo = document.getElementById("conteudo-precos");
+  const itensFiltrados = itensCatalogo.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
+  if (itensFiltrados.length === 0) {
+    alvo.innerHTML = `<div class="vazio">Nenhum item encontrado.</div>`;
+    return;
+  }
+
+  const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
+  const grupos = new Map();
+  for (const item of itensFiltrados) {
+    const chave = item.categoria_produto_id ?? "sem";
+    if (!grupos.has(chave)) grupos.set(chave, []);
+    grupos.get(chave).push(item);
+  }
+  for (const lista of grupos.values()) lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const ordem = [...categorias.map(c => c.id), "sem"].filter(id => grupos.has(id));
+
+  let html = `<table><thead><tr><th>Item</th><th class="num">Preço (R$)</th></tr></thead><tbody>`;
+  for (const catId of ordem) {
+    const nomeCat = catId === "sem" ? "Sem categoria" : nomeCategoriaPorId.get(catId);
+    html += `<tr class="linha-categoria"><td colspan="2">${nomeCat}</td></tr>`;
+    for (const item of grupos.get(catId)) {
+      const valorAtual = precosEditados.has(item.id) ? precosEditados.get(item.id) : (precosAtuais.get(item.id) ?? "");
+      html += `<tr><td>${item.nome}</td><td class="num">
+        <input type="number" step="0.01" min="0" class="campo-preco" data-item-id="${item.id}"
+               value="${valorAtual}" placeholder="—"></td></tr>`;
+    }
+  }
+  html += `</tbody></table>`;
+  alvo.innerHTML = html;
+
+  alvo.querySelectorAll(".campo-preco").forEach(campo => {
+    campo.addEventListener("input", () => {
+      const itemId = Number(campo.dataset.itemId);
+      const texto = campo.value.trim();
+      const precoOriginal = precosAtuais.get(itemId) ?? null;
+      const precoNovo = texto === "" ? null : parseFloat(texto);
+      if (precoNovo === precoOriginal) {
+        precosEditados.delete(itemId);
+        campo.classList.remove("alterado");
+      } else {
+        precosEditados.set(itemId, precoNovo);
+        campo.classList.add("alterado");
+      }
+      atualizarContadorEBotao();
+    });
+  });
+}
+
+function atualizarContadorEBotao() {
+  const qtd = precosEditados.size;
+  document.getElementById("contador-alteracoes").textContent =
+    qtd === 0 ? "Nenhuma alteração" : `${qtd} preço(s) alterado(s)`;
+  document.getElementById("botao-salvar-precos").disabled = qtd === 0;
+}
+
+document.getElementById("campo-busca-item").addEventListener("input", (e) => {
+  desenharTabelaPrecos(e.target.value);
+});
+
+document.getElementById("botao-salvar-precos").addEventListener("click", async () => {
+  const botao = document.getElementById("botao-salvar-precos");
+  const mensagem = document.getElementById("mensagem");
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+  try {
+    const linhas = [...precosEditados.entries()].map(([item_id, preco]) => ({
+      tabela_id: tabelaSelecionadaId, item_id, preco,
+    }));
+    await chamarSupabase("tabela_preco_itens", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify(linhas),
+    });
+    for (const [itemId, preco] of precosEditados.entries()) {
+      precosAtuais.set(itemId, preco);
+    }
+    precosEditados.clear();
+    document.querySelectorAll(".campo-preco.alterado").forEach(c => c.classList.remove("alterado"));
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = "Preços salvos com sucesso!";
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.textContent = "Salvar alterações";
+    atualizarContadorEBotao();
+  }
+});
+
+carregarTabelas();
+</script>
+</body>
+</html>
