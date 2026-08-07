@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Clientes</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 14.5px; color: var(--texto); background: #fff;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--azul); }
+
+  .lista-busca { max-height: 220px; overflow-y: auto; margin-top: 8px; border-radius: 9px; border: 1px solid var(--linha); }
+  .item-busca { padding: 11px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14px; }
+  .item-busca:last-child { border-bottom: none; }
+  .item-busca:hover { background: #F6F9FA; }
+
+  .campo { margin-bottom: 14px; }
+  .campo label { display: block; font-size: 11.5px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; margin-bottom: 5px; }
+
+  .linha-dupla { display: flex; gap: 10px; }
+  .linha-dupla .campo { flex: 1; }
+
+  .botao { padding: 12px 20px; border-radius: 9px; border: none; background: var(--laranja); color: #fff;
+    font-size: 14.5px; font-weight: 700; cursor: pointer; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+
+  .mensagem { margin-top: 12px; padding: 13px 15px; border-radius: 9px; font-size: 14px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .nome-selecionado { font-weight: 700; color: var(--azul); font-size: 15px; margin-bottom: 14px; }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+
+  nav.nav-dram {
+    background: #123551;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px;
+  }
+  nav.nav-dram a {
+    color: #C9DCEA;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 14px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+  }
+  nav.nav-dram a.ativa {
+    color: #fff;
+    border-bottom-color: #D9662F;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Clientes</h1>
+    <p>Tabela de preço e forma de pagamento</p>
+  </div>
+</header>
+<nav class="nav-dram">
+  <a href="estoque.html">Estoque</a>
+  <a href="ajustar-estoque.html">Ajustar Estoque</a>
+  <a href="tabelas-preco.html">Tabelas de Preço</a>
+  <a href="clientes.html">Clientes</a>
+  <a href="novo-pedido.html">Novo Pedido</a>
+  <a href="pedidos.html">Pedidos</a>
+</nav>
+
+
+<main>
+  <div class="cartao">
+    <h2>Buscar cliente</h2>
+    <input type="text" id="campo-busca-cliente" placeholder="Digite o nome do cliente...">
+    <div class="lista-busca" id="lista-clientes" style="display:none"></div>
+  </div>
+
+  <div class="cartao" id="cartao-edicao" style="display:none">
+    <h2>Configuração do cliente</h2>
+    <div class="nome-selecionado" id="nome-cliente-selecionado"></div>
+
+    <div class="campo">
+      <label>Tabela de preço</label>
+      <select id="campo-tabela-preco"><option value="">— Nenhuma —</option></select>
+    </div>
+
+    <div class="campo">
+      <label>Forma de pagamento</label>
+      <select id="campo-forma-pagamento">
+        <option value="">— Não definida —</option>
+        <option value="boleto">Boleto</option>
+        <option value="pix">PIX</option>
+        <option value="deposito">Depósito em conta</option>
+      </select>
+    </div>
+
+    <div class="linha-dupla">
+      <div class="campo">
+        <label>Prazo (dias)</label>
+        <input type="number" id="campo-prazo" min="0" placeholder="Ex: 30">
+      </div>
+      <div class="campo">
+        <label>Parcelas</label>
+        <input type="number" id="campo-parcelas" min="1" placeholder="Ex: 1">
+      </div>
+    </div>
+
+    <button class="botao" id="botao-salvar">Salvar</button>
+    <div class="mensagem" id="mensagem"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(corpoErro || `Erro ${resposta.status}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+let clientes = [];
+let tabelasPreco = [];
+let clienteSelecionado = null;
+
+async function carregarDados() {
+  [clientes, tabelasPreco] = await Promise.all([
+    chamarSupabase("clientes?select=id,nome,tabela_preco_id,forma_pagamento,prazo_dias,parcelas&order=nome"),
+    chamarSupabase("tabelas_preco?select=id,nome&order=nome"),
+  ]);
+  const selectTabela = document.getElementById("campo-tabela-preco");
+  for (const t of tabelasPreco) {
+    const opcao = document.createElement("option");
+    opcao.value = t.id;
+    opcao.textContent = t.nome;
+    selectTabela.appendChild(opcao);
+  }
+}
+
+document.getElementById("campo-busca-cliente").addEventListener("input", (e) => {
+  const filtro = e.target.value.trim().toLowerCase();
+  const alvo = document.getElementById("lista-clientes");
+  if (!filtro) { alvo.style.display = "none"; return; }
+  const filtrados = clientes.filter(c => c.nome.toLowerCase().includes(filtro)).slice(0, 25);
+  if (filtrados.length === 0) {
+    alvo.innerHTML = `<div class="item-busca">Nenhum cliente encontrado.</div>`;
+  } else {
+    alvo.innerHTML = filtrados.map(c => `<div class="item-busca" data-id="${c.id}">${c.nome}</div>`).join("");
+    alvo.querySelectorAll(".item-busca[data-id]").forEach(linha => {
+      linha.addEventListener("click", () => selecionarCliente(Number(linha.dataset.id)));
+    });
+  }
+  alvo.style.display = "block";
+});
+
+function selecionarCliente(id) {
+  clienteSelecionado = clientes.find(c => c.id === id);
+  document.getElementById("campo-busca-cliente").value = "";
+  document.getElementById("lista-clientes").style.display = "none";
+  document.getElementById("nome-cliente-selecionado").textContent = clienteSelecionado.nome;
+
+  document.getElementById("campo-tabela-preco").value = clienteSelecionado.tabela_preco_id || "";
+  document.getElementById("campo-forma-pagamento").value = clienteSelecionado.forma_pagamento || "";
+  document.getElementById("campo-prazo").value = clienteSelecionado.prazo_dias || "";
+  document.getElementById("campo-parcelas").value = clienteSelecionado.parcelas || "";
+
+  document.getElementById("mensagem").className = "mensagem";
+  document.getElementById("cartao-edicao").style.display = "block";
+}
+
+document.getElementById("botao-salvar").addEventListener("click", async () => {
+  const botao = document.getElementById("botao-salvar");
+  const mensagem = document.getElementById("mensagem");
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+
+  const tabelaValor = document.getElementById("campo-tabela-preco").value;
+  const formaValor = document.getElementById("campo-forma-pagamento").value;
+  const prazoValor = document.getElementById("campo-prazo").value;
+  const parcelasValor = document.getElementById("campo-parcelas").value;
+
+  try {
+    await chamarSupabase(`clientes?id=eq.${clienteSelecionado.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        tabela_preco_id: tabelaValor ? Number(tabelaValor) : null,
+        forma_pagamento: formaValor || null,
+        prazo_dias: prazoValor ? Number(prazoValor) : null,
+        parcelas: parcelasValor ? Number(parcelasValor) : null,
+      }),
+    });
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = "Salvo com sucesso!";
+
+    const indice = clientes.findIndex(c => c.id === clienteSelecionado.id);
+    clientes[indice] = {
+      ...clientes[indice],
+      tabela_preco_id: tabelaValor ? Number(tabelaValor) : null,
+      forma_pagamento: formaValor || null,
+      prazo_dias: prazoValor ? Number(prazoValor) : null,
+      parcelas: parcelasValor ? Number(parcelasValor) : null,
+    };
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Salvar";
+  }
+});
+
+carregarDados();
+</script>
+</body>
+</html>
