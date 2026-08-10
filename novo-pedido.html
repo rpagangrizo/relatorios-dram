@@ -7,6 +7,21 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
 <style>
   :root {
     --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
