@@ -74,6 +74,9 @@
   .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
 
   .aviso-pessoa { background: #FFF3E0; color: #92600C; border-radius: 9px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 14px; }
+  .opcao-checkbox { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600; color: var(--texto); cursor: pointer; }
+  .opcao-checkbox input { width: auto; }
+  .ajuda-nota-fiscal { color: var(--texto-suave); font-size: 12.5px; margin: 8px 0 0; }
   .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
   .barra-final { position: sticky; bottom: 0; background: var(--papel); border-top: 1px solid var(--linha);
     padding: 14px 16px; margin: 14px -16px -16px; border-radius: 0 0 12px 12px; }
@@ -155,6 +158,15 @@
       <span>Total do pedido</span>
       <span class="valor" id="valor-total-pedido">R$ 0,00</span>
     </div>
+  </div>
+
+  <div class="passo" id="passo-nota-fiscal">
+    <h2>4. Nota fiscal</h2>
+    <label class="opcao-checkbox">
+      <input type="checkbox" id="campo-emite-nota">
+      Emitir nota fiscal para este pedido
+    </label>
+    <p class="ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
   </div>
 
   <div class="barra-final">
@@ -409,6 +421,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         p_prazo_dias: clienteEscolhido.prazo_dias || null,
         p_parcelas: clienteEscolhido.parcelas || 1,
         p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
+        p_com_nota_fiscal: document.getElementById("campo-emite-nota").checked,
       }),
     });
     mensagem.className = "mensagem sucesso";
@@ -421,6 +434,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     document.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
     document.getElementById("passo-deposito").classList.add("desabilitado");
     document.getElementById("passo-itens").classList.add("desabilitado");
+    document.getElementById("campo-emite-nota").checked = false;
     desenharTabelaItensPedido();
   } catch (erro) {
     mensagem.className = "mensagem erro";
