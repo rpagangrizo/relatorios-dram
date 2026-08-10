@@ -281,6 +281,15 @@ function celulaSelo(qtd) {
   return `<span class="selo ${classe}">${texto}</span>`;
 }
 
+// dentro de uma mesma categoria (ex: Polpas), itens de embalagem "100g"
+// vem antes dos de "barra"; dentro de cada grupo, ordem alfabética.
+function compararItensPorEmbalagemENome(a, b) {
+  const pesoA = a.embalagem === "100g" ? 0 : 1;
+  const pesoB = b.embalagem === "100g" ? 0 : 1;
+  if (pesoA !== pesoB) return pesoA - pesoB;
+  return a.nome.localeCompare(b.nome, "pt-BR");
+}
+
 let dadosProdutoAcabado = null; // { itens: [...], depositos: [...], saldos: Map }
 let dadosMateriaPrima = null;   // { itens: [...], saldos: Map }
 
@@ -288,7 +297,7 @@ async function carregarProdutoAcabado() {
   const alvo = document.getElementById("conteudo-acabado");
   try {
     const [itens, depositos, estoque, categorias] = await Promise.all([
-      chamarSupabase("itens?select=id,nome,categoria_produto_id&order=nome"),
+      chamarSupabase("itens?select=id,nome,categoria_produto_id,embalagem&order=nome"),
       chamarSupabase("depositos?select=id,nome&order=id"),
       chamarSupabase("estoque_produto_acabado?select=item_id,deposito_id,quantidade"),
       chamarSupabase("categorias_produto?select=id,nome&order=id"),
@@ -318,7 +327,8 @@ function desenharProdutoAcabado(filtro) {
 
   // agrupa por categoria (na ordem em que as categorias foram cadastradas,
   // igual ja fazemos nos outros relatorios: Polpas, Frutas, Salgados...),
-  // e ordena os itens em ordem alfabetica dentro de cada categoria
+  // e ordena os itens dentro de cada categoria: 100g antes de barra, e
+  // dentro de cada uma dessas, ordem alfabetica
   const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
   const gruposPorCategoria = new Map(); // categoria_id (ou 'sem') -> [itens]
   for (const item of itensFiltrados) {
@@ -327,7 +337,7 @@ function desenharProdutoAcabado(filtro) {
     gruposPorCategoria.get(chave).push(item);
   }
   for (const lista of gruposPorCategoria.values()) {
-    lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    lista.sort(compararItensPorEmbalagemENome);
   }
 
   const ordemCategorias = [...categorias.map(c => c.id), "sem"].filter(id => gruposPorCategoria.has(id));
