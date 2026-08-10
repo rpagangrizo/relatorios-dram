@@ -77,6 +77,13 @@
   .opcao-checkbox { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600; color: var(--texto); cursor: pointer; }
   .opcao-checkbox input { width: auto; }
   .ajuda-nota-fiscal { color: var(--texto-suave); font-size: 12.5px; margin: 8px 0 0; }
+  .linha-parcela { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--linha); }
+  .linha-parcela:last-child { border-bottom: none; }
+  .linha-parcela .numero-parcela { font-size: 13.5px; font-weight: 700; color: var(--texto-suave); width: 60px; flex-shrink: 0; }
+  .linha-parcela input[type=date] { flex: 1; }
+  .linha-parcela .valor-parcela { width: 90px; text-align: right; font-size: 13.5px; color: var(--texto-suave); flex-shrink: 0; }
+  .linha-parcela .botao-remover-parcela { background: none; border: none; color: var(--vermelho); font-size: 17px; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+  .botao-link { background: none; border: none; color: var(--azul); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 8px 0 0; }
   .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
   .barra-final { position: sticky; bottom: 0; background: var(--papel); border-top: 1px solid var(--linha);
     padding: 14px 16px; margin: 14px -16px -16px; border-radius: 0 0 12px 12px; }
@@ -160,8 +167,15 @@
     </div>
   </div>
 
+  <div class="passo desabilitado" id="passo-parcelas">
+    <h2>4. Parcelas</h2>
+    <div id="linhas-parcelas"></div>
+    <button type="button" class="botao-link" id="botao-add-parcela">+ Adicionar parcela</button>
+    <p class="ajuda-nota-fiscal">Os vencimentos vêm pré-preenchidos a partir do cadastro do cliente, mas cada um pode ser ajustado livremente (ex: 30/45, 30/35...).</p>
+  </div>
+
   <div class="passo" id="passo-nota-fiscal">
-    <h2>4. Nota fiscal</h2>
+    <h2>5. Nota fiscal</h2>
     <label class="opcao-checkbox">
       <input type="checkbox" id="campo-emite-nota">
       Emitir nota fiscal para este pedido
@@ -240,6 +254,75 @@ let depositoEscolhidoId = null;
 let saldosEstoque = new Map();
 let precosTabela = new Map();
 let itensPedido = [];
+let parcelasPedido = []; // [{numero_parcela, data_vencimento}] - data_vencimento em formato AAAA-MM-DD
+
+function formatarDataISO(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function distribuirValoresParcelas(total, quantidade) {
+  if (quantidade <= 0) return [];
+  const valorBase = Math.round((total / quantidade) * 100) / 100;
+  const valores = new Array(quantidade).fill(valorBase);
+  const diferenca = Math.round((total - valorBase * quantidade) * 100) / 100;
+  valores[quantidade - 1] = Math.round((valores[quantidade - 1] + diferenca) * 100) / 100;
+  return valores;
+}
+
+function gerarParcelasPadrao() {
+  const quantidade = Math.max(1, clienteEscolhido.parcelas || 1);
+  const prazo = clienteEscolhido.prazo_dias || 30;
+  const hoje = new Date();
+  parcelasPedido = [];
+  for (let i = 1; i <= quantidade; i++) {
+    const data = new Date(hoje);
+    data.setDate(data.getDate() + prazo * i);
+    parcelasPedido.push({ numero_parcela: i, data_vencimento: formatarDataISO(data) });
+  }
+}
+
+function desenharParcelas() {
+  const alvo = document.getElementById("linhas-parcelas");
+  const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+  const valores = distribuirValoresParcelas(total, parcelasPedido.length);
+
+  alvo.innerHTML = parcelasPedido.map((p, indice) => `
+    <div class="linha-parcela">
+      <span class="numero-parcela">Parcela ${p.numero_parcela}</span>
+      <input type="date" class="campo-data-parcela" data-indice="${indice}" value="${p.data_vencimento}">
+      <span class="valor-parcela">R$ ${(valores[indice] || 0).toFixed(2).replace(".", ",")}</span>
+      ${parcelasPedido.length > 1 ? `<button type="button" class="botao-remover-parcela" data-indice="${indice}">✕</button>` : ""}
+    </div>
+  `).join("");
+
+  alvo.querySelectorAll(".campo-data-parcela").forEach(campo => {
+    campo.addEventListener("input", () => {
+      parcelasPedido[Number(campo.dataset.indice)].data_vencimento = campo.value;
+      atualizarBotaoConfirmar();
+    });
+  });
+  alvo.querySelectorAll(".botao-remover-parcela").forEach(botao => {
+    botao.addEventListener("click", () => {
+      parcelasPedido.splice(Number(botao.dataset.indice), 1);
+      parcelasPedido.forEach((p, i) => { p.numero_parcela = i + 1; });
+      desenharParcelas();
+      atualizarBotaoConfirmar();
+    });
+  });
+}
+
+document.getElementById("botao-add-parcela").addEventListener("click", () => {
+  const prazo = (clienteEscolhido && clienteEscolhido.prazo_dias) || 30;
+  const ultima = parcelasPedido[parcelasPedido.length - 1];
+  const dataBase = ultima ? new Date(ultima.data_vencimento + "T00:00:00") : new Date();
+  dataBase.setDate(dataBase.getDate() + prazo);
+  parcelasPedido.push({ numero_parcela: parcelasPedido.length + 1, data_vencimento: formatarDataISO(dataBase) });
+  desenharParcelas();
+  atualizarBotaoConfirmar();
+});
 
 async function iniciar() {
   [clientes, depositos] = await Promise.all([
@@ -281,6 +364,9 @@ async function escolherCliente(id) {
   document.getElementById("caixa-cliente-selecionado").style.display = "block";
 
   document.getElementById("passo-deposito").classList.remove("desabilitado");
+  document.getElementById("passo-parcelas").classList.remove("desabilitado");
+  gerarParcelasPadrao();
+  desenharParcelas();
 
   precosTabela.clear();
   if (clienteEscolhido.tabela_preco_id) {
@@ -390,6 +476,7 @@ function desenharTabelaItensPedido() {
 
   const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
   document.getElementById("valor-total-pedido").textContent = "R$ " + total.toFixed(2).replace(".", ",");
+  if (parcelasPedido.length > 0) desenharParcelas();
   atualizarBotaoConfirmar();
 }
 
@@ -398,9 +485,10 @@ function algumItemExcedeEstoque() {
 }
 
 function atualizarBotaoConfirmar() {
+  const parcelasValidas = parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento);
   const tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa &&
     itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
-    !algumItemExcedeEstoque();
+    !algumItemExcedeEstoque() && parcelasValidas;
   document.getElementById("botao-confirmar").disabled = !tudoPreenchido;
 }
 
@@ -412,6 +500,14 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
   mensagem.className = "mensagem";
 
   try {
+    const totalFinal = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+    const valoresParcelas = distribuirValoresParcelas(totalFinal, parcelasPedido.length);
+    const parcelasDetalhe = parcelasPedido.map((p, indice) => ({
+      numero_parcela: p.numero_parcela,
+      data_vencimento: p.data_vencimento,
+      valor: valoresParcelas[indice],
+    }));
+
     const numeroPedido = await chamarSupabase("rpc/confirmar_pedido", {
       method: "POST",
       body: JSON.stringify({
@@ -419,9 +515,11 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         p_deposito_id: depositoEscolhidoId,
         p_forma_pagamento: clienteEscolhido.forma_pagamento || null,
         p_prazo_dias: clienteEscolhido.prazo_dias || null,
-        p_parcelas: clienteEscolhido.parcelas || 1,
+        p_parcelas: parcelasPedido.length,
         p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
         p_com_nota_fiscal: document.getElementById("campo-emite-nota").checked,
+        p_parcelas_detalhe: parcelasDetalhe,
+        p_pessoa: pessoa,
       }),
     });
     mensagem.className = "mensagem sucesso";
@@ -430,11 +528,14 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     itensPedido = [];
     clienteEscolhido = null;
     depositoEscolhidoId = null;
+    parcelasPedido = [];
     document.getElementById("caixa-cliente-selecionado").style.display = "none";
     document.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
     document.getElementById("passo-deposito").classList.add("desabilitado");
     document.getElementById("passo-itens").classList.add("desabilitado");
+    document.getElementById("passo-parcelas").classList.add("desabilitado");
     document.getElementById("campo-emite-nota").checked = false;
+    desenharParcelas();
     desenharTabelaItensPedido();
   } catch (erro) {
     mensagem.className = "mensagem erro";
