@@ -38,6 +38,10 @@
   .linha-total { display: flex; justify-content: flex-end; padding: 14px 4px 0; font-size: 17px; font-weight: 700; color: var(--azul); }
   .linha-total span:first-child { margin-right: 20px; }
 
+  .secao-parcelas { margin-top: 26px; }
+  .secao-parcelas h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 8px; padding-top: 14px; border-top: 1px solid var(--linha); }
+  .secao-parcelas table thead th { border-bottom: 1px solid var(--linha); }
+
   .rodape-folha { text-align: center; color: #93A0A8; font-size: 11px; margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--linha); }
 
   .carregando, .erro { padding: 40px; text-align: center; color: var(--texto-suave); }
@@ -78,6 +82,15 @@ function formatarData(isoTexto) {
   return data.toLocaleDateString("pt-BR") + " às " + data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+// datas "puras" (sem hora, ex: vencimento de parcela) sao formatadas sem
+// passar por new Date(texto) direto, pra nao correr risco de virar o dia
+// anterior por causa de fuso horario (new Date("2026-08-10") e' UTC 00:00,
+// que em horario do Brasil vira dia 09 a noite)
+function formatarDataPura(isoTexto) {
+  const [ano, mes, dia] = isoTexto.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
 const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito em conta" };
 
 async function carregarRecibo() {
@@ -90,9 +103,10 @@ async function carregarRecibo() {
   }
 
   try {
-    const [pedidos, itens] = await Promise.all([
+    const [pedidos, itens, parcelas] = await Promise.all([
       chamarSupabase(`pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,clientes(nome),depositos(nome)&id=eq.${pedidoId}`),
       chamarSupabase(`pedido_itens?select=quantidade,preco_unitario,itens(nome)&pedido_id=eq.${pedidoId}`),
+      chamarSupabase(`pedido_parcelas?select=numero_parcela,data_vencimento,valor&pedido_id=eq.${pedidoId}&order=numero_parcela`),
     ]);
 
     if (pedidos.length === 0) {
@@ -111,7 +125,35 @@ async function carregarRecibo() {
     `).join("");
 
     const formaPagTexto = pedido.forma_pagamento ? (FORMAS_PAGAMENTO[pedido.forma_pagamento] || pedido.forma_pagamento) : "—";
-    const prazoTexto = pedido.prazo_dias ? `${pedido.prazo_dias} dia(s)` + (pedido.parcelas > 1 ? `, ${pedido.parcelas}x` : "") : "—";
+
+    // pedidos antigos (feitos antes das parcelas com data individual) nao
+    // tem nada em pedido_parcelas - nesse caso cai no texto resumido de
+    // antes ("30 dia(s), 2x"). Pedidos novos mostram a tabela com cada
+    // vencimento de verdade.
+    let blocoPagamentoInfo;
+    let secaoParcelasHtml = "";
+    if (parcelas.length > 0) {
+      blocoPagamentoInfo = formaPagTexto;
+      const linhasParcelas = parcelas.map(p => `
+        <tr>
+          <td>Parcela ${p.numero_parcela}</td>
+          <td class="num">${formatarDataPura(p.data_vencimento)}</td>
+          <td class="num">${formatarMoeda(p.valor)}</td>
+        </tr>
+      `).join("");
+      secaoParcelasHtml = `
+        <div class="secao-parcelas">
+          <h2>Parcelas — ${formaPagTexto}</h2>
+          <table>
+            <thead><tr><th>Parcela</th><th class="num">Vencimento</th><th class="num">Valor</th></tr></thead>
+            <tbody>${linhasParcelas}</tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      const prazoTexto = pedido.prazo_dias ? `${pedido.prazo_dias} dia(s)` + (pedido.parcelas > 1 ? `, ${pedido.parcelas}x` : "") : "—";
+      blocoPagamentoInfo = `${formaPagTexto} — ${prazoTexto}`;
+    }
 
     alvo.innerHTML = `
       <div class="cabecalho-folha">
@@ -126,7 +168,7 @@ async function carregarRecibo() {
         <div class="bloco-info"><div class="rotulo">Cliente</div><div class="valor">${pedido.clientes.nome}</div></div>
         <div class="bloco-info"><div class="rotulo">Data</div><div class="valor">${formatarData(pedido.criado_em)}</div></div>
         <div class="bloco-info"><div class="rotulo">Depósito de origem</div><div class="valor">${pedido.depositos.nome}</div></div>
-        <div class="bloco-info"><div class="rotulo">Pagamento</div><div class="valor">${formaPagTexto} — ${prazoTexto}</div></div>
+        <div class="bloco-info"><div class="rotulo">Pagamento</div><div class="valor">${blocoPagamentoInfo}</div></div>
       </div>
 
       <table>
@@ -134,6 +176,8 @@ async function carregarRecibo() {
         <tbody>${linhasItens}</tbody>
       </table>
       <div class="linha-total"><span>Total</span><span>${formatarMoeda(pedido.total)}</span></div>
+
+      ${secaoParcelasHtml}
 
       <div class="rodape-folha">
         Este é um Pedido de Venda, sem valor fiscal (não é Nota Fiscal).<br>
