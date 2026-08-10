@@ -226,10 +226,19 @@ async function chamarSupabase(caminho, opcoes = {}) {
 
 let tabelas = [];
 let tabelaSelecionadaId = null;
-let itensCatalogo = [];       // [{id, nome, categoria_produto_id}]
+let itensCatalogo = [];       // [{id, nome, categoria_produto_id, embalagem}]
 let categorias = [];          // [{id, nome}]
 let precosAtuais = new Map(); // item_id -> preco (o que ja esta salvo)
 let precosEditados = new Map(); // item_id -> novo preco (so' o que foi alterado nesta sessao)
+
+// dentro de uma mesma categoria (ex: Polpas), itens de embalagem "100g"
+// vem antes dos de "barra"; dentro de cada grupo, ordem alfabética.
+function compararItensPorEmbalagemENome(a, b) {
+  const pesoA = a.embalagem === "100g" ? 0 : 1;
+  const pesoB = b.embalagem === "100g" ? 0 : 1;
+  if (pesoA !== pesoB) return pesoA - pesoB;
+  return a.nome.localeCompare(b.nome, "pt-BR");
+}
 
 async function carregarTabelas() {
   tabelas = await chamarSupabase("tabelas_preco?select=id,nome&order=nome");
@@ -278,7 +287,7 @@ async function selecionarTabela(id, nome) {
 
   if (itensCatalogo.length === 0) {
     [itensCatalogo, categorias] = await Promise.all([
-      chamarSupabase("itens?select=id,nome,categoria_produto_id&order=nome"),
+      chamarSupabase("itens?select=id,nome,categoria_produto_id,embalagem&order=nome"),
       chamarSupabase("categorias_produto?select=id,nome&order=id"),
     ]);
   }
@@ -305,7 +314,7 @@ function desenharTabelaPrecos(filtro) {
     if (!grupos.has(chave)) grupos.set(chave, []);
     grupos.get(chave).push(item);
   }
-  for (const lista of grupos.values()) lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  for (const lista of grupos.values()) lista.sort(compararItensPorEmbalagemENome);
   const ordem = [...categorias.map(c => c.id), "sem"].filter(id => grupos.has(id));
 
   let html = `<table><thead><tr><th>Item</th><th class="num">Preço (R$)</th></tr></thead><tbody>`;
