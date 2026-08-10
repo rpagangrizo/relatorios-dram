@@ -31,12 +31,13 @@
   .campo-filtro input:focus { outline: none; border-color: var(--azul); }
   .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 
-  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; }
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; }
-  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 10px 14px; border-bottom: 1px solid var(--linha); }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 10px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
   thead th.num { text-align: right; }
   tbody td { padding: 12px 14px; border-bottom: 1px solid var(--linha); font-size: 14px; }
   tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody td.pessoa { color: var(--texto-suave); font-size: 13px; }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr { cursor: pointer; }
   tbody tr:hover { background: #F6F9FA; }
@@ -113,7 +114,7 @@
 
   <div class="cartao-secao">
     <table>
-      <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th class="num">Valor</th></tr></thead>
+      <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Lançado por</th><th class="num">Valor</th></tr></thead>
       <tbody id="corpo-tabela"></tbody>
     </table>
     <div id="area-mensagem"></div>
@@ -154,7 +155,7 @@ async function carregarPedidos() {
   mensagem.innerHTML = `<div class="carregando">Carregando pedidos...</div>`;
   corpo.innerHTML = "";
   try {
-    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,clientes(nome)&order=criado_em.desc");
+    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,clientes(nome)&order=criado_em.desc");
     mensagem.innerHTML = "";
     desenharTabela();
   } catch (erro) {
@@ -194,6 +195,7 @@ function desenharTabela() {
       <td class="numero-pedido">Nº ${p.id}</td>
       <td>${p.clientes.nome}</td>
       <td>${dataTexto}</td>
+      <td class="pessoa">${p.pessoa || "—"}</td>
       <td class="num">${formatarMoeda(p.total)}</td>
     </tr>`;
   }).join("");
