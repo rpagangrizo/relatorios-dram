@@ -57,6 +57,10 @@
   .secao-parcelas h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 8px; padding-top: 14px; border-top: 1px solid var(--linha); }
   .secao-parcelas table thead th { border-bottom: 1px solid var(--linha); }
 
+  .secao-observacoes { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--linha); }
+  .secao-observacoes h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 6px; }
+  .secao-observacoes p { font-size: 13.5px; white-space: pre-wrap; margin: 0; }
+
   .rodape-folha { text-align: center; color: #93A0A8; font-size: 11px; margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--linha); }
 
   .carregando, .erro { padding: 40px; text-align: center; color: var(--texto-suave); }
@@ -106,6 +110,12 @@ function formatarDataPura(isoTexto) {
   return `${dia}/${mes}/${ano}`;
 }
 
+function escaparHtml(texto) {
+  const div = document.createElement("div");
+  div.textContent = texto;
+  return div.innerHTML;
+}
+
 const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito em conta" };
 
 async function carregarRecibo() {
@@ -119,7 +129,7 @@ async function carregarRecibo() {
 
   try {
     const [pedidos, itens, parcelas] = await Promise.all([
-      chamarSupabase(`pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,clientes(nome),depositos(nome)&id=eq.${pedidoId}`),
+      chamarSupabase(`pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,observacoes,clientes(nome),depositos(nome)&id=eq.${pedidoId}`),
       chamarSupabase(`pedido_itens?select=quantidade,preco_unitario,itens(nome)&pedido_id=eq.${pedidoId}`),
       chamarSupabase(`pedido_parcelas?select=numero_parcela,data_vencimento,valor&pedido_id=eq.${pedidoId}&order=numero_parcela`),
     ]);
@@ -193,6 +203,13 @@ async function carregarRecibo() {
       <div class="linha-total"><span>Total</span><span>${formatarMoeda(pedido.total)}</span></div>
 
       ${secaoParcelasHtml}
+
+      ${pedido.observacoes ? `
+        <div class="secao-observacoes">
+          <h2>Observações</h2>
+          <p>${escaparHtml(pedido.observacoes)}</p>
+        </div>
+      ` : ""}
 
       <div class="rodape-folha">
         Este é um Pedido de Venda, sem valor fiscal (não é Nota Fiscal).<br>
