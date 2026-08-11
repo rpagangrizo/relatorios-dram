@@ -47,6 +47,11 @@
     font-size: 14.5px; color: var(--texto); background: #fff;
   }
   input:focus { outline: none; border-color: var(--azul); }
+  textarea {
+    width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 14.5px; color: var(--texto); background: #fff; font-family: inherit; resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: var(--azul); }
 
   .lista-produtos { max-height: 220px; overflow-y: auto; margin-top: 8px; border-radius: 9px; border: 1px solid var(--linha); }
   .item-produto { padding: 11px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14px; display: flex; justify-content: space-between; }
@@ -196,6 +201,12 @@
       Emitir nota fiscal para este pedido
     </label>
     <p class="ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
+  </div>
+
+  <div class="passo" id="passo-observacoes">
+    <h2>6. Observações</h2>
+    <textarea id="campo-observacoes" rows="3" placeholder="Endereço de entrega, horário do cliente, número do pedido, etc."></textarea>
+    <p class="ajuda-nota-fiscal">Se marcar "Emitir nota fiscal", esse texto vai junto no campo de Informações Complementares da nota.</p>
   </div>
 
   <div class="barra-final">
@@ -535,6 +546,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         p_com_nota_fiscal: document.getElementById("campo-emite-nota").checked,
         p_parcelas_detalhe: parcelasDetalhe,
         p_pessoa: pessoa,
+        p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
       }),
     });
     mensagem.className = "mensagem sucesso";
@@ -550,6 +562,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     document.getElementById("passo-itens").classList.add("desabilitado");
     document.getElementById("passo-parcelas").classList.add("desabilitado");
     document.getElementById("campo-emite-nota").checked = false;
+    document.getElementById("campo-observacoes").value = "";
     desenharParcelas();
     desenharTabelaItensPedido();
   } catch (erro) {
