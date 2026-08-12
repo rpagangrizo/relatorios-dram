@@ -157,8 +157,18 @@
     <div style="margin-top:8px"><input type="text" id="campo-pessoa-manual" placeholder="Seu nome"></div>
   </div>
 
+  <div class="passo" id="passo-tipo-operacao">
+    <h2>Tipo de operação</h2>
+    <div class="opcoes-deposito" id="opcoes-tipo-operacao">
+      <button type="button" class="opcao-deposito ativa" data-tipo="venda">Venda</button>
+      <button type="button" class="opcao-deposito" data-tipo="comodato">Comodato</button>
+      <button type="button" class="opcao-deposito" data-tipo="devolucao_comodato">Devolução de Comodato</button>
+      <button type="button" class="opcao-deposito" data-tipo="transferencia">Transferência</button>
+    </div>
+  </div>
+
   <div class="passo" id="passo-cliente">
-    <h2>1. Cliente</h2>
+    <h2 id="titulo-passo-cliente">1. Cliente</h2>
     <input type="text" id="campo-busca-cliente" placeholder="Buscar cliente...">
     <div class="lista-produtos" id="lista-clientes"></div>
     <div class="selecionado-caixa" id="caixa-cliente-selecionado">
@@ -167,9 +177,26 @@
     </div>
   </div>
 
+  <div class="passo desabilitado" id="passo-equipamento" style="display:none">
+    <h2 id="titulo-passo-equipamento">Equipamento</h2>
+    <div class="campo">
+      <label>Descrição do equipamento</label>
+      <input type="text" id="campo-descricao-equipamento" placeholder="Ex: Freezer horizontal 300L">
+    </div>
+    <div class="campo" style="margin-top:10px">
+      <label>Valor de referência (R$)</label>
+      <input type="number" id="campo-valor-equipamento" min="0" step="0.01" placeholder="0,00">
+    </div>
+  </div>
+
   <div class="passo desabilitado" id="passo-deposito">
-    <h2>2. De qual depósito sai essa venda?</h2>
+    <h2 id="titulo-passo-deposito">2. De qual depósito sai essa venda?</h2>
     <div class="opcoes-deposito" id="opcoes-deposito"></div>
+  </div>
+
+  <div class="passo" id="passo-deposito-destino" style="display:none">
+    <h2>Depósito de destino</h2>
+    <div class="opcoes-deposito" id="opcoes-deposito-destino"></div>
   </div>
 
   <div class="passo desabilitado" id="passo-itens">
@@ -196,11 +223,11 @@
 
   <div class="passo" id="passo-nota-fiscal">
     <h2>5. Nota fiscal</h2>
-    <label class="opcao-checkbox">
+    <label class="opcao-checkbox" id="linha-checkbox-nota">
       <input type="checkbox" id="campo-emite-nota">
       Emitir nota fiscal para este pedido
     </label>
-    <p class="ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
+    <p class="ajuda-nota-fiscal" id="texto-ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
   </div>
 
   <div class="passo" id="passo-observacoes">
@@ -277,10 +304,89 @@ let depositos = [];
 let itensCatalogo = [];
 let clienteEscolhido = null;
 let depositoEscolhidoId = null;
+let depositoDestinoEscolhidoId = null;
 let saldosEstoque = new Map();
 let precosTabela = new Map();
 let itensPedido = [];
 let parcelasPedido = []; // [{numero_parcela, data_vencimento}] - data_vencimento em formato AAAA-MM-DD
+let tipoOperacao = "venda"; // 'venda' | 'comodato' | 'devolucao_comodato' | 'transferencia'
+
+// CNPJ da Filial (Barueri), cadastrada como cliente normal - usada como
+// destinatario automatico quando a transferencia envolve o deposito dela.
+const CNPJ_FILIAL = "13086597000261";
+
+function nomeDepositoContem(depositoId, trecho) {
+  const dep = depositos.find(d => d.id === depositoId);
+  return dep ? dep.nome.toLowerCase().includes(trecho.toLowerCase()) : false;
+}
+
+document.querySelectorAll("#opcoes-tipo-operacao button").forEach(botao => {
+  botao.addEventListener("click", () => {
+    document.querySelectorAll("#opcoes-tipo-operacao button").forEach(b => b.classList.remove("ativa"));
+    botao.classList.add("ativa");
+    tipoOperacao = botao.dataset.tipo;
+    aplicarTipoOperacaoNaTela();
+  });
+});
+
+function aplicarTipoOperacaoNaTela() {
+  // reseta selecoes ao trocar de tipo, pra nao misturar dado de um fluxo com outro
+  clienteEscolhido = null;
+  depositoEscolhidoId = null;
+  depositoDestinoEscolhidoId = null;
+  itensPedido = [];
+  parcelasPedido = [];
+  document.getElementById("campo-busca-cliente").value = "";
+  document.getElementById("lista-clientes").innerHTML = "";
+  document.getElementById("caixa-cliente-selecionado").style.display = "none";
+  document.getElementById("campo-descricao-equipamento").value = "";
+  document.getElementById("campo-valor-equipamento").value = "";
+  document.querySelectorAll(".opcao-deposito[data-id]").forEach(b => b.classList.remove("ativa"));
+  desenharTabelaItensPedido();
+  desenharParcelas();
+
+  const ehComodatoOuDevolucao = tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato";
+  const ehTransferencia = tipoOperacao === "transferencia";
+  const ehVenda = tipoOperacao === "venda";
+
+  document.getElementById("passo-cliente").style.display = ehTransferencia ? "none" : "";
+  document.getElementById("titulo-passo-cliente").textContent =
+    tipoOperacao === "devolucao_comodato" ? "Cliente que está devolvendo" :
+    tipoOperacao === "comodato" ? "Cliente que vai receber" : "1. Cliente";
+
+  document.getElementById("passo-equipamento").style.display = ehComodatoOuDevolucao ? "" : "none";
+  document.getElementById("passo-equipamento").classList.remove("desabilitado");
+  document.getElementById("titulo-passo-equipamento").textContent =
+    tipoOperacao === "devolucao_comodato" ? "Equipamento sendo devolvido" : "Equipamento";
+
+  document.getElementById("passo-deposito").style.display = (ehVenda || ehTransferencia) ? "" : "none";
+  document.getElementById("titulo-passo-deposito").textContent =
+    ehTransferencia ? "Depósito de origem" : "2. De qual depósito sai essa venda?";
+
+  document.getElementById("passo-deposito-destino").style.display = ehTransferencia ? "" : "none";
+
+  document.getElementById("passo-itens").style.display = (ehVenda || ehTransferencia) ? "" : "none";
+  document.getElementById("passo-parcelas").style.display = ehVenda ? "" : "none";
+
+  // nota fiscal: em comodato/devolucao sempre precisa (sem checkbox, forcado);
+  // em transferencia, so' precisa se envolver o deposito da Filial (Barueri) -
+  // isso e' calculado automaticamente, sem o usuario escolher
+  const linhaCheckbox = document.getElementById("linha-checkbox-nota");
+  const textoAjuda = document.getElementById("texto-ajuda-nota-fiscal");
+  if (ehVenda) {
+    linhaCheckbox.style.display = "";
+    textoAjuda.textContent = "Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.";
+  } else if (ehComodatoOuDevolucao) {
+    linhaCheckbox.style.display = "none";
+    document.getElementById("campo-emite-nota").checked = true;
+    textoAjuda.textContent = "Comodato e devolução de comodato sempre emitem nota fiscal.";
+  } else {
+    linhaCheckbox.style.display = "none";
+    textoAjuda.textContent = "Se a transferência envolver o depósito da Filial (Estoque Barueri), a nota fiscal é obrigatória (calculado automaticamente). Entre depósitos da Matriz, não precisa de nota.";
+  }
+
+  atualizarBotaoConfirmar();
+}
 
 function formatarDataISO(data) {
   const ano = data.getFullYear();
@@ -352,7 +458,7 @@ document.getElementById("botao-add-parcela").addEventListener("click", () => {
 
 async function iniciar() {
   [clientes, depositos] = await Promise.all([
-    chamarSupabase("clientes?select=id,nome,tabela_preco_id,forma_pagamento,prazo_dias,parcelas&order=nome"),
+    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas&order=nome"),
     chamarSupabase("depositos?select=id,nome&order=id"),
   ]);
   desenharOpcoesDeposito();
@@ -412,10 +518,17 @@ function desenharOpcoesDeposito() {
   alvo.querySelectorAll(".opcao-deposito").forEach(botao => {
     botao.addEventListener("click", () => escolherDeposito(botao));
   });
+
+  const alvoDestino = document.getElementById("opcoes-deposito-destino");
+  alvoDestino.innerHTML = depositos.map(d => `<button class="opcao-deposito" data-id="${d.id}">${d.nome}</button>`).join("");
+  alvoDestino.querySelectorAll(".opcao-deposito").forEach(botao => {
+    botao.addEventListener("click", () => escolherDepositoDestino(botao));
+  });
 }
 
 async function escolherDeposito(botao) {
-  document.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
+  const container = botao.closest("#opcoes-deposito");
+  container.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
   botao.classList.add("ativa");
   depositoEscolhidoId = Number(botao.dataset.id);
   document.getElementById("passo-itens").classList.remove("desabilitado");
@@ -427,6 +540,14 @@ async function escolherDeposito(botao) {
   saldosEstoque = new Map(saldos.map(s => [s.item_id, Number(s.quantidade)]));
   desenharListaProdutosParaAdicionar("");
   desenharTabelaItensPedido();
+  atualizarBotaoConfirmar();
+}
+
+function escolherDepositoDestino(botao) {
+  const container = botao.closest("#opcoes-deposito-destino");
+  container.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
+  botao.classList.add("ativa");
+  depositoDestinoEscolhidoId = Number(botao.dataset.id);
   atualizarBotaoConfirmar();
 }
 
@@ -510,11 +631,32 @@ function algumItemExcedeEstoque() {
   return itensPedido.some(i => (saldosEstoque.get(i.item_id) || 0) < i.quantidade);
 }
 
+function determinarNotaFiscalTransferencia() {
+  // precisa de nota se envolver o deposito da Filial (Estoque Barueri)
+  const origemEhFilial = nomeDepositoContem(depositoEscolhidoId, "Barueri");
+  const destinoEhFilial = nomeDepositoContem(depositoDestinoEscolhidoId, "Barueri");
+  return origemEhFilial || destinoEhFilial;
+}
+
 function atualizarBotaoConfirmar() {
-  const parcelasValidas = parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento);
-  const tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa &&
-    itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
-    !algumItemExcedeEstoque() && parcelasValidas;
+  let tudoPreenchido = false;
+
+  if (tipoOperacao === "venda") {
+    const parcelasValidas = parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento);
+    tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      !algumItemExcedeEstoque() && parcelasValidas;
+  } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
+    const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+    const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+    tudoPreenchido = !!(clienteEscolhido && pessoa && descricao && valor > 0);
+  } else if (tipoOperacao === "transferencia") {
+    tudoPreenchido = !!(depositoEscolhidoId && depositoDestinoEscolhidoId &&
+      depositoEscolhidoId !== depositoDestinoEscolhidoId && pessoa &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      !algumItemExcedeEstoque());
+  }
+
   document.getElementById("botao-confirmar").disabled = !tudoPreenchido;
 }
 
@@ -526,43 +668,97 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
   mensagem.className = "mensagem";
 
   try {
-    const totalFinal = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
-    const valoresParcelas = distribuirValoresParcelas(totalFinal, parcelasPedido.length);
-    const parcelasDetalhe = parcelasPedido.map((p, indice) => ({
-      numero_parcela: p.numero_parcela,
-      data_vencimento: p.data_vencimento,
-      valor: valoresParcelas[indice],
-    }));
+    let resultadoId;
 
-    const numeroPedido = await chamarSupabase("rpc/confirmar_pedido", {
-      method: "POST",
-      body: JSON.stringify({
-        p_cliente_id: clienteEscolhido.id,
-        p_deposito_id: depositoEscolhidoId,
-        p_forma_pagamento: clienteEscolhido.forma_pagamento || null,
-        p_prazo_dias: clienteEscolhido.prazo_dias || null,
-        p_parcelas: parcelasPedido.length,
-        p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
-        p_com_nota_fiscal: document.getElementById("campo-emite-nota").checked,
-        p_parcelas_detalhe: parcelasDetalhe,
-        p_pessoa: pessoa,
-        p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
-      }),
-    });
-    mensagem.className = "mensagem sucesso";
-    mensagem.innerHTML = `Pedido nº ${numeroPedido} confirmado! <a class="link-discreto" href="recibo-pedido.html?pedido=${numeroPedido}" target="_blank">Ver / Imprimir recibo</a>`;
+    if (tipoOperacao === "venda") {
+      const totalFinal = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+      const valoresParcelas = distribuirValoresParcelas(totalFinal, parcelasPedido.length);
+      const parcelasDetalhe = parcelasPedido.map((p, indice) => ({
+        numero_parcela: p.numero_parcela,
+        data_vencimento: p.data_vencimento,
+        valor: valoresParcelas[indice],
+      }));
+
+      resultadoId = await chamarSupabase("rpc/confirmar_pedido", {
+        method: "POST",
+        body: JSON.stringify({
+          p_cliente_id: clienteEscolhido.id,
+          p_deposito_id: depositoEscolhidoId,
+          p_forma_pagamento: clienteEscolhido.forma_pagamento || null,
+          p_prazo_dias: clienteEscolhido.prazo_dias || null,
+          p_parcelas: parcelasPedido.length,
+          p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
+          p_com_nota_fiscal: document.getElementById("campo-emite-nota").checked,
+          p_parcelas_detalhe: parcelasDetalhe,
+          p_pessoa: pessoa,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+        }),
+      });
+      mensagem.className = "mensagem sucesso";
+      mensagem.innerHTML = `Pedido nº ${resultadoId} confirmado! <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
+
+    } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
+      const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+      const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+
+      resultadoId = await chamarSupabase("rpc/confirmar_operacao_especial", {
+        method: "POST",
+        body: JSON.stringify({
+          p_tipo: tipoOperacao,
+          p_cliente_id: clienteEscolhido.id,
+          p_descricao_equipamento: descricao,
+          p_valor_referencia: valor,
+          p_com_nota_fiscal: true,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+          p_pessoa: pessoa,
+        }),
+      });
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = `${tipoOperacao === "comodato" ? "Comodato" : "Devolução de comodato"} nº ${resultadoId} registrado(a) com sucesso.`;
+
+    } else if (tipoOperacao === "transferencia") {
+      const precisaNota = determinarNotaFiscalTransferencia();
+      let clienteFilialId = null;
+      if (precisaNota) {
+        const filial = clientes.find(c => c.cnpj_cpf && c.cnpj_cpf.replace(/\D/g, "") === CNPJ_FILIAL.replace(/\D/g, ""));
+        if (!filial) {
+          throw new Error("Não encontrei a Filial cadastrada como cliente (confira o CNPJ configurado no código).");
+        }
+        clienteFilialId = filial.id;
+      }
+
+      resultadoId = await chamarSupabase("rpc/confirmar_operacao_especial", {
+        method: "POST",
+        body: JSON.stringify({
+          p_tipo: "transferencia",
+          p_cliente_id: clienteFilialId,
+          p_deposito_origem_id: depositoEscolhidoId,
+          p_deposito_destino_id: depositoDestinoEscolhidoId,
+          p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, valor_unitario: i.preco_unitario })),
+          p_com_nota_fiscal: precisaNota,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+          p_pessoa: pessoa,
+        }),
+      });
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = `Transferência nº ${resultadoId} registrada com sucesso.` +
+        (precisaNota ? " Precisa emitir nota fiscal (envolve a Filial)." : " Sem necessidade de nota (só entre depósitos da Matriz).");
+    }
 
     itensPedido = [];
     clienteEscolhido = null;
     depositoEscolhidoId = null;
+    depositoDestinoEscolhidoId = null;
     parcelasPedido = [];
     document.getElementById("caixa-cliente-selecionado").style.display = "none";
-    document.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
+    document.querySelectorAll("#opcoes-deposito .opcao-deposito, #opcoes-deposito-destino .opcao-deposito").forEach(b => b.classList.remove("ativa"));
     document.getElementById("passo-deposito").classList.add("desabilitado");
     document.getElementById("passo-itens").classList.add("desabilitado");
     document.getElementById("passo-parcelas").classList.add("desabilitado");
     document.getElementById("campo-emite-nota").checked = false;
     document.getElementById("campo-observacoes").value = "";
+    document.getElementById("campo-descricao-equipamento").value = "";
+    document.getElementById("campo-valor-equipamento").value = "";
     desenharParcelas();
     desenharTabelaItensPedido();
   } catch (erro) {
