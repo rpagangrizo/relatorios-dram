@@ -39,6 +39,8 @@
   .cabecalho-folha .numero { text-align: right; }
   .cabecalho-folha .numero .rotulo { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.5px; }
   .cabecalho-folha .numero .valor { font-size: 22px; font-weight: 700; color: var(--azul); }
+  .banner-cancelado { background: #FBE7E4; color: #C0392B; font-weight: 700; text-align: center;
+    padding: 10px; border-radius: 9px; margin-bottom: 18px; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px; }
 
   .grade-info { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
   .bloco-info .rotulo { font-size: 10.5px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.5px; margin-bottom: 3px; }
@@ -85,6 +87,7 @@
     body { background: #fff; }
     .barra-acoes { display: none; }
     .folha { border: none; margin: 0; max-width: none; }
+    .botoes-nota { display: none; }
   }
 </style>
 </head>
@@ -145,7 +148,7 @@ async function carregarRecibo() {
 
   try {
     const [pedidos, itens, parcelas] = await Promise.all([
-      chamarSupabase(`pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,observacoes,clientes(nome),depositos(nome)&id=eq.${pedidoId}`),
+      chamarSupabase(`pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,observacoes,status,clientes(nome),depositos(nome)&id=eq.${pedidoId}`),
       chamarSupabase(`pedido_itens?select=quantidade,preco_unitario,itens(nome)&pedido_id=eq.${pedidoId}`),
       chamarSupabase(`pedido_parcelas?select=numero_parcela,data_vencimento,valor&pedido_id=eq.${pedidoId}&order=numero_parcela`),
     ]);
@@ -197,6 +200,7 @@ async function carregarRecibo() {
     }
 
     alvo.innerHTML = `
+      ${pedido.status === "cancelado" ? `<div class="banner-cancelado">Pedido Cancelado</div>` : ""}
       <div class="cabecalho-folha">
         <img src="logo.png" alt="Arco Íris" onerror="this.style.display='none'">
         <div class="numero">
@@ -234,7 +238,7 @@ async function carregarRecibo() {
         Powered by DRAM
       </div>
     `;
-    desenharSecaoNotaFiscal(pedido.id);
+    desenharSecaoNotaFiscal(pedido.id, pedido.status);
   } catch (erro) {
     alvo.innerHTML = `<div class="erro">Não consegui carregar o pedido: ${erro.message}</div>`;
   }
@@ -265,7 +269,7 @@ async function chamarFunction(nome, corpo) {
   return { ok: resposta.ok, dados };
 }
 
-async function desenharSecaoNotaFiscal(pedidoId) {
+async function desenharSecaoNotaFiscal(pedidoId, statusPedido) {
   const alvo = document.getElementById("secao-nota-fiscal");
   const [notas, cartas] = await Promise.all([
     chamarSupabase(`notas_fiscais?pedido_id=eq.${pedidoId}&order=criado_em.desc`),
@@ -274,36 +278,30 @@ async function desenharSecaoNotaFiscal(pedidoId) {
 
   const notaAutorizada = notas.find(n => n.status === "autorizado");
   const notaCancelada = notas.find(n => n.status === "cancelado");
-
-  if (!notaAutorizada && !notaCancelada) {
-    alvo.innerHTML = ""; // sem nota emitida ainda pra esse pedido - nao mostra a secao
-    return;
-  }
-
   const notaAtual = notaCancelada || notaAutorizada;
-  const dadosNota = notaAtual.resposta_bruta || {};
-  const numero = dadosNota.numero || "—";
-  const chave = dadosNota.chave_nfe || "";
 
-  let html = `<h2>Nota Fiscal</h2>`;
-  if (notaCancelada) {
-    html += `
-      <div class="caixa-nota cancelada">
-        <div class="linha1">Nota nº ${numero} — CANCELADA</div>
-        <div class="chave">${chave}</div>
-      </div>
-    `;
-  } else {
-    html += `
-      <div class="caixa-nota autorizada">
-        <div class="linha1">Nota nº ${numero} — Autorizada</div>
-        <div class="chave">${chave}</div>
-      </div>
-      <div class="botoes-nota">
-        <button type="button" class="botao-nota perigo" id="botao-cancelar-nota">Cancelar Nota Fiscal</button>
-        <button type="button" class="botao-nota" id="botao-emitir-cce">Emitir Carta de Correção</button>
-      </div>
-    `;
+  let html = "";
+
+  if (notaAtual) {
+    const dadosNota = notaAtual.resposta_bruta || {};
+    const numero = dadosNota.numero || "—";
+    const chave = dadosNota.chave_nfe || "";
+    html += `<h2>Nota Fiscal</h2>`;
+    if (notaCancelada) {
+      html += `
+        <div class="caixa-nota cancelada">
+          <div class="linha1">Nota nº ${numero} — CANCELADA</div>
+          <div class="chave">${chave}</div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="caixa-nota autorizada">
+          <div class="linha1">Nota nº ${numero} — Autorizada</div>
+          <div class="chave">${chave}</div>
+        </div>
+      `;
+    }
   }
 
   const cartasAutorizadas = cartas.filter(c => c.status === "autorizado");
@@ -316,34 +314,50 @@ async function desenharSecaoNotaFiscal(pedidoId) {
     html += `</div>`;
   }
 
+  // "Cancelar Pedido" fica disponível pra qualquer pedido ainda não
+  // cancelado, tenha nota ou não (cuida de tudo: cancela a nota se tiver,
+  // devolve o estoque, marca o pedido como cancelado). "Emitir Carta de
+  // Correção" só faz sentido se já tiver uma nota autorizada.
+  if (statusPedido !== "cancelado") {
+    html += `<div class="botoes-nota">`;
+    if (notaAutorizada) {
+      html += `<button type="button" class="botao-nota" id="botao-emitir-cce">Emitir Carta de Correção</button>`;
+    }
+    html += `<button type="button" class="botao-nota perigo" id="botao-cancelar-pedido">Cancelar Pedido</button>`;
+    html += `</div>`;
+  }
+
   alvo.innerHTML = html;
 
-  const botaoCancelar = document.getElementById("botao-cancelar-nota");
-  if (botaoCancelar) {
-    botaoCancelar.addEventListener("click", async () => {
-      const justificativa = window.prompt("Motivo do cancelamento (mínimo 15 caracteres):");
+  const botaoCancelarPedido = document.getElementById("botao-cancelar-pedido");
+  if (botaoCancelarPedido) {
+    botaoCancelarPedido.addEventListener("click", async () => {
+      const aviso = notaAutorizada
+        ? "Motivo do cancelamento (mínimo 15 caracteres). Isso vai cancelar a nota fiscal E devolver o estoque:"
+        : "Motivo do cancelamento (mínimo 15 caracteres). Isso vai devolver o estoque:";
+      const justificativa = window.prompt(aviso);
       if (!justificativa) return;
       if (justificativa.length < 15) {
         alert("A justificativa precisa ter pelo menos 15 caracteres.");
         return;
       }
-      if (!confirm(`Confirma o cancelamento da nota nº ${numero}? Essa ação não pode ser desfeita.`)) return;
-      botaoCancelar.disabled = true;
-      botaoCancelar.textContent = "Cancelando...";
+      if (!confirm(`Confirma o cancelamento do pedido nº ${pedidoId}? Essa ação não pode ser desfeita.`)) return;
+      botaoCancelarPedido.disabled = true;
+      botaoCancelarPedido.textContent = "Cancelando...";
       try {
-        const { ok, dados } = await chamarFunction("cancelar-nota-fiscal", { pedido_id: pedidoId, justificativa });
-        if (ok && dados.focus && dados.focus.status === "cancelado") {
-          alert("Nota cancelada com sucesso.");
-          desenharSecaoNotaFiscal(pedidoId);
+        const { ok, dados } = await chamarFunction("cancelar-pedido", { pedido_id: pedidoId, justificativa });
+        if (ok) {
+          alert("Pedido cancelado com sucesso. O estoque foi devolvido.");
+          location.reload();
         } else {
-          alert(`Não consegui cancelar: ${(dados.focus && (dados.focus.mensagem_sefaz || dados.focus.mensagem)) || dados.erro || JSON.stringify(dados)}`);
-          botaoCancelar.disabled = false;
-          botaoCancelar.textContent = "Cancelar Nota Fiscal";
+          alert(`Não consegui cancelar: ${dados.erro || JSON.stringify(dados)}`);
+          botaoCancelarPedido.disabled = false;
+          botaoCancelarPedido.textContent = "Cancelar Pedido";
         }
       } catch (erro) {
         alert(`Erro: ${erro.message}`);
-        botaoCancelar.disabled = false;
-        botaoCancelar.textContent = "Cancelar Nota Fiscal";
+        botaoCancelarPedido.disabled = false;
+        botaoCancelarPedido.textContent = "Cancelar Pedido";
       }
     });
   }
@@ -363,7 +377,7 @@ async function desenharSecaoNotaFiscal(pedidoId) {
         const { ok, dados } = await chamarFunction("emitir-carta-correcao", { pedido_id: pedidoId, correcao });
         if (ok && dados.focus && dados.focus.status === "autorizado") {
           alert("Carta de Correção emitida com sucesso.");
-          desenharSecaoNotaFiscal(pedidoId);
+          desenharSecaoNotaFiscal(pedidoId, statusPedido);
         } else {
           alert(`Não consegui emitir: ${(dados.focus && (dados.focus.mensagem_sefaz || dados.focus.mensagem)) || dados.erro || JSON.stringify(dados)}`);
         }
