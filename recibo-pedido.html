@@ -336,7 +336,7 @@ async function desenharSecaoNotaFiscal(pedidoId) {
           alert("Nota cancelada com sucesso.");
           desenharSecaoNotaFiscal(pedidoId);
         } else {
-          alert(`Não consegui cancelar: ${(dados.focus && dados.focus.mensagem_sefaz) || dados.erro || "erro desconhecido"}`);
+          alert(`Não consegui cancelar: ${(dados.focus && (dados.focus.mensagem_sefaz || dados.focus.mensagem)) || dados.erro || JSON.stringify(dados)}`);
           botaoCancelar.disabled = false;
           botaoCancelar.textContent = "Cancelar Nota Fiscal";
         }
@@ -365,7 +365,7 @@ async function desenharSecaoNotaFiscal(pedidoId) {
           alert("Carta de Correção emitida com sucesso.");
           desenharSecaoNotaFiscal(pedidoId);
         } else {
-          alert(`Não consegui emitir: ${(dados.focus && dados.focus.mensagem_sefaz) || dados.erro || "erro desconhecido"}`);
+          alert(`Não consegui emitir: ${(dados.focus && (dados.focus.mensagem_sefaz || dados.focus.mensagem)) || dados.erro || JSON.stringify(dados)}`);
         }
       } catch (erro) {
         alert(`Erro: ${erro.message}`);
