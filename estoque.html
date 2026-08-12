@@ -146,6 +146,36 @@
     margin: 0;
     padding: 14px 16px 10px;
   }
+  .cabecalho-secao {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-right: 14px;
+  }
+  .cabecalho-secao h2 { padding-right: 0; }
+  .controles-exportar { display: flex; gap: 8px; align-items: center; }
+  .controles-exportar select {
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1.5px solid var(--linha);
+    font-size: 12.5px;
+    color: var(--texto);
+    background: #fff;
+  }
+  .botao-exportar {
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1.5px solid var(--azul);
+    background: var(--azul);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .botao-exportar:disabled { background: #C9CFD3; border-color: #C9CFD3; cursor: not-allowed; }
 
   table { width: 100%; border-collapse: collapse; }
   thead th {
@@ -261,7 +291,13 @@
   </div>
 
   <div class="cartao-secao" id="secao-acabado">
-    <h2>Produto acabado - por depósito e total</h2>
+    <div class="cabecalho-secao">
+      <h2>Produto acabado - por depósito e total</h2>
+      <div class="controles-exportar">
+        <select id="select-deposito-exportar"></select>
+        <button type="button" class="botao-exportar" id="botao-exportar-excel">⬇️ Exportar Excel</button>
+      </div>
+    </div>
     <div id="conteudo-acabado" class="carregando">Carregando...</div>
   </div>
 
@@ -273,9 +309,11 @@
   <p class="rodape">Powered by DRAM</p>
 </main>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
 
 async function chamarSupabase(caminho) {
   const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
@@ -329,9 +367,16 @@ async function carregarProdutoAcabado() {
 
     dadosProdutoAcabado = { itens, depositos, saldos, categorias };
     desenharProdutoAcabado("");
+    popularSeletorDeposito(depositos);
   } catch (erro) {
     alvo.innerHTML = `<div class="erro">Não consegui carregar o estoque. ${erro.message}</div>`;
   }
+}
+
+function popularSeletorDeposito(depositos) {
+  const select = document.getElementById("select-deposito-exportar");
+  select.innerHTML = `<option value="todos">Consolidado (todos)</option>` +
+    depositos.map(d => `<option value="${d.id}">${d.nome}</option>`).join("");
 }
 
 function desenharProdutoAcabado(filtro) {
@@ -441,6 +486,77 @@ document.querySelectorAll(".abas button").forEach((botao) => {
     document.getElementById("secao-materia").style.display = aba === "materia" ? "" : "none";
   });
 });
+
+document.getElementById("botao-exportar-excel").addEventListener("click", () => {
+  const botao = document.getElementById("botao-exportar-excel");
+  if (!dadosProdutoAcabado) return;
+  botao.disabled = true;
+  botao.textContent = "Gerando...";
+  try {
+    exportarEstoqueParaExcel();
+  } catch (erro) {
+    alert(`Não consegui gerar o Excel: ${erro.message}`);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "⬇️ Exportar Excel";
+  }
+});
+
+function exportarEstoqueParaExcel() {
+  const { itens, depositos, saldos, categorias } = dadosProdutoAcabado;
+  const filtroDeposito = document.getElementById("select-deposito-exportar").value;
+  const filtroTexto = document.getElementById("campo-busca").value.trim().toLowerCase();
+
+  const depositosParaExportar = filtroDeposito === "todos"
+    ? depositos
+    : depositos.filter(d => String(d.id) === filtroDeposito);
+
+  const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes(filtroTexto));
+
+  // mesmo agrupamento/ordenacao da tela: por categoria, depois embalagem
+  // (100g antes de barra, "Sandro" por ultimo), depois alfabetico
+  const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
+  const gruposPorCategoria = new Map();
+  for (const item of itensFiltrados) {
+    const chave = item.categoria_produto_id ?? "sem";
+    if (!gruposPorCategoria.has(chave)) gruposPorCategoria.set(chave, []);
+    gruposPorCategoria.get(chave).push(item);
+  }
+  for (const lista of gruposPorCategoria.values()) {
+    lista.sort(compararItensPorEmbalagemENome);
+  }
+  const ordemCategorias = [...categorias.map(c => c.id), "sem"].filter(id => gruposPorCategoria.has(id));
+
+  const mostraTotal = depositosParaExportar.length > 1;
+  const linhas = [];
+  linhas.push(["Categoria", "Item", ...depositosParaExportar.map(d => d.nome), ...(mostraTotal ? ["Total"] : [])]);
+
+  for (const categoriaId of ordemCategorias) {
+    const nomeCategoria = categoriaId === "sem" ? "Sem categoria" : nomeCategoriaPorId.get(categoriaId);
+    for (const item of gruposPorCategoria.get(categoriaId)) {
+      const linha = [nomeCategoria, item.nome];
+      let total = 0;
+      for (const dep of depositosParaExportar) {
+        const qtd = saldos.get(`${item.id}-${dep.id}`) || 0;
+        linha.push(qtd);
+        total += qtd;
+      }
+      if (mostraTotal) linha.push(total);
+      linhas.push(linha);
+    }
+  }
+
+  const planilha = XLSX.utils.aoa_to_sheet(linhas);
+  planilha["!cols"] = [{ wch: 16 }, { wch: 34 }, ...depositosParaExportar.map(() => ({ wch: 14 })), ...(mostraTotal ? [{ wch: 12 }] : [])];
+
+  const pasta = XLSX.utils.book_new();
+  const nomeAba = filtroDeposito === "todos" ? "Consolidado" : (depositosParaExportar[0]?.nome || "Estoque").slice(0, 28);
+  XLSX.utils.book_append_sheet(pasta, planilha, nomeAba);
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const sufixo = filtroDeposito === "todos" ? "consolidado" : nomeAba.toLowerCase().replace(/\s+/g, "-");
+  XLSX.writeFile(pasta, `estoque_${sufixo}_${hoje}.xlsx`);
+}
 
 carregarProdutoAcabado();
 carregarMateriaPrima();
