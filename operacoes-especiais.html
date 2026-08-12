@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Operações Especiais</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 130px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select, .campo-filtro input { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); }
+  .campo-filtro select:focus, .campo-filtro input:focus { outline: none; border-color: var(--azul); }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 10px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 12px 14px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  .numero-operacao { font-weight: 700; color: var(--azul); }
+
+  .selo-tipo { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .selo-tipo.comodato { background: #EAF1F6; color: var(--azul); }
+  .selo-tipo.devolucao_comodato { background: #FFF3E0; color: #92600C; }
+  .selo-tipo.transferencia { background: #E4F3E8; color: var(--verde); }
+
+  .selo-status { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 700; }
+  .selo-status.confirmado { background: #E4F3E8; color: var(--verde); }
+  .selo-status.cancelado { background: #FBE7E4; color: var(--vermelho); }
+
+  .selo-nota { font-size: 12px; }
+  .selo-nota.sim { color: var(--verde); font-weight: 700; }
+  .selo-nota.nao { color: var(--texto-suave); }
+  .selo-nota.pendente { color: #92600C; font-weight: 700; }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: #C0392B; }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+
+  nav.nav-dram {
+    background: #123551;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px;
+  }
+  nav.nav-dram a {
+    color: #C9DCEA;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 14px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+  }
+  nav.nav-dram a.ativa {
+    color: #fff;
+    border-bottom-color: #D9662F;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Operações Especiais</h1>
+    <p>Comodato, devolução e transferência</p>
+  </div>
+</header>
+<nav class="nav-dram">
+  <a href="estoque.html">Estoque</a>
+  <a href="ajustar-estoque.html">Ajustar Estoque</a>
+  <a href="tabelas-preco.html">Tabelas de Preço</a>
+  <a href="clientes.html">Clientes</a>
+  <a href="novo-pedido.html">Novo Pedido</a>
+  <a href="pedidos.html">Pedidos</a>
+  <a href="operacoes-especiais.html" class="ativa">Operações Especiais</a>
+</nav>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro">
+        <label>Tipo</label>
+        <select id="filtro-tipo">
+          <option value="">Todos</option>
+          <option value="comodato">Comodato</option>
+          <option value="devolucao_comodato">Devolução de Comodato</option>
+          <option value="transferencia">Transferência</option>
+        </select>
+      </div>
+      <div class="campo-filtro">
+        <label>Status</label>
+        <select id="filtro-status">
+          <option value="">Todos</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+      </div>
+      <button class="botao" id="botao-limpar">Limpar filtros</button>
+    </div>
+  </div>
+
+  <div class="cartao-secao">
+    <table>
+      <thead>
+        <tr>
+          <th>Nº</th>
+          <th>Tipo</th>
+          <th>Cliente / Depósitos</th>
+          <th>Descrição</th>
+          <th>Data</th>
+          <th>Status</th>
+          <th>Nota Fiscal</th>
+          <th class="num">Valor</th>
+        </tr>
+      </thead>
+      <tbody id="corpo-tabela"></tbody>
+    </table>
+    <div id="area-mensagem"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+const NOMES_TIPO = {
+  comodato: "Comodato",
+  devolucao_comodato: "Devolução de Comodato",
+  transferencia: "Transferência",
+};
+
+let operacoes = [];
+let notaAutorizadaPorOperacao = new Map();
+
+async function carregarOperacoes() {
+  const corpo = document.getElementById("corpo-tabela");
+  const mensagem = document.getElementById("area-mensagem");
+  mensagem.innerHTML = `<div class="carregando">Carregando...</div>`;
+  corpo.innerHTML = "";
+  try {
+    const [dados, notas] = await Promise.all([
+      chamarSupabase(
+        "operacoes_especiais?select=id,tipo,total,valor_referencia,descricao_equipamento,com_nota_fiscal,status," +
+          "criado_em,clientes(nome),deposito_origem:deposito_origem_id(nome),deposito_destino:deposito_destino_id(nome)" +
+          "&order=criado_em.desc",
+      ),
+      chamarSupabase("notas_fiscais?select=operacao_especial_id,status&status=eq.autorizado&operacao_especial_id=not.is.null"),
+    ]);
+    operacoes = dados;
+    notaAutorizadaPorOperacao = new Map(notas.map(n => [n.operacao_especial_id, n]));
+    mensagem.innerHTML = "";
+    desenharTabela();
+  } catch (erro) {
+    mensagem.innerHTML = `<div class="erro">Não consegui carregar: ${erro.message}</div>`;
+  }
+}
+
+function desenharTabela() {
+  const corpo = document.getElementById("corpo-tabela");
+  const mensagem = document.getElementById("area-mensagem");
+  const filtroTipo = document.getElementById("filtro-tipo").value;
+  const filtroStatus = document.getElementById("filtro-status").value;
+
+  const filtradas = operacoes.filter(op => {
+    if (filtroTipo && op.tipo !== filtroTipo) return false;
+    if (filtroStatus && op.status !== filtroStatus) return false;
+    return true;
+  });
+
+  if (filtradas.length === 0) {
+    corpo.innerHTML = "";
+    mensagem.innerHTML = `<div class="vazio">Nenhuma operação encontrada.</div>`;
+    return;
+  }
+  mensagem.innerHTML = "";
+
+  corpo.innerHTML = filtradas.map(op => {
+    const data = new Date(op.criado_em);
+    const dataTexto = data.toLocaleDateString("pt-BR") + " " + data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+    const clienteOuDeposito = op.tipo === "transferencia"
+      ? `${op.deposito_origem?.nome || "—"} → ${op.deposito_destino?.nome || "—"}`
+      : (op.clientes?.nome || "—");
+
+    const descricao = op.tipo === "transferencia" ? "—" : (op.descricao_equipamento || "—");
+    const valor = op.tipo === "transferencia" ? op.total : op.valor_referencia;
+
+    const statusTexto = op.status === "cancelado" ? "Cancelado" : "Confirmado";
+
+    let notaTexto, notaClasse;
+    if (!op.com_nota_fiscal) {
+      notaTexto = "Sem nota"; notaClasse = "nao";
+    } else {
+      const nota = notaAutorizadaPorOperacao.get(op.id);
+      if (nota) { notaTexto = "Autorizada"; notaClasse = "sim"; }
+      else { notaTexto = "Pendente"; notaClasse = "pendente"; }
+    }
+
+    return `<tr>
+      <td class="numero-operacao">Nº ${op.id}</td>
+      <td><span class="selo-tipo ${op.tipo}">${NOMES_TIPO[op.tipo] || op.tipo}</span></td>
+      <td>${clienteOuDeposito}</td>
+      <td>${descricao}</td>
+      <td>${dataTexto}</td>
+      <td><span class="selo-status ${op.status}">${statusTexto}</span></td>
+      <td><span class="selo-nota ${notaClasse}">${notaTexto}</span></td>
+      <td class="num">${formatarMoeda(valor)}</td>
+    </tr>`;
+  }).join("");
+}
+
+document.getElementById("filtro-tipo").addEventListener("change", desenharTabela);
+document.getElementById("filtro-status").addEventListener("change", desenharTabela);
+document.getElementById("botao-limpar").addEventListener("click", () => {
+  document.getElementById("filtro-tipo").value = "";
+  document.getElementById("filtro-status").value = "";
+  desenharTabela();
+});
+
+carregarOperacoes();
+</script>
+</body>
+</html>
