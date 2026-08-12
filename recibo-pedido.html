@@ -61,6 +61,22 @@
   .secao-observacoes h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 6px; }
   .secao-observacoes p { font-size: 13.5px; white-space: pre-wrap; margin: 0; }
 
+  .secao-nota-fiscal { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--linha); }
+  .secao-nota-fiscal h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 8px; }
+  .caixa-nota { border-radius: 9px; padding: 12px 14px; font-size: 13.5px; }
+  .caixa-nota.autorizada { background: #E4F3E8; }
+  .caixa-nota.cancelada { background: #FBE7E4; }
+  .caixa-nota .linha1 { font-weight: 700; margin-bottom: 4px; }
+  .caixa-nota .chave { font-size: 11.5px; color: var(--texto-suave); word-break: break-all; }
+  .botoes-nota { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .botao-nota { padding: 9px 14px; border-radius: 8px; border: 1.5px solid var(--linha); background: #fff;
+    font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--texto); }
+  .botao-nota.perigo { border-color: #E5B4AC; color: #C0392B; }
+  .botao-nota:disabled { opacity: 0.5; cursor: not-allowed; }
+  .lista-cce { margin-top: 10px; }
+  .item-cce { font-size: 12.5px; padding: 8px 0; border-top: 1px solid var(--linha); }
+  .item-cce .numero { font-weight: 700; color: var(--azul); }
+
   .rodape-folha { text-align: center; color: #93A0A8; font-size: 11px; margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--linha); }
 
   .carregando, .erro { padding: 40px; text-align: center; color: var(--texto-suave); }
@@ -211,13 +227,153 @@ async function carregarRecibo() {
         </div>
       ` : ""}
 
+      <div class="secao-nota-fiscal" id="secao-nota-fiscal"></div>
+
       <div class="rodape-folha">
         Este é um Pedido de Venda, sem valor fiscal (não é Nota Fiscal).<br>
         Powered by DRAM
       </div>
     `;
+    desenharSecaoNotaFiscal(pedido.id);
   } catch (erro) {
     alvo.innerHTML = `<div class="erro">Não consegui carregar o pedido: ${erro.message}</div>`;
+  }
+}
+
+const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
+
+function obterSessao() {
+  try {
+    return JSON.parse(localStorage.getItem("dram_auth") || "null");
+  } catch {
+    return null;
+  }
+}
+
+async function chamarFunction(nome, corpo) {
+  const sessao = obterSessao();
+  const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
+      "apikey": SUPABASE_KEY,
+    },
+    body: JSON.stringify(corpo),
+  });
+  const dados = await resposta.json();
+  return { ok: resposta.ok, dados };
+}
+
+async function desenharSecaoNotaFiscal(pedidoId) {
+  const alvo = document.getElementById("secao-nota-fiscal");
+  const [notas, cartas] = await Promise.all([
+    chamarSupabase(`notas_fiscais?pedido_id=eq.${pedidoId}&order=criado_em.desc`),
+    chamarSupabase(`cartas_correcao?pedido_id=eq.${pedidoId}&order=criado_em.desc`),
+  ]);
+
+  const notaAutorizada = notas.find(n => n.status === "autorizado");
+  const notaCancelada = notas.find(n => n.status === "cancelado");
+
+  if (!notaAutorizada && !notaCancelada) {
+    alvo.innerHTML = ""; // sem nota emitida ainda pra esse pedido - nao mostra a secao
+    return;
+  }
+
+  const notaAtual = notaCancelada || notaAutorizada;
+  const dadosNota = notaAtual.resposta_bruta || {};
+  const numero = dadosNota.numero || "—";
+  const chave = dadosNota.chave_nfe || "";
+
+  let html = `<h2>Nota Fiscal</h2>`;
+  if (notaCancelada) {
+    html += `
+      <div class="caixa-nota cancelada">
+        <div class="linha1">Nota nº ${numero} — CANCELADA</div>
+        <div class="chave">${chave}</div>
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="caixa-nota autorizada">
+        <div class="linha1">Nota nº ${numero} — Autorizada</div>
+        <div class="chave">${chave}</div>
+      </div>
+      <div class="botoes-nota">
+        <button type="button" class="botao-nota perigo" id="botao-cancelar-nota">Cancelar Nota Fiscal</button>
+        <button type="button" class="botao-nota" id="botao-emitir-cce">Emitir Carta de Correção</button>
+      </div>
+    `;
+  }
+
+  const cartasAutorizadas = cartas.filter(c => c.status === "autorizado");
+  if (cartasAutorizadas.length > 0) {
+    html += `<div class="lista-cce">`;
+    for (const carta of cartasAutorizadas) {
+      const numeroCce = carta.resposta_bruta && carta.resposta_bruta.numero_carta_correcao;
+      html += `<div class="item-cce"><span class="numero">CC-e nº ${numeroCce || "—"}</span> — ${escaparHtml(carta.correcao)}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  alvo.innerHTML = html;
+
+  const botaoCancelar = document.getElementById("botao-cancelar-nota");
+  if (botaoCancelar) {
+    botaoCancelar.addEventListener("click", async () => {
+      const justificativa = window.prompt("Motivo do cancelamento (mínimo 15 caracteres):");
+      if (!justificativa) return;
+      if (justificativa.length < 15) {
+        alert("A justificativa precisa ter pelo menos 15 caracteres.");
+        return;
+      }
+      if (!confirm(`Confirma o cancelamento da nota nº ${numero}? Essa ação não pode ser desfeita.`)) return;
+      botaoCancelar.disabled = true;
+      botaoCancelar.textContent = "Cancelando...";
+      try {
+        const { ok, dados } = await chamarFunction("cancelar-nota-fiscal", { pedido_id: pedidoId, justificativa });
+        if (ok && dados.focus && dados.focus.status === "cancelado") {
+          alert("Nota cancelada com sucesso.");
+          desenharSecaoNotaFiscal(pedidoId);
+        } else {
+          alert(`Não consegui cancelar: ${(dados.focus && dados.focus.mensagem_sefaz) || dados.erro || "erro desconhecido"}`);
+          botaoCancelar.disabled = false;
+          botaoCancelar.textContent = "Cancelar Nota Fiscal";
+        }
+      } catch (erro) {
+        alert(`Erro: ${erro.message}`);
+        botaoCancelar.disabled = false;
+        botaoCancelar.textContent = "Cancelar Nota Fiscal";
+      }
+    });
+  }
+
+  const botaoCce = document.getElementById("botao-emitir-cce");
+  if (botaoCce) {
+    botaoCce.addEventListener("click", async () => {
+      const correcao = window.prompt("Texto da Carta de Correção (mínimo 15 caracteres):");
+      if (!correcao) return;
+      if (correcao.length < 15) {
+        alert("O texto precisa ter pelo menos 15 caracteres.");
+        return;
+      }
+      botaoCce.disabled = true;
+      botaoCce.textContent = "Enviando...";
+      try {
+        const { ok, dados } = await chamarFunction("emitir-carta-correcao", { pedido_id: pedidoId, correcao });
+        if (ok && dados.focus && dados.focus.status === "autorizado") {
+          alert("Carta de Correção emitida com sucesso.");
+          desenharSecaoNotaFiscal(pedidoId);
+        } else {
+          alert(`Não consegui emitir: ${(dados.focus && dados.focus.mensagem_sefaz) || dados.erro || "erro desconhecido"}`);
+        }
+      } catch (erro) {
+        alert(`Erro: ${erro.message}`);
+      } finally {
+        botaoCce.disabled = false;
+        botaoCce.textContent = "Emitir Carta de Correção";
+      }
+    });
   }
 }
 
