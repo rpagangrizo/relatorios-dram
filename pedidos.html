@@ -57,6 +57,9 @@
   tbody tr { cursor: pointer; }
   tbody tr:hover { background: #F6F9FA; }
   .numero-pedido { font-weight: 700; color: var(--azul); }
+  .selo-status { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 700; }
+  .selo-status.faturado { background: #E4F3E8; color: #2F8F4E; }
+  .selo-status.cancelado { background: #FBE7E4; color: #C0392B; }
 
   .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
   .erro { color: #C0392B; }
@@ -129,7 +132,7 @@
 
   <div class="cartao-secao">
     <table>
-      <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Lançado por</th><th class="num">Valor</th></tr></thead>
+      <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Lançado por</th><th>Status</th><th>Nota Fiscal</th><th class="num">Valor</th></tr></thead>
       <tbody id="corpo-tabela"></tbody>
     </table>
     <div id="area-mensagem"></div>
@@ -163,6 +166,7 @@ function dataBrParaIso(texto) {
 }
 
 let pedidos = [];
+let notaAutorizadaPorPedido = new Map();
 
 async function carregarPedidos() {
   const corpo = document.getElementById("corpo-tabela");
@@ -170,7 +174,9 @@ async function carregarPedidos() {
   mensagem.innerHTML = `<div class="carregando">Carregando pedidos...</div>`;
   corpo.innerHTML = "";
   try {
-    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,clientes(nome)&order=criado_em.desc");
+    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,clientes(nome)&order=criado_em.desc");
+    const notas = await chamarSupabase("notas_fiscais?select=pedido_id,status,resposta_bruta&status=eq.autorizado");
+    notaAutorizadaPorPedido = new Map(notas.map(n => [n.pedido_id, n]));
     mensagem.innerHTML = "";
     desenharTabela();
   } catch (erro) {
@@ -206,11 +212,28 @@ function desenharTabela() {
   corpo.innerHTML = filtrados.map(p => {
     const data = new Date(p.criado_em);
     const dataTexto = data.toLocaleDateString("pt-BR") + " " + data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+    const statusCancelado = p.status === "cancelado";
+    const statusTexto = statusCancelado ? "Cancelado" : "Faturado";
+    const statusClasse = statusCancelado ? "cancelado" : "faturado";
+
+    let notaTexto = "—";
+    if (p.com_nota_fiscal) {
+      if (statusCancelado) {
+        notaTexto = "Cancelada";
+      } else {
+        const nota = notaAutorizadaPorPedido.get(p.id);
+        notaTexto = nota ? `Nº ${(nota.resposta_bruta && nota.resposta_bruta.numero) || "—"}` : "Pendente";
+      }
+    }
+
     return `<tr data-id="${p.id}">
       <td class="numero-pedido">Nº ${p.id}</td>
       <td>${p.clientes.nome}</td>
       <td>${dataTexto}</td>
       <td class="pessoa">${p.pessoa || "—"}</td>
+      <td><span class="selo-status ${statusClasse}">${statusTexto}</span></td>
+      <td>${notaTexto}</td>
       <td class="num">${formatarMoeda(p.total)}</td>
     </tr>`;
   }).join("");
