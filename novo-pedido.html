@@ -502,6 +502,8 @@ function desenharListaEquipamentos(filtro) {
   });
 }
 document.getElementById("campo-busca-equipamento").addEventListener("input", (e) => desenharListaEquipamentos(e.target.value));
+document.getElementById("campo-descricao-equipamento").addEventListener("input", atualizarBotaoConfirmar);
+document.getElementById("campo-valor-equipamento").addEventListener("input", atualizarBotaoConfirmar);
 
 document.getElementById("botao-novo-equipamento").addEventListener("click", async () => {
   const nome = document.getElementById("campo-descricao-equipamento").value.trim();
