@@ -24,7 +24,7 @@
 </script>
 <style>
   :root {
-    --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --azul: #1B4F72; --azul-claro: #EAF1F6; --laranja: #D9662F; --laranja-escuro: #B84F1F;
     --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870;
     --linha: #DCE3E7; --verde: #2F8F4E; --vermelho: #C0392B;
   }
@@ -36,11 +36,71 @@
   header .logo-caixa img { height: 24px; display: block; }
   header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
   header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
-  main { max-width: 760px; margin: 0 auto; padding: 18px 16px 80px; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px 16px 80px; }
 
-  .passo { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
-  .passo.desabilitado { opacity: 0.45; pointer-events: none; }
-  .passo h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+  nav.nav-dram {
+    background: #123551;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px;
+  }
+  nav.nav-dram a {
+    color: #C9DCEA;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 14px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+  }
+  nav.nav-dram a.ativa {
+    color: #fff;
+    border-bottom-color: #D9662F;
+  }
+
+  /* --- cartoes (base) --- */
+  .cartao {
+    background: var(--papel); border-radius: 14px; border: 1px solid var(--linha);
+    padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(20,30,40,0.04);
+  }
+  .cartao.desabilitado { opacity: 0.45; pointer-events: none; }
+  .titulo-cartao { font-size: 14px; font-weight: 700; color: var(--texto); margin: 0 0 12px; }
+
+  /* --- barra de topo: tipo de operacao + depositos, lado a lado --- */
+  .barra-topo { display: flex; gap: 14px; flex-wrap: wrap; }
+  .barra-topo .campo-select { flex: 1; min-width: 200px; }
+  .campo-select label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--texto-suave); margin-bottom: 6px; font-weight: 600; }
+  select {
+    width: 100%; padding: 11px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 14.5px; color: var(--texto); background: #fff; font-weight: 600;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235C6870' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center;
+  }
+  select:focus { outline: none; border-color: var(--azul); }
+
+  /* --- layout de 2 colunas (desktop-first, empilha em telas estreitas) --- */
+  .colunas { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; align-items: start; margin-top: 16px; }
+  @media (max-width: 860px) {
+    .colunas { grid-template-columns: 1fr; }
+  }
+
+  /* --- cartoes colapsaveis (encolhem quando a secao ta preenchida) --- */
+  .cartao-colapsavel .cabecalho-colapsavel {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer;
+  }
+  .cartao-colapsavel .cabecalho-colapsavel:hover .titulo-cartao { color: var(--azul); }
+  .seta-colapsavel { color: var(--texto-suave); font-size: 11px; transition: transform 0.15s; flex-shrink: 0; }
+  .cartao-colapsavel.fechado .seta-colapsavel { transform: rotate(-90deg); }
+  .resumo-colapsavel { display: none; color: var(--azul); font-weight: 700; font-size: 13.5px; margin-right: auto; margin-left: 4px; }
+  .cartao-colapsavel.fechado .resumo-colapsavel { display: inline; }
+  .cartao-colapsavel.fechado .titulo-cartao { color: var(--verde); }
+  .cartao-colapsavel.fechado .titulo-cartao::before { content: "✓ "; }
+  .cartao-colapsavel .conteudo-colapsavel { margin-top: 12px; }
+  .cartao-colapsavel.fechado .conteudo-colapsavel { display: none; }
+  .cartao-colapsavel.fechado { padding-bottom: 14px; }
 
   input[type=text], input[type=number] {
     width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
@@ -60,15 +120,10 @@
   .item-produto .saldo-atual { color: var(--texto-suave); font-size: 12.5px; }
   .item-produto.zerado .saldo-atual { color: var(--vermelho); font-weight: 700; }
 
-  .selecionado-caixa { margin-top: 10px; padding: 12px 14px; border-radius: 9px; background: #EAF1F6; border: 1.5px solid var(--azul); display: none; }
+  .selecionado-caixa { margin-top: 10px; padding: 12px 14px; border-radius: 9px; background: var(--azul-claro); border: 1.5px solid var(--azul); display: none; }
   .selecionado-caixa .nome { font-weight: 700; color: var(--azul); font-size: 14.5px; }
   .chips-info { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .chip-info { background: #fff; border: 1px solid var(--linha); border-radius: 100px; padding: 5px 11px; font-size: 12px; color: var(--texto-suave); }
-
-  .opcoes-deposito { display: flex; flex-direction: column; gap: 8px; }
-  .opcao-deposito { text-align: left; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
-    background: #fff; font-size: 14.5px; font-weight: 600; color: var(--texto); cursor: pointer; }
-  .opcao-deposito.ativa { border-color: var(--azul); background: #EAF1F6; color: var(--azul); }
 
   table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 6px; border-bottom: 1px solid var(--linha); }
@@ -80,8 +135,8 @@
   .campo-tabela { width: 78px; padding: 7px 8px; font-size: 13.5px; text-align: center; }
   .botao-remover { background: none; border: none; color: var(--vermelho); font-size: 18px; cursor: pointer; padding: 0 6px; }
 
-  .botao { padding: 12px 18px; border-radius: 9px; border: none; background: var(--laranja); color: #fff;
-    font-size: 14.5px; font-weight: 700; cursor: pointer; }
+  .botao { padding: 13px 20px; border-radius: 9px; border: none; background: var(--laranja); color: #fff;
+    font-size: 15px; font-weight: 700; cursor: pointer; }
   .botao:active { background: var(--laranja-escuro); }
   .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
 
@@ -105,30 +160,9 @@
   .linha-parcela .botao-remover-parcela { background: none; border: none; color: var(--vermelho); font-size: 17px; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
   .botao-link { background: none; border: none; color: var(--azul); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 8px 0 0; }
   .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
-  .barra-final { position: sticky; bottom: 0; background: var(--papel); border-top: 1px solid var(--linha);
-    padding: 14px 16px; margin: 14px -16px -16px; border-radius: 0 0 12px 12px; }
+  .barra-final { position: sticky; bottom: 16px; background: var(--papel); border: 1px solid var(--linha);
+    padding: 14px 16px; margin-top: 4px; border-radius: 14px; box-shadow: 0 4px 16px rgba(20,30,40,0.10); }
   a.link-discreto { color: var(--azul); font-size: 13.5px; text-decoration: none; font-weight: 700; }
-
-  nav.nav-dram {
-    background: #123551;
-    display: flex;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding: 0 12px;
-  }
-  nav.nav-dram a {
-    color: #C9DCEA;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 12px 14px;
-    white-space: nowrap;
-    border-bottom: 3px solid transparent;
-  }
-  nav.nav-dram a.ativa {
-    color: #fff;
-    border-bottom-color: #D9662F;
-  }
 </style>
 </head>
 <body>
@@ -145,12 +179,10 @@
   <a href="ajustar-estoque.html">Ajustar Estoque</a>
   <a href="tabelas-preco.html">Tabelas de Preço</a>
   <a href="clientes.html">Clientes</a>
-  <a href="novo-pedido.html">Novo Pedido</a>
+  <a href="novo-pedido.html" class="ativa">Novo Pedido</a>
   <a href="pedidos.html">Pedidos</a>
   <a href="operacoes-especiais.html">Operações Especiais</a>
 </nav>
-
-
 
 <main>
   <div id="aviso-pessoa" class="aviso-pessoa" style="display:none">
@@ -158,86 +190,121 @@
     <div style="margin-top:8px"><input type="text" id="campo-pessoa-manual" placeholder="Seu nome"></div>
   </div>
 
-  <div class="passo" id="passo-tipo-operacao">
-    <h2>Tipo de operação</h2>
-    <div class="opcoes-deposito" id="opcoes-tipo-operacao">
-      <button type="button" class="opcao-deposito ativa" data-tipo="venda">Venda</button>
-      <button type="button" class="opcao-deposito" data-tipo="comodato">Comodato</button>
-      <button type="button" class="opcao-deposito" data-tipo="devolucao_comodato">Devolução de Comodato</button>
-      <button type="button" class="opcao-deposito" data-tipo="transferencia">Transferência</button>
+  <div class="cartao">
+    <div class="barra-topo">
+      <div class="campo-select">
+        <label>Tipo de operação</label>
+        <select id="select-tipo-operacao">
+          <option value="venda">Venda</option>
+          <option value="comodato">Comodato</option>
+          <option value="devolucao_comodato">Devolução de Comodato</option>
+          <option value="transferencia">Transferência</option>
+        </select>
+      </div>
+      <div class="campo-select" id="grupo-deposito">
+        <label id="rotulo-deposito">Depósito</label>
+        <select id="select-deposito"><option value="">Selecione...</option></select>
+      </div>
+      <div class="campo-select" id="grupo-deposito-destino" style="display:none">
+        <label>Depósito de destino</label>
+        <select id="select-deposito-destino"><option value="">Selecione...</option></select>
+      </div>
     </div>
   </div>
 
-  <div class="passo" id="passo-cliente">
-    <h2 id="titulo-passo-cliente">1. Cliente</h2>
-    <input type="text" id="campo-busca-cliente" placeholder="Buscar cliente...">
-    <div class="lista-produtos" id="lista-clientes"></div>
-    <div class="selecionado-caixa" id="caixa-cliente-selecionado">
-      <div class="nome" id="nome-cliente-selecionado"></div>
-      <div class="chips-info" id="chips-cliente-info"></div>
+  <div class="colunas">
+    <div class="coluna-esquerda">
+
+      <div class="cartao cartao-colapsavel" id="cartao-cliente">
+        <div class="cabecalho-colapsavel">
+          <span class="titulo-cartao" id="titulo-cartao-cliente">Cliente</span>
+          <span class="resumo-colapsavel" id="resumo-cliente"></span>
+          <span class="seta-colapsavel">▾</span>
+        </div>
+        <div class="conteudo-colapsavel" id="conteudo-cliente">
+          <input type="text" id="campo-busca-cliente" placeholder="Buscar cliente...">
+          <div class="lista-produtos" id="lista-clientes"></div>
+          <div class="selecionado-caixa" id="caixa-cliente-selecionado">
+            <div class="nome" id="nome-cliente-selecionado"></div>
+            <div class="chips-info" id="chips-cliente-info"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cartao cartao-colapsavel" id="cartao-equipamento" style="display:none">
+        <div class="cabecalho-colapsavel">
+          <span class="titulo-cartao" id="titulo-cartao-equipamento">Equipamento</span>
+          <span class="resumo-colapsavel" id="resumo-equipamento"></span>
+          <span class="seta-colapsavel">▾</span>
+        </div>
+        <div class="conteudo-colapsavel" id="conteudo-equipamento">
+          <input type="text" id="campo-busca-equipamento" placeholder="Buscar equipamento já cadastrado...">
+          <div class="lista-produtos" id="lista-equipamentos"></div>
+          <div class="campo" style="margin-top:10px">
+            <label>Descrição do equipamento</label>
+            <input type="text" id="campo-descricao-equipamento" placeholder="Ex: Freezer horizontal 300L">
+          </div>
+          <div class="campo" style="margin-top:10px">
+            <label>Valor de referência (R$)</label>
+            <input type="number" id="campo-valor-equipamento" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <button type="button" class="botao-link" id="botao-novo-equipamento">+ Cadastrar esse equipamento pra próxima vez</button>
+        </div>
+      </div>
+
+      <div class="cartao cartao-colapsavel desabilitado" id="cartao-itens">
+        <div class="cabecalho-colapsavel">
+          <span class="titulo-cartao">Itens do pedido</span>
+          <span class="resumo-colapsavel" id="resumo-itens"></span>
+          <span class="seta-colapsavel">▾</span>
+        </div>
+        <div class="conteudo-colapsavel" id="conteudo-itens">
+          <input type="text" id="campo-busca-produto" placeholder="Buscar produto pra adicionar...">
+          <div class="lista-produtos" id="lista-produtos"></div>
+
+          <table id="tabela-itens-pedido" style="display:none">
+            <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Subtotal</th><th></th></tr></thead>
+            <tbody id="corpo-itens-pedido"></tbody>
+          </table>
+          <div class="total-caixa" id="total-caixa">
+            <span>Total do pedido</span>
+            <span class="valor" id="valor-total-pedido">R$ 0,00</span>
+          </div>
+        </div>
+      </div>
+
     </div>
-  </div>
+    <div class="coluna-direita">
 
-  <div class="passo desabilitado" id="passo-equipamento" style="display:none">
-    <h2 id="titulo-passo-equipamento">Equipamento</h2>
-    <input type="text" id="campo-busca-equipamento" placeholder="Buscar equipamento já cadastrado...">
-    <div class="lista-produtos" id="lista-equipamentos"></div>
-    <div class="campo" style="margin-top:10px">
-      <label>Descrição do equipamento</label>
-      <input type="text" id="campo-descricao-equipamento" placeholder="Ex: Freezer horizontal 300L">
+      <div class="cartao cartao-colapsavel desabilitado" id="cartao-parcelas">
+        <div class="cabecalho-colapsavel">
+          <span class="titulo-cartao">Parcelas</span>
+          <span class="resumo-colapsavel" id="resumo-parcelas"></span>
+          <span class="seta-colapsavel">▾</span>
+        </div>
+        <div class="conteudo-colapsavel" id="conteudo-parcelas">
+          <div id="linhas-parcelas"></div>
+          <button type="button" class="botao-link" id="botao-add-parcela">+ Adicionar parcela</button>
+          <p class="ajuda-nota-fiscal">Os vencimentos vêm pré-preenchidos a partir do cadastro do cliente, mas cada um pode ser ajustado livremente (ex: 30/45, 30/35...).</p>
+        </div>
+      </div>
+
+      <div class="cartao" id="cartao-nota-fiscal">
+        <div class="titulo-cartao">Nota fiscal</div>
+        <label class="opcao-checkbox" id="linha-checkbox-nota">
+          <input type="checkbox" id="campo-emite-nota">
+          Emitir nota fiscal para este pedido
+        </label>
+        <p class="ajuda-nota-fiscal" id="texto-ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
+      </div>
+
+      <div class="cartao" id="cartao-observacoes">
+        <div class="titulo-cartao">Observações</div>
+        <textarea id="campo-observacoes" rows="3" placeholder="Endereço de entrega, horário do cliente, número do pedido, etc."></textarea>
+        <p class="ajuda-nota-fiscal">Se marcar "Emitir nota fiscal", esse texto vai junto no campo de Informações Complementares da nota.</p>
+      </div>
+
     </div>
-    <div class="campo" style="margin-top:10px">
-      <label>Valor de referência (R$)</label>
-      <input type="number" id="campo-valor-equipamento" min="0" step="0.01" placeholder="0,00">
-    </div>
-    <button type="button" class="botao-link" id="botao-novo-equipamento">+ Cadastrar esse equipamento pra próxima vez</button>
-  </div>
-
-  <div class="passo desabilitado" id="passo-deposito">
-    <h2 id="titulo-passo-deposito">2. De qual depósito sai essa venda?</h2>
-    <div class="opcoes-deposito" id="opcoes-deposito"></div>
-  </div>
-
-  <div class="passo" id="passo-deposito-destino" style="display:none">
-    <h2>Depósito de destino</h2>
-    <div class="opcoes-deposito" id="opcoes-deposito-destino"></div>
-  </div>
-
-  <div class="passo desabilitado" id="passo-itens">
-    <h2>3. Itens do pedido</h2>
-    <input type="text" id="campo-busca-produto" placeholder="Buscar produto pra adicionar...">
-    <div class="lista-produtos" id="lista-produtos"></div>
-
-    <table id="tabela-itens-pedido" style="display:none">
-      <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Subtotal</th><th></th></tr></thead>
-      <tbody id="corpo-itens-pedido"></tbody>
-    </table>
-    <div class="total-caixa" id="total-caixa">
-      <span>Total do pedido</span>
-      <span class="valor" id="valor-total-pedido">R$ 0,00</span>
-    </div>
-  </div>
-
-  <div class="passo desabilitado" id="passo-parcelas">
-    <h2>4. Parcelas</h2>
-    <div id="linhas-parcelas"></div>
-    <button type="button" class="botao-link" id="botao-add-parcela">+ Adicionar parcela</button>
-    <p class="ajuda-nota-fiscal">Os vencimentos vêm pré-preenchidos a partir do cadastro do cliente, mas cada um pode ser ajustado livremente (ex: 30/45, 30/35...).</p>
-  </div>
-
-  <div class="passo" id="passo-nota-fiscal">
-    <h2>5. Nota fiscal</h2>
-    <label class="opcao-checkbox" id="linha-checkbox-nota">
-      <input type="checkbox" id="campo-emite-nota">
-      Emitir nota fiscal para este pedido
-    </label>
-    <p class="ajuda-nota-fiscal" id="texto-ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
-  </div>
-
-  <div class="passo" id="passo-observacoes">
-    <h2>6. Observações</h2>
-    <textarea id="campo-observacoes" rows="3" placeholder="Endereço de entrega, horário do cliente, número do pedido, etc."></textarea>
-    <p class="ajuda-nota-fiscal">Se marcar "Emitir nota fiscal", esse texto vai junto no campo de Informações Complementares da nota.</p>
   </div>
 
   <div class="barra-final">
@@ -324,13 +391,48 @@ function nomeDepositoContem(depositoId, trecho) {
   return dep ? dep.nome.toLowerCase().includes(trecho.toLowerCase()) : false;
 }
 
-document.querySelectorAll("#opcoes-tipo-operacao button").forEach(botao => {
-  botao.addEventListener("click", () => {
-    document.querySelectorAll("#opcoes-tipo-operacao button").forEach(b => b.classList.remove("ativa"));
-    botao.classList.add("ativa");
-    tipoOperacao = botao.dataset.tipo;
-    aplicarTipoOperacaoNaTela();
+function formatarMoeda(valor) {
+  return "R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
+}
+
+// --- cartoes colapsaveis: abrir/fechar manual + resumo quando completo ---
+function abrirCartao(id) {
+  const cartao = document.getElementById(`cartao-${id}`);
+  if (cartao) cartao.classList.remove("fechado");
+}
+function fecharCartaoComResumo(id, texto) {
+  const cartao = document.getElementById(`cartao-${id}`);
+  const resumo = document.getElementById(`resumo-${id}`);
+  if (!cartao) return;
+  if (resumo) resumo.textContent = texto;
+  cartao.classList.add("fechado");
+}
+document.querySelectorAll(".cabecalho-colapsavel").forEach(cabecalho => {
+  cabecalho.addEventListener("click", () => {
+    const cartao = cabecalho.closest(".cartao-colapsavel");
+    if (cartao.classList.contains("desabilitado")) return;
+    cartao.classList.toggle("fechado");
   });
+});
+
+// fecha um cartao sozinho quando o foco sai dele, se a condicao de
+// "completo" for verdadeira - usado pra Itens, Parcelas e Equipamento,
+// que nao tem uma unica acao discreta de "terminei" como o Cliente tem
+function ativarFechamentoAutomatico(idConteudo, idCartao, condicaoCompleta, gerarResumo) {
+  document.getElementById(idConteudo).addEventListener("focusout", () => {
+    setTimeout(() => {
+      const cartao = document.getElementById(idCartao);
+      if (cartao.classList.contains("fechado")) return;
+      if (!cartao.contains(document.activeElement) && condicaoCompleta()) {
+        fecharCartaoComResumo(idCartao.replace("cartao-", ""), gerarResumo());
+      }
+    }, 150);
+  });
+}
+
+document.getElementById("select-tipo-operacao").addEventListener("change", (e) => {
+  tipoOperacao = e.target.value;
+  aplicarTipoOperacaoNaTela();
 });
 
 function aplicarTipoOperacaoNaTela() {
@@ -347,7 +449,12 @@ function aplicarTipoOperacaoNaTela() {
   document.getElementById("campo-valor-equipamento").value = "";
   document.getElementById("campo-busca-equipamento").value = "";
   document.getElementById("lista-equipamentos").innerHTML = "";
-  document.querySelectorAll(".opcao-deposito[data-id]").forEach(b => b.classList.remove("ativa"));
+  document.getElementById("select-deposito").value = "";
+  document.getElementById("select-deposito-destino").value = "";
+  abrirCartao("cliente");
+  abrirCartao("equipamento");
+  abrirCartao("itens");
+  abrirCartao("parcelas");
   desenharTabelaItensPedido();
   desenharParcelas();
 
@@ -355,24 +462,25 @@ function aplicarTipoOperacaoNaTela() {
   const ehTransferencia = tipoOperacao === "transferencia";
   const ehVenda = tipoOperacao === "venda";
 
-  document.getElementById("passo-cliente").style.display = ehTransferencia ? "none" : "";
-  document.getElementById("titulo-passo-cliente").textContent =
+  document.getElementById("cartao-cliente").style.display = ehTransferencia ? "none" : "";
+  document.getElementById("titulo-cartao-cliente").textContent =
     tipoOperacao === "devolucao_comodato" ? "Cliente que está devolvendo" :
-    tipoOperacao === "comodato" ? "Cliente que vai receber" : "1. Cliente";
+    tipoOperacao === "comodato" ? "Cliente que vai receber" : "Cliente";
 
-  document.getElementById("passo-equipamento").style.display = ehComodatoOuDevolucao ? "" : "none";
-  document.getElementById("passo-equipamento").classList.remove("desabilitado");
-  document.getElementById("titulo-passo-equipamento").textContent =
+  document.getElementById("cartao-equipamento").style.display = ehComodatoOuDevolucao ? "" : "none";
+  document.getElementById("cartao-equipamento").classList.remove("desabilitado");
+  document.getElementById("titulo-cartao-equipamento").textContent =
     tipoOperacao === "devolucao_comodato" ? "Equipamento sendo devolvido" : "Equipamento";
 
-  document.getElementById("passo-deposito").style.display = (ehVenda || ehTransferencia) ? "" : "none";
-  document.getElementById("titulo-passo-deposito").textContent =
-    ehTransferencia ? "Depósito de origem" : "2. De qual depósito sai essa venda?";
+  document.getElementById("grupo-deposito").style.display = (ehVenda || ehTransferencia) ? "" : "none";
+  document.getElementById("rotulo-deposito").textContent = ehTransferencia ? "Depósito de origem" : "Depósito";
 
-  document.getElementById("passo-deposito-destino").style.display = ehTransferencia ? "" : "none";
+  document.getElementById("grupo-deposito-destino").style.display = ehTransferencia ? "" : "none";
 
-  document.getElementById("passo-itens").style.display = (ehVenda || ehTransferencia) ? "" : "none";
-  document.getElementById("passo-parcelas").style.display = ehVenda ? "" : "none";
+  document.getElementById("cartao-itens").style.display = (ehVenda || ehTransferencia) ? "" : "none";
+  document.getElementById("cartao-itens").classList.add("desabilitado");
+  document.getElementById("cartao-parcelas").style.display = ehVenda ? "" : "none";
+  document.getElementById("cartao-parcelas").classList.add("desabilitado");
 
   // nota fiscal: em comodato/devolucao sempre precisa (sem checkbox, forcado);
   // em transferencia, so' precisa se envolver o deposito da Filial (Barueri) -
@@ -431,7 +539,7 @@ function desenharParcelas() {
     <div class="linha-parcela">
       <span class="numero-parcela">Parcela ${p.numero_parcela}</span>
       <input type="date" class="campo-data-parcela" data-indice="${indice}" value="${p.data_vencimento}">
-      <span class="valor-parcela">R$ ${(valores[indice] || 0).toFixed(2).replace(".", ",")}</span>
+      <span class="valor-parcela">${formatarMoeda(valores[indice])}</span>
       ${parcelasPedido.length > 1 ? `<button type="button" class="botao-remover-parcela" data-indice="${indice}">✕</button>` : ""}
     </div>
   `).join("");
@@ -462,13 +570,26 @@ document.getElementById("botao-add-parcela").addEventListener("click", () => {
   atualizarBotaoConfirmar();
 });
 
+ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
+  () => parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento),
+  () => {
+    const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+    return `${parcelasPedido.length} parcela${parcelasPedido.length > 1 ? "s" : ""} · ${formatarMoeda(total)}`;
+  });
+
 async function iniciar() {
   [clientes, depositos] = await Promise.all([
     chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas&order=nome"),
     chamarSupabase("depositos?select=id,nome&order=id"),
   ]);
-  desenharOpcoesDeposito();
+  popularSelectsDeposito();
   await carregarEquipamentosComodato();
+}
+
+function popularSelectsDeposito() {
+  const opcoes = '<option value="">Selecione...</option>' + depositos.map(d => `<option value="${d.id}">${d.nome}</option>`).join("");
+  document.getElementById("select-deposito").innerHTML = opcoes;
+  document.getElementById("select-deposito-destino").innerHTML = opcoes;
 }
 
 let equipamentosComodato = [];
@@ -487,7 +608,7 @@ function desenharListaEquipamentos(filtro) {
   }
   alvo.innerHTML = filtrados.map(e =>
     `<div class="item-produto" data-id="${e.id}">
-      <span>${e.nome}</span><span class="saldo-atual">R$ ${Number(e.valor_referencia).toFixed(2).replace(".", ",")}</span>
+      <span>${e.nome}</span><span class="saldo-atual">${formatarMoeda(e.valor_referencia)}</span>
     </div>`
   ).join("");
   alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
@@ -525,6 +646,18 @@ document.getElementById("botao-novo-equipamento").addEventListener("click", asyn
   }
 });
 
+ativarFechamentoAutomatico("conteudo-equipamento", "cartao-equipamento",
+  () => {
+    const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+    const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+    return !!descricao && valor > 0;
+  },
+  () => {
+    const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+    const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+    return `${descricao} · ${formatarMoeda(valor)}`;
+  });
+
 function desenharListaClientes(filtro) {
   const alvo = document.getElementById("lista-clientes");
   if (!filtro) { alvo.innerHTML = ""; return; }
@@ -556,8 +689,7 @@ async function escolherCliente(id) {
     (chips.length ? chips : ["Sem forma de pagamento cadastrada"]).map(c => `<span class="chip-info">${c}</span>`).join("");
   document.getElementById("caixa-cliente-selecionado").style.display = "block";
 
-  document.getElementById("passo-deposito").classList.remove("desabilitado");
-  document.getElementById("passo-parcelas").classList.remove("desabilitado");
+  document.getElementById("cartao-parcelas").classList.remove("desabilitado");
   gerarParcelasPadrao();
   desenharParcelas();
 
@@ -571,28 +703,18 @@ async function escolherCliente(id) {
   }
   desenharTabelaItensPedido();
   atualizarBotaoConfirmar();
+
+  // cliente e' uma escolha unica e discreta - fecha na hora, sem esperar
+  // o foco sair (diferente de itens/parcelas/equipamento, que ficam
+  // sendo ajustados aos poucos)
+  fecharCartaoComResumo("cliente", clienteEscolhido.nome);
 }
 
-function desenharOpcoesDeposito() {
-  const alvo = document.getElementById("opcoes-deposito");
-  alvo.innerHTML = depositos.map(d => `<button class="opcao-deposito" data-id="${d.id}">${d.nome}</button>`).join("");
-  alvo.querySelectorAll(".opcao-deposito").forEach(botao => {
-    botao.addEventListener("click", () => escolherDeposito(botao));
-  });
-
-  const alvoDestino = document.getElementById("opcoes-deposito-destino");
-  alvoDestino.innerHTML = depositos.map(d => `<button class="opcao-deposito" data-id="${d.id}">${d.nome}</button>`).join("");
-  alvoDestino.querySelectorAll(".opcao-deposito").forEach(botao => {
-    botao.addEventListener("click", () => escolherDepositoDestino(botao));
-  });
-}
-
-async function escolherDeposito(botao) {
-  const container = botao.closest("#opcoes-deposito");
-  container.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
-  botao.classList.add("ativa");
-  depositoEscolhidoId = Number(botao.dataset.id);
-  document.getElementById("passo-itens").classList.remove("desabilitado");
+document.getElementById("select-deposito").addEventListener("change", async (e) => {
+  const id = Number(e.target.value);
+  if (!id) return;
+  depositoEscolhidoId = id;
+  document.getElementById("cartao-itens").classList.remove("desabilitado");
 
   if (itensCatalogo.length === 0) {
     itensCatalogo = await chamarSupabase("itens?select=id,nome&order=nome");
@@ -602,15 +724,12 @@ async function escolherDeposito(botao) {
   desenharListaProdutosParaAdicionar("");
   desenharTabelaItensPedido();
   atualizarBotaoConfirmar();
-}
+});
 
-function escolherDepositoDestino(botao) {
-  const container = botao.closest("#opcoes-deposito-destino");
-  container.querySelectorAll(".opcao-deposito").forEach(b => b.classList.remove("ativa"));
-  botao.classList.add("ativa");
-  depositoDestinoEscolhidoId = Number(botao.dataset.id);
+document.getElementById("select-deposito-destino").addEventListener("change", (e) => {
+  depositoDestinoEscolhidoId = Number(e.target.value) || null;
   atualizarBotaoConfirmar();
-}
+});
 
 function desenharListaProdutosParaAdicionar(filtro) {
   const alvo = document.getElementById("lista-produtos");
@@ -662,7 +781,7 @@ function desenharTabelaItensPedido() {
       <td>${item.nome}${excede ? `<div class="aviso-linha">Só tem ${saldo} em estoque</div>` : ""}</td>
       <td class="num"><input type="number" min="0.01" step="0.01" class="campo-tabela" data-campo="quantidade" data-indice="${indice}" value="${item.quantidade}"></td>
       <td class="num"><input type="number" min="0" step="0.01" class="campo-tabela" data-campo="preco_unitario" data-indice="${indice}" value="${item.preco_unitario}" placeholder="0,00"></td>
-      <td class="num">R$ ${(item.quantidade * (item.preco_unitario || 0)).toFixed(2).replace(".", ",")}</td>
+      <td class="num">${formatarMoeda(item.quantidade * (item.preco_unitario || 0))}</td>
       <td><button class="botao-remover" data-indice="${indice}">✕</button></td>
     </tr>`;
   }).join("");
@@ -683,10 +802,17 @@ function desenharTabelaItensPedido() {
   });
 
   const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
-  document.getElementById("valor-total-pedido").textContent = "R$ " + total.toFixed(2).replace(".", ",");
+  document.getElementById("valor-total-pedido").textContent = formatarMoeda(total);
   if (parcelasPedido.length > 0) desenharParcelas();
   atualizarBotaoConfirmar();
 }
+
+ativarFechamentoAutomatico("conteudo-itens", "cartao-itens",
+  () => itensPedido.length > 0,
+  () => {
+    const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+    return `${itensPedido.length} ${itensPedido.length > 1 ? "itens" : "item"} · ${formatarMoeda(total)}`;
+  });
 
 function algumItemExcedeEstoque() {
   return itensPedido.some(i => (saldosEstoque.get(i.item_id) || 0) < i.quantidade);
@@ -812,14 +938,18 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     depositoDestinoEscolhidoId = null;
     parcelasPedido = [];
     document.getElementById("caixa-cliente-selecionado").style.display = "none";
-    document.querySelectorAll("#opcoes-deposito .opcao-deposito, #opcoes-deposito-destino .opcao-deposito").forEach(b => b.classList.remove("ativa"));
-    document.getElementById("passo-deposito").classList.add("desabilitado");
-    document.getElementById("passo-itens").classList.add("desabilitado");
-    document.getElementById("passo-parcelas").classList.add("desabilitado");
+    document.getElementById("select-deposito").value = "";
+    document.getElementById("select-deposito-destino").value = "";
+    document.getElementById("cartao-itens").classList.add("desabilitado");
+    document.getElementById("cartao-parcelas").classList.add("desabilitado");
     document.getElementById("campo-emite-nota").checked = false;
     document.getElementById("campo-observacoes").value = "";
     document.getElementById("campo-descricao-equipamento").value = "";
     document.getElementById("campo-valor-equipamento").value = "";
+    abrirCartao("cliente");
+    abrirCartao("equipamento");
+    abrirCartao("itens");
+    abrirCartao("parcelas");
     desenharParcelas();
     desenharTabelaItensPedido();
   } catch (erro) {
