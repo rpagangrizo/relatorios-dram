@@ -247,7 +247,7 @@ async function carregarPedidos() {
     }
 
     const [boletosBrutos, parcelas] = await Promise.all([
-      chamarSupabase("boletos?select=id,pedido_id,pedido_parcela_id,url_boleto,status&status=eq.registrado&order=criado_em"),
+      chamarSupabase("boletos?select=id,pedido_id,pedido_parcela_id,url_boleto,url_pdf,status&status=eq.registrado&order=criado_em"),
       chamarSupabase("pedido_parcelas?select=id,numero_parcela"),
     ]);
     const numeroParcelaPorId = new Map(parcelas.map(p => [p.id, p.numero_parcela]));
@@ -323,7 +323,7 @@ function desenharTabela() {
     const botoesBoleto = boletosDoPedido.length === 0
       ? "—"
       : boletosDoPedido.map(b =>
-          `<a class="botao-nf" href="${b.url_boleto}" target="_blank" rel="noopener">${boletosDoPedido.length > 1 ? `Parcela ${b.numero_parcela || "?"}` : "Ver Boleto"}</a>`
+          `<a class="botao-nf" href="${b.url_pdf || b.url_boleto}" target="_blank" rel="noopener">${boletosDoPedido.length > 1 ? `Parcela ${b.numero_parcela || "?"}` : "Ver Boleto"}</a>`
         ).join("");
 
     return `<tr data-id="${p.id}">
