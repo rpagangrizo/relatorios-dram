@@ -252,13 +252,9 @@
         </div>
       </div>
 
-      <div class="cartao cartao-colapsavel desabilitado" id="cartao-itens">
-        <div class="cabecalho-colapsavel">
-          <span class="titulo-cartao">Itens do pedido</span>
-          <span class="resumo-colapsavel" id="resumo-itens"></span>
-          <span class="seta-colapsavel">▾</span>
-        </div>
-        <div class="conteudo-colapsavel" id="conteudo-itens">
+      <div class="cartao desabilitado" id="cartao-itens">
+        <div class="titulo-cartao">Itens do pedido</div>
+        <div id="conteudo-itens">
           <input type="text" id="campo-busca-produto" placeholder="Buscar produto pra adicionar...">
           <div class="lista-produtos" id="lista-produtos"></div>
 
@@ -807,12 +803,8 @@ function desenharTabelaItensPedido() {
   atualizarBotaoConfirmar();
 }
 
-ativarFechamentoAutomatico("conteudo-itens", "cartao-itens",
-  () => itensPedido.length > 0,
-  () => {
-    const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
-    return `${itensPedido.length} ${itensPedido.length > 1 ? "itens" : "item"} · ${formatarMoeda(total)}`;
-  });
+// Itens fica sempre exposto (sem fechamento automático nem manual) - a
+// lista pode ficar grande, e o usuario quer ver ela inteira o tempo todo
 
 function algumItemExcedeEstoque() {
   return itensPedido.some(i => (saldosEstoque.get(i.item_id) || 0) < i.quantidade);
