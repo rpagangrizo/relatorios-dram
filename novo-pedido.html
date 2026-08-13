@@ -773,21 +773,24 @@ function desenharTabelaItensPedido() {
     const saldo = saldosEstoque.get(item.item_id) || 0;
     const excede = item.quantidade > saldo;
     return `
-    <tr class="${excede ? 'linha-erro' : ''}">
-      <td>${item.nome}${excede ? `<div class="aviso-linha">Só tem ${saldo} em estoque</div>` : ""}</td>
+    <tr class="${excede ? 'linha-erro' : ''}" data-linha-indice="${indice}">
+      <td>${item.nome}<div class="aviso-linha" style="display:${excede ? '' : 'none'}">Só tem ${saldo} em estoque</div></td>
       <td class="num"><input type="number" min="0.01" step="0.01" class="campo-tabela" data-campo="quantidade" data-indice="${indice}" value="${item.quantidade}"></td>
       <td class="num"><input type="number" min="0" step="0.01" class="campo-tabela" data-campo="preco_unitario" data-indice="${indice}" value="${item.preco_unitario}" placeholder="0,00"></td>
-      <td class="num">${formatarMoeda(item.quantidade * (item.preco_unitario || 0))}</td>
+      <td class="num" data-subtotal-de="${indice}">${formatarMoeda(item.quantidade * (item.preco_unitario || 0))}</td>
       <td><button class="botao-remover" data-indice="${indice}">✕</button></td>
     </tr>`;
   }).join("");
 
   corpo.querySelectorAll(".campo-tabela").forEach(campo => {
+    // so' atualiza numeros/subtotal na hora de digitar (sem recriar a
+    // linha inteira) - recriar tudo a cada tecla jogava o foco pra fora
+    // da caixinha, obrigando a clicar de novo pra continuar digitando
     campo.addEventListener("input", () => {
       const indice = Number(campo.dataset.indice);
       const valor = parseFloat(campo.value) || 0;
       itensPedido[indice][campo.dataset.campo] = valor;
-      desenharTabelaItensPedido();
+      atualizarLinhaItemSemRedesenhar(indice);
     });
   });
   corpo.querySelectorAll(".botao-remover").forEach(botao => {
@@ -797,6 +800,28 @@ function desenharTabelaItensPedido() {
     });
   });
 
+  atualizarTotaisGerais();
+}
+
+function atualizarLinhaItemSemRedesenhar(indice) {
+  const item = itensPedido[indice];
+  const linha = document.querySelector(`#corpo-itens-pedido tr[data-linha-indice="${indice}"]`);
+  if (linha) {
+    const saldo = saldosEstoque.get(item.item_id) || 0;
+    const excede = item.quantidade > saldo;
+    linha.classList.toggle("linha-erro", excede);
+    const aviso = linha.querySelector(".aviso-linha");
+    if (aviso) {
+      aviso.style.display = excede ? "" : "none";
+      aviso.textContent = `Só tem ${saldo} em estoque`;
+    }
+    const celulaSubtotal = linha.querySelector(`[data-subtotal-de="${indice}"]`);
+    if (celulaSubtotal) celulaSubtotal.textContent = formatarMoeda(item.quantidade * (item.preco_unitario || 0));
+  }
+  atualizarTotaisGerais();
+}
+
+function atualizarTotaisGerais() {
   const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
   document.getElementById("valor-total-pedido").textContent = formatarMoeda(total);
   if (parcelasPedido.length > 0) desenharParcelas();
