@@ -36,7 +36,7 @@
   header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
   header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
 
-  main { max-width: 900px; margin: 0 auto; padding: 18px 16px 60px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
 
   .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
   .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
@@ -47,7 +47,7 @@
   .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 
   .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
+  table { width: 100%; min-width: 920px; border-collapse: collapse; }
   thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 10px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
   thead th.num { text-align: right; }
   tbody td { padding: 12px 14px; border-bottom: 1px solid var(--linha); font-size: 14px; }
@@ -328,7 +328,7 @@ function desenharTabela() {
 
     return `<tr data-id="${p.id}">
       <td class="numero-pedido">Nº ${p.id}</td>
-      <td>${p.clientes.nome}</td>
+      <td style="white-space:nowrap">${p.clientes.nome}</td>
       <td>${dataTexto}</td>
       <td class="pessoa">${p.pessoa || "—"}</td>
       <td><span class="selo-status ${statusClasse}">${statusTexto}</span></td>
