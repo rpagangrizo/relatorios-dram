@@ -179,23 +179,25 @@ async function chamarFunction(nome, corpo) {
 }
 
 async function cancelarNotaDoPedido(pedidoId, botao) {
-  const justificativa = window.prompt("Motivo do cancelamento (mínimo 15 caracteres):");
+  const justificativa = window.prompt(
+    "Motivo do cancelamento (mínimo 15 caracteres). Isso vai cancelar a nota E devolver o estoque:"
+  );
   if (!justificativa) return;
   if (justificativa.length < 15) {
     alert("A justificativa precisa ter pelo menos 15 caracteres.");
     return;
   }
-  if (!confirm(`Confirma o cancelamento da nota do pedido nº ${pedidoId}? Essa ação não pode ser desfeita.`)) return;
+  if (!confirm(`Confirma o cancelamento do pedido nº ${pedidoId}? Essa ação não pode ser desfeita.`)) return;
 
   botao.disabled = true;
   botao.textContent = "Cancelando...";
   try {
-    const { ok, dados } = await chamarFunction("cancelar-nota-fiscal", { pedido_id: pedidoId, justificativa });
+    const { ok, dados } = await chamarFunction("cancelar-pedido", { pedido_id: pedidoId, justificativa });
     if (ok) {
-      alert("Nota cancelada com sucesso.");
+      alert("Pedido cancelado com sucesso. O estoque foi devolvido.");
       carregarPedidos();
     } else {
-      alert(`Não consegui cancelar: ${(dados.focus && (dados.focus.mensagem_sefaz || dados.focus.mensagem)) || dados.erro || JSON.stringify(dados)}`);
+      alert(`Não consegui cancelar: ${dados.erro || JSON.stringify(dados)}`);
       botao.disabled = false;
       botao.textContent = "Cancelar";
     }
