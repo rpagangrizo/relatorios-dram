@@ -60,6 +60,13 @@
   .selo-status { display: inline-block; padding: 3px 10px; border-radius: 100px; font-size: 12px; font-weight: 700; }
   .selo-status.faturado { background: #E4F3E8; color: #2F8F4E; }
   .selo-status.cancelado { background: #FBE7E4; color: #C0392B; }
+  .botoes-nf-linha { display: flex; gap: 6px; margin-top: 6px; }
+  .botao-nf {
+    padding: 4px 10px; border-radius: 7px; border: 1.5px solid var(--linha); background: #fff;
+    font-size: 11.5px; font-weight: 700; cursor: pointer; color: var(--azul); text-decoration: none; white-space: nowrap;
+  }
+  .botao-nf.perigo { border-color: #E5B4AC; color: #C0392B; }
+  .botao-nf:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
   .erro { color: #C0392B; }
@@ -145,6 +152,59 @@
 <script>
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const FOCUS_BASE_URL = "https://homologacao.focusnfe.com.br"; // homologação por enquanto
+const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
+
+function obterSessao() {
+  try {
+    return JSON.parse(localStorage.getItem("dram_auth") || "null");
+  } catch {
+    return null;
+  }
+}
+
+async function chamarFunction(nome, corpo) {
+  const sessao = obterSessao();
+  const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
+      "apikey": SUPABASE_KEY,
+    },
+    body: JSON.stringify(corpo),
+  });
+  const dados = await resposta.json();
+  return { ok: resposta.ok, dados };
+}
+
+async function cancelarNotaDoPedido(pedidoId, botao) {
+  const justificativa = window.prompt("Motivo do cancelamento (mínimo 15 caracteres):");
+  if (!justificativa) return;
+  if (justificativa.length < 15) {
+    alert("A justificativa precisa ter pelo menos 15 caracteres.");
+    return;
+  }
+  if (!confirm(`Confirma o cancelamento da nota do pedido nº ${pedidoId}? Essa ação não pode ser desfeita.`)) return;
+
+  botao.disabled = true;
+  botao.textContent = "Cancelando...";
+  try {
+    const { ok, dados } = await chamarFunction("cancelar-nota-fiscal", { pedido_id: pedidoId, justificativa });
+    if (ok) {
+      alert("Nota cancelada com sucesso.");
+      carregarPedidos();
+    } else {
+      alert(`Não consegui cancelar: ${(dados.focus && (dados.focus.mensagem_sefaz || dados.focus.mensagem)) || dados.erro || JSON.stringify(dados)}`);
+      botao.disabled = false;
+      botao.textContent = "Cancelar";
+    }
+  } catch (erro) {
+    alert(`Erro: ${erro.message}`);
+    botao.disabled = false;
+    botao.textContent = "Cancelar";
+  }
+}
 
 async function chamarSupabase(caminho) {
   const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
@@ -176,8 +236,12 @@ async function carregarPedidos() {
   corpo.innerHTML = "";
   try {
     pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,clientes(nome)&order=criado_em.desc");
-    const notas = await chamarSupabase("notas_fiscais?select=pedido_id,status,resposta_bruta&status=eq.autorizado");
-    notaAutorizadaPorPedido = new Map(notas.map(n => [n.pedido_id, n]));
+    const notas = await chamarSupabase("notas_fiscais?select=id,pedido_id,status,resposta_bruta&pedido_id=not.is.null&order=criado_em.desc");
+    notaAutorizadaPorPedido = new Map();
+    for (const n of notas) {
+      if (n.status !== "autorizado" && n.status !== "cancelado") continue;
+      if (!notaAutorizadaPorPedido.has(n.pedido_id)) notaAutorizadaPorPedido.set(n.pedido_id, n);
+    }
     mensagem.innerHTML = "";
     desenharTabela();
   } catch (erro) {
@@ -219,12 +283,24 @@ function desenharTabela() {
     const statusClasse = statusCancelado ? "cancelado" : "faturado";
 
     let notaTexto = "—";
+    let botoesNota = "";
     if (p.com_nota_fiscal) {
       if (statusCancelado) {
         notaTexto = "Cancelada";
       } else {
         const nota = notaAutorizadaPorPedido.get(p.id);
-        notaTexto = nota ? `Nº ${(nota.resposta_bruta && nota.resposta_bruta.numero) || "—"}` : "Pendente";
+        if (nota && nota.status === "autorizado") {
+          notaTexto = `Nº ${(nota.resposta_bruta && nota.resposta_bruta.numero) || "—"}`;
+          const caminhoDanfe = nota.resposta_bruta && nota.resposta_bruta.caminho_danfe;
+          if (caminhoDanfe) {
+            botoesNota += `<a class="botao-nf" href="${FOCUS_BASE_URL}${caminhoDanfe}" target="_blank" rel="noopener">Ver NF</a>`;
+          }
+          botoesNota += `<button type="button" class="botao-nf perigo" data-pedido="${p.id}" data-acao="cancelar-nf">Cancelar</button>`;
+        } else if (nota && nota.status === "cancelado") {
+          notaTexto = "Cancelada";
+        } else {
+          notaTexto = "Pendente";
+        }
       }
     }
 
@@ -234,14 +310,21 @@ function desenharTabela() {
       <td>${dataTexto}</td>
       <td class="pessoa">${p.pessoa || "—"}</td>
       <td><span class="selo-status ${statusClasse}">${statusTexto}</span></td>
-      <td>${notaTexto}</td>
+      <td>${notaTexto}<div class="botoes-nf-linha">${botoesNota}</div></td>
       <td class="num">${formatarMoeda(p.total)}</td>
     </tr>`;
   }).join("");
 
   corpo.querySelectorAll("tr[data-id]").forEach(linha => {
-    linha.addEventListener("click", () => {
+    linha.addEventListener("click", (evento) => {
+      if (evento.target.closest(".botao-nf")) return; // nao abre o recibo quando clica nos botoes de nota
       window.open(`recibo-pedido.html?pedido=${linha.dataset.id}`, "_blank");
+    });
+  });
+  corpo.querySelectorAll('[data-acao="cancelar-nf"]').forEach(botao => {
+    botao.addEventListener("click", (evento) => {
+      evento.stopPropagation();
+      cancelarNotaDoPedido(Number(botao.dataset.pedido), botao);
     });
   });
 }
