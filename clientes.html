@@ -106,9 +106,10 @@
   <a href="estoque.html">Estoque</a>
   <a href="ajustar-estoque.html">Ajustar Estoque</a>
   <a href="tabelas-preco.html">Tabelas de Preço</a>
-  <a href="clientes.html">Clientes</a>
+  <a href="clientes.html" class="ativa">Clientes</a>
   <a href="novo-pedido.html">Novo Pedido</a>
   <a href="pedidos.html">Pedidos</a>
+  <a href="operacoes-especiais.html">Operações Especiais</a>
 </nav>
 
 
@@ -149,6 +150,24 @@
       </div>
     </div>
 
+    <div id="secao-desconto-boleto" style="display:none">
+      <div class="campo">
+        <label>Desconto padrão no boleto</label>
+        <select id="campo-desconto-tipo">
+          <option value="nenhum">— Sem desconto —</option>
+          <option value="fixo">Valor fixo (R$)</option>
+          <option value="percentual">Percentual (%)</option>
+        </select>
+      </div>
+      <div class="campo" id="campo-valor-desconto-caixa" style="display:none">
+        <label id="rotulo-valor-desconto">Valor do desconto</label>
+        <input type="number" id="campo-desconto-valor" min="0" step="0.01" placeholder="0,00">
+      </div>
+      <p style="color:var(--texto-suave); font-size:12.5px; margin:-6px 0 14px;">
+        Isso é só uma sugestão que vem pré-preenchida no Novo Pedido — pode ser ajustada (ou removida) pra cada venda específica.
+      </p>
+    </div>
+
     <button class="botao" id="botao-salvar">Salvar</button>
     <div class="mensagem" id="mensagem"></div>
   </div>
@@ -179,7 +198,7 @@ let clienteSelecionado = null;
 
 async function carregarDados() {
   [clientes, tabelasPreco] = await Promise.all([
-    chamarSupabase("clientes?select=id,nome,tabela_preco_id,forma_pagamento,prazo_dias,parcelas&order=nome"),
+    chamarSupabase("clientes?select=id,nome,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor&order=nome"),
     chamarSupabase("tabelas_preco?select=id,nome&order=nome"),
   ]);
   const selectTabela = document.getElementById("campo-tabela-preco");
@@ -190,6 +209,21 @@ async function carregarDados() {
     selectTabela.appendChild(opcao);
   }
 }
+
+function atualizarVisibilidadeDesconto() {
+  const ehBoleto = document.getElementById("campo-forma-pagamento").value === "boleto";
+  document.getElementById("secao-desconto-boleto").style.display = ehBoleto ? "block" : "none";
+}
+document.getElementById("campo-forma-pagamento").addEventListener("change", atualizarVisibilidadeDesconto);
+
+function atualizarVisibilidadeValorDesconto() {
+  const tipo = document.getElementById("campo-desconto-tipo").value;
+  const caixa = document.getElementById("campo-valor-desconto-caixa");
+  const rotulo = document.getElementById("rotulo-valor-desconto");
+  caixa.style.display = tipo === "nenhum" ? "none" : "block";
+  rotulo.textContent = tipo === "percentual" ? "Percentual de desconto (%)" : "Valor do desconto (R$)";
+}
+document.getElementById("campo-desconto-tipo").addEventListener("change", atualizarVisibilidadeValorDesconto);
 
 document.getElementById("campo-busca-cliente").addEventListener("input", (e) => {
   const filtro = e.target.value.trim().toLowerCase();
@@ -217,6 +251,10 @@ function selecionarCliente(id) {
   document.getElementById("campo-forma-pagamento").value = clienteSelecionado.forma_pagamento || "";
   document.getElementById("campo-prazo").value = clienteSelecionado.prazo_dias || "";
   document.getElementById("campo-parcelas").value = clienteSelecionado.parcelas || "";
+  document.getElementById("campo-desconto-tipo").value = clienteSelecionado.desconto_boleto_tipo || "nenhum";
+  document.getElementById("campo-desconto-valor").value = clienteSelecionado.desconto_boleto_valor || "";
+  atualizarVisibilidadeDesconto();
+  atualizarVisibilidadeValorDesconto();
 
   document.getElementById("mensagem").className = "mensagem";
   document.getElementById("cartao-edicao").style.display = "block";
@@ -232,6 +270,12 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
   const formaValor = document.getElementById("campo-forma-pagamento").value;
   const prazoValor = document.getElementById("campo-prazo").value;
   const parcelasValor = document.getElementById("campo-parcelas").value;
+  // desconto so' vale de verdade quando a forma de pagamento e' boleto -
+  // se nao for, grava sempre como "sem desconto", mesmo que os campos
+  // tenham ficado preenchidos de uma escolha anterior
+  const descontoTipoValor = formaValor === "boleto" ? document.getElementById("campo-desconto-tipo").value : "nenhum";
+  const descontoValorValor = formaValor === "boleto" && descontoTipoValor !== "nenhum"
+    ? document.getElementById("campo-desconto-valor").value : null;
 
   try {
     await chamarSupabase(`clientes?id=eq.${clienteSelecionado.id}`, {
@@ -241,6 +285,8 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
         forma_pagamento: formaValor || null,
         prazo_dias: prazoValor ? Number(prazoValor) : null,
         parcelas: parcelasValor ? Number(parcelasValor) : null,
+        desconto_boleto_tipo: descontoTipoValor,
+        desconto_boleto_valor: descontoValorValor ? Number(descontoValorValor) : null,
       }),
     });
     mensagem.className = "mensagem sucesso";
@@ -253,6 +299,8 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
       forma_pagamento: formaValor || null,
       prazo_dias: prazoValor ? Number(prazoValor) : null,
       parcelas: parcelasValor ? Number(parcelasValor) : null,
+      desconto_boleto_tipo: descontoTipoValor,
+      desconto_boleto_valor: descontoValorValor ? Number(descontoValorValor) : null,
     };
   } catch (erro) {
     mensagem.className = "mensagem erro";
