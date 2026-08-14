@@ -294,6 +294,19 @@
         <p class="ajuda-nota-fiscal" id="texto-ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
       </div>
 
+      <div class="cartao" id="cartao-desconto-boleto" style="display:none">
+        <div class="titulo-cartao">Desconto no boleto</div>
+        <select id="campo-desconto-tipo-pedido">
+          <option value="nenhum">— Sem desconto —</option>
+          <option value="fixo">Valor fixo (R$)</option>
+          <option value="percentual">Percentual (%)</option>
+        </select>
+        <div id="campo-desconto-valor-pedido-caixa" style="display:none; margin-top:10px">
+          <input type="number" id="campo-desconto-valor-pedido" min="0" step="0.01" placeholder="0,00">
+        </div>
+        <p class="ajuda-nota-fiscal">Só se aplica a este pedido específico. Aparece aqui porque o cliente paga via boleto.</p>
+      </div>
+
       <div class="cartao" id="cartao-observacoes">
         <div class="titulo-cartao">Observações</div>
         <textarea id="campo-observacoes" rows="3" placeholder="Endereço de entrega, horário do cliente, número do pedido, etc."></textarea>
@@ -447,6 +460,7 @@ function aplicarTipoOperacaoNaTela() {
   document.getElementById("lista-equipamentos").innerHTML = "";
   document.getElementById("select-deposito").value = "";
   document.getElementById("select-deposito-destino").value = "";
+  document.getElementById("cartao-desconto-boleto").style.display = "none";
   abrirCartao("cliente");
   abrirCartao("equipamento");
   abrirCartao("itens");
@@ -575,7 +589,7 @@ ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
 
 async function iniciar() {
   [clientes, depositos] = await Promise.all([
-    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas&order=nome"),
+    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor&order=nome"),
     chamarSupabase("depositos?select=id,nome&order=id"),
   ]);
   popularSelectsDeposito();
@@ -671,6 +685,23 @@ function desenharListaClientes(filtro) {
 }
 document.getElementById("campo-busca-cliente").addEventListener("input", (e) => desenharListaClientes(e.target.value));
 
+function atualizarCardDescontoBoleto() {
+  const cartao = document.getElementById("cartao-desconto-boleto");
+  const mostrar = tipoOperacao === "venda" && clienteEscolhido && clienteEscolhido.forma_pagamento === "boleto";
+  cartao.style.display = mostrar ? "" : "none";
+  if (mostrar) {
+    document.getElementById("campo-desconto-tipo-pedido").value = clienteEscolhido.desconto_boleto_tipo || "nenhum";
+    document.getElementById("campo-desconto-valor-pedido").value = clienteEscolhido.desconto_boleto_valor || "";
+    atualizarVisibilidadeValorDescontoPedido();
+  }
+}
+
+function atualizarVisibilidadeValorDescontoPedido() {
+  const tipo = document.getElementById("campo-desconto-tipo-pedido").value;
+  document.getElementById("campo-desconto-valor-pedido-caixa").style.display = tipo === "nenhum" ? "none" : "block";
+}
+document.getElementById("campo-desconto-tipo-pedido").addEventListener("change", atualizarVisibilidadeValorDescontoPedido);
+
 async function escolherCliente(id) {
   clienteEscolhido = clientes.find(c => c.id === id);
   document.getElementById("campo-busca-cliente").value = "";
@@ -688,6 +719,8 @@ async function escolherCliente(id) {
   document.getElementById("cartao-parcelas").classList.remove("desabilitado");
   gerarParcelasPadrao();
   desenharParcelas();
+
+  atualizarCardDescontoBoleto();
 
   precosTabela.clear();
   if (clienteEscolhido.tabela_preco_id) {
@@ -883,6 +916,11 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         valor: valoresParcelas[indice],
       }));
 
+      const ehBoleto = clienteEscolhido.forma_pagamento === "boleto";
+      const descontoTipo = ehBoleto ? document.getElementById("campo-desconto-tipo-pedido").value : "nenhum";
+      const descontoValorCampo = document.getElementById("campo-desconto-valor-pedido").value;
+      const descontoValor = ehBoleto && descontoTipo !== "nenhum" && descontoValorCampo ? Number(descontoValorCampo) : null;
+
       resultadoId = await chamarSupabase("rpc/confirmar_pedido", {
         method: "POST",
         body: JSON.stringify({
@@ -896,6 +934,8 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
           p_parcelas_detalhe: parcelasDetalhe,
           p_pessoa: pessoa,
           p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+          p_desconto_boleto_tipo: descontoTipo,
+          p_desconto_boleto_valor: descontoValor,
         }),
       });
       mensagem.className = "mensagem sucesso";
@@ -963,6 +1003,9 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     document.getElementById("campo-observacoes").value = "";
     document.getElementById("campo-descricao-equipamento").value = "";
     document.getElementById("campo-valor-equipamento").value = "";
+    document.getElementById("cartao-desconto-boleto").style.display = "none";
+    document.getElementById("campo-desconto-tipo-pedido").value = "nenhum";
+    document.getElementById("campo-desconto-valor-pedido").value = "";
     abrirCartao("cliente");
     abrirCartao("equipamento");
     abrirCartao("itens");
