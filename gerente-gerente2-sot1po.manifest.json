@@ -1,0 +1,22 @@
+{
+  "name": "DRAM - Estoques",
+  "short_name": "DRAM",
+  "start_url": "gerente-gerente2-sot1po.html",
+  "display": "standalone",
+  "background_color": "#f7f7f5",
+  "theme_color": "#1B4F72",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
