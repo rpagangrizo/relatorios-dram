@@ -99,15 +99,16 @@
   }
   .opcao-estoque.ativa { border-color: var(--azul); background: #EAF1F6; color: var(--azul); }
 
-  input[type=text], input[type=number] {
+  input[type=text], input[type=number], select {
     width: 100%;
     padding: 12px 14px;
     border-radius: 9px;
     border: 1.5px solid var(--linha);
     font-size: 15px;
     color: var(--texto);
+    background: #fff;
   }
-  input:focus { outline: none; border-color: var(--azul); }
+  input:focus, select:focus { outline: none; border-color: var(--azul); }
 
   .lista-produtos {
     max-height: 220px;
@@ -127,6 +128,25 @@
   .item-produto:last-child { border-bottom: none; }
   .item-produto:hover { background: #F6F9FA; }
   .item-produto .saldo-atual { color: var(--texto-suave); font-size: 12.5px; }
+
+  .botao-link { background: none; border: none; color: var(--azul); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 8px 0 0; }
+
+  .caixa-cadastro-materia {
+    display: none;
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 9px;
+    background: #F6F9FA;
+    border: 1.5px dashed var(--linha);
+  }
+  .caixa-cadastro-materia .campo-mini { margin-bottom: 8px; }
+  .caixa-cadastro-materia .campo-mini label {
+    display: block; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); margin-bottom: 4px;
+  }
+  .botao-cadastrar-materia {
+    padding: 10px 16px; border-radius: 8px; border: none; background: var(--azul); color: #fff;
+    font-size: 13.5px; font-weight: 700; cursor: pointer;
+  }
 
   .botoes-tipo { display: flex; gap: 10px; }
   .botao-tipo {
@@ -213,11 +233,12 @@
 </header>
 <nav class="nav-dram">
   <a href="estoque.html">Estoque</a>
-  <a href="ajustar-estoque.html">Ajustar Estoque</a>
+  <a href="ajustar-estoque.html" class="ativa">Ajustar Estoque</a>
   <a href="tabelas-preco.html">Tabelas de Preço</a>
   <a href="clientes.html">Clientes</a>
   <a href="novo-pedido.html">Novo Pedido</a>
   <a href="pedidos.html">Pedidos</a>
+  <a href="operacoes-especiais.html">Operações Especiais</a>
 </nav>
 
 
@@ -238,6 +259,26 @@
     <input type="text" id="campo-busca-produto" placeholder="Buscar produto...">
     <div class="lista-produtos" id="lista-produtos"></div>
     <div class="selecionado" id="produto-selecionado" style="margin-top:8px; display:none"></div>
+
+    <button type="button" class="botao-link" id="botao-abrir-cadastro-materia" style="display:none">+ Cadastrar nova matéria-prima</button>
+    <div class="caixa-cadastro-materia" id="caixa-cadastro-materia">
+      <div class="campo-mini">
+        <label>Nome</label>
+        <input type="text" id="campo-nome-nova-materia" placeholder="Ex: Manga, Açúcar, Embalagem 100g...">
+      </div>
+      <div class="campo-mini">
+        <label>Unidade</label>
+        <select id="campo-unidade-nova-materia">
+          <option value="kg">kg</option>
+          <option value="g">g</option>
+          <option value="L">Litro (L)</option>
+          <option value="mL">mL</option>
+          <option value="unidade">Unidade</option>
+          <option value="caixa">Caixa</option>
+        </select>
+      </div>
+      <button type="button" class="botao-cadastrar-materia" id="botao-confirmar-cadastro-materia">Cadastrar e selecionar</button>
+    </div>
   </div>
 
   <div class="passo desabilitado" id="passo-3">
@@ -349,15 +390,19 @@ async function escolherEstoque(botao) {
   document.getElementById("produto-selecionado").style.display = "none";
   document.getElementById("passo-2").classList.remove("desabilitado");
   document.getElementById("campo-busca-produto").value = "";
+  esconderCadastroMateria();
+  // o botao "+ Cadastrar" so' faz sentido pra materia-prima
+  document.getElementById("botao-abrir-cadastro-materia").style.display =
+    estoqueEscolhido.tipo === "materia" ? "block" : "none";
   atualizarBotaoConfirmar();
 
   if (estoqueEscolhido.tipo === "materia") {
     const [itens, saldos] = await Promise.all([
-      chamarSupabase("itens_materia_prima?select=id,nome&order=nome"),
+      chamarSupabase("itens_materia_prima?select=id,nome,unidade&order=nome"),
       chamarSupabase("estoque_materia_prima?select=item_id,quantidade"),
     ]);
     const mapaSaldo = new Map(saldos.map(s => [s.item_id, Number(s.quantidade)]));
-    itensDoEstoque = itens.map(i => ({ id: i.id, nome: i.nome, saldo: mapaSaldo.get(i.id) || 0 }));
+    itensDoEstoque = itens.map(i => ({ id: i.id, nome: i.nome, unidade: i.unidade, saldo: mapaSaldo.get(i.id) || 0 }));
   } else {
     const depositoId = Number(estoqueEscolhido.id);
     const [itens, saldos] = await Promise.all([
@@ -375,27 +420,85 @@ function desenharListaProdutos(filtro) {
   const filtrados = itensDoEstoque.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
   if (filtrados.length === 0) {
     alvo.innerHTML = `<div class="item-produto">Nenhum produto encontrado.</div>`;
-    return;
-  }
-  alvo.innerHTML = filtrados.map(i =>
-    `<div class="item-produto" data-id="${i.id}" data-nome="${i.nome}">
-       <span>${i.nome}</span><span class="saldo-atual">${i.saldo.toLocaleString("pt-BR")} em estoque</span>
-     </div>`
-  ).join("");
-  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
-    linha.addEventListener("click", () => {
-      produtoEscolhido = { id: Number(linha.dataset.id), nome: linha.dataset.nome };
-      const rotulo = document.getElementById("produto-selecionado");
-      rotulo.textContent = `Selecionado: ${produtoEscolhido.nome}`;
-      rotulo.style.display = "block";
-      document.getElementById("passo-3").classList.remove("desabilitado");
-      atualizarBotaoConfirmar();
+  } else {
+    alvo.innerHTML = filtrados.map(i =>
+      `<div class="item-produto" data-id="${i.id}" data-nome="${i.nome}">
+         <span>${i.nome}</span><span class="saldo-atual">${i.saldo.toLocaleString("pt-BR")}${i.unidade ? " " + i.unidade : ""} em estoque</span>
+       </div>`
+    ).join("");
+    alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+      linha.addEventListener("click", () => {
+        selecionarProduto({ id: Number(linha.dataset.id), nome: linha.dataset.nome });
+      });
     });
-  });
+  }
+
+  // pre-preenche o nome sugerido pro cadastro com o que foi buscado
+  if (estoqueEscolhido && estoqueEscolhido.tipo === "materia" && filtro) {
+    document.getElementById("campo-nome-nova-materia").value = filtro;
+  }
+}
+
+function selecionarProduto(produto) {
+  produtoEscolhido = produto;
+  const rotulo = document.getElementById("produto-selecionado");
+  rotulo.textContent = `Selecionado: ${produtoEscolhido.nome}`;
+  rotulo.style.display = "block";
+  esconderCadastroMateria();
+  document.getElementById("passo-3").classList.remove("desabilitado");
+  atualizarBotaoConfirmar();
 }
 
 document.getElementById("campo-busca-produto").addEventListener("input", (e) => {
   desenharListaProdutos(e.target.value);
+});
+
+function esconderCadastroMateria() {
+  document.getElementById("caixa-cadastro-materia").style.display = "none";
+  document.getElementById("campo-nome-nova-materia").value = "";
+}
+
+document.getElementById("botao-abrir-cadastro-materia").addEventListener("click", () => {
+  const caixa = document.getElementById("caixa-cadastro-materia");
+  caixa.style.display = caixa.style.display === "block" ? "none" : "block";
+});
+
+document.getElementById("botao-confirmar-cadastro-materia").addEventListener("click", async () => {
+  const nome = document.getElementById("campo-nome-nova-materia").value.trim();
+  const unidade = document.getElementById("campo-unidade-nova-materia").value;
+  const mensagem = document.getElementById("mensagem");
+  if (!nome) {
+    alert("Digite o nome da matéria-prima antes de cadastrar.");
+    return;
+  }
+  // evita cadastro duplicado do mesmo nome (nao trava por maiusculas/minusculas)
+  if (itensDoEstoque.some(i => i.nome.toLowerCase() === nome.toLowerCase())) {
+    alert("Já existe uma matéria-prima com esse nome.");
+    return;
+  }
+
+  const botao = document.getElementById("botao-confirmar-cadastro-materia");
+  botao.disabled = true;
+  botao.textContent = "Cadastrando...";
+  try {
+    const criado = await chamarSupabase("itens_materia_prima", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ nome, unidade }),
+    });
+    const novoItem = { id: criado[0].id, nome: criado[0].nome, unidade: criado[0].unidade, saldo: 0 };
+    itensDoEstoque.push(novoItem);
+    document.getElementById("campo-busca-produto").value = "";
+    desenharListaProdutos("");
+    selecionarProduto({ id: novoItem.id, nome: novoItem.nome });
+    mensagem.className = "mensagem";
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui cadastrar: ${erro.message}`;
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Cadastrar e selecionar";
+  }
 });
 
 document.getElementById("botao-entrada").addEventListener("click", () => escolherTipo("entrada"));
