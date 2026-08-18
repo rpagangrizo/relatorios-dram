@@ -327,7 +327,50 @@
 <script>
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito" };
+
+function obterSessao() {
+  try {
+    return JSON.parse(localStorage.getItem("dram_auth") || "null");
+  } catch {
+    return null;
+  }
+}
+
+async function chamarFunction(nome, corpo) {
+  const sessao = obterSessao();
+  const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
+      "apikey": SUPABASE_KEY,
+    },
+    body: JSON.stringify(corpo),
+  });
+  const dados = await resposta.json();
+  return { ok: resposta.ok, dados };
+}
+
+// depois que um pedido de venda (pago por boleto) e' confirmado, gera o
+// boleto de CADA parcela automaticamente - sem isso, ficaria em aberto
+// ate' alguem lembrar de rodar manualmente. Se algum boleto falhar, nao
+// desfaz o pedido (a venda ja aconteceu) - so' avisa qual parcela precisa
+// de atencao manual.
+async function gerarBoletosDoPedido(pedidoId) {
+  const parcelas = await chamarSupabase(`pedido_parcelas?pedido_id=eq.${pedidoId}&select=id,numero_parcela`);
+  const resultados = [];
+  for (const parcela of parcelas) {
+    try {
+      const { ok, dados } = await chamarFunction("emitir-boleto", { pedido_parcela_id: parcela.id });
+      resultados.push({ numero_parcela: parcela.numero_parcela, ok, erro: ok ? null : (dados.erro || JSON.stringify(dados)) });
+    } catch (erro) {
+      resultados.push({ numero_parcela: parcela.numero_parcela, ok: false, erro: erro.message });
+    }
+  }
+  return resultados;
+}
 
 // --- identificação: primeiro tenta a sessão de login (localStorage),
 // depois o parâmetro ?pessoa= da URL, depois pede manualmente ---
@@ -938,8 +981,23 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
           p_desconto_boleto_valor: descontoValor,
         }),
       });
+
+      let textoBoleto = "";
+      if (ehBoleto) {
+        botao.textContent = "Gerando boleto(s)...";
+        const resultadosBoletos = await gerarBoletosDoPedido(resultadoId);
+        const falhas = resultadosBoletos.filter(r => !r.ok);
+        if (resultadosBoletos.length === 0) {
+          textoBoleto = "";
+        } else if (falhas.length === 0) {
+          textoBoleto = ` Boleto${resultadosBoletos.length > 1 ? "s" : ""} gerado${resultadosBoletos.length > 1 ? "s" : ""} com sucesso.`;
+        } else {
+          textoBoleto = ` ⚠️ ${falhas.length} de ${resultadosBoletos.length} boleto(s) falharam (parcela ${falhas.map(f => f.numero_parcela).join(", ")}) — confira na tela de Pedidos.`;
+        }
+      }
+
       mensagem.className = "mensagem sucesso";
-      mensagem.innerHTML = `Pedido nº ${resultadoId} confirmado! <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
+      mensagem.innerHTML = `Pedido nº ${resultadoId} confirmado!${textoBoleto} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
 
     } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
       const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
