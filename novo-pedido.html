@@ -848,8 +848,14 @@ async function escolherCliente(id) {
 
   // cliente e' uma escolha unica e discreta - fecha na hora, sem esperar
   // o foco sair (diferente de itens/parcelas/equipamento, que ficam
-  // sendo ajustados aos poucos)
-  fecharCartaoComResumo("cliente", clienteEscolhido.nome);
+  // sendo ajustados aos poucos). Excecao: se falta forma de pagamento,
+  // deixa o cartao aberto - senao a caixa de preenchimento fica escondida
+  // e ninguem consegue completar o cadastro pra destravar o pedido.
+  if (clienteEscolhido.forma_pagamento) {
+    fecharCartaoComResumo("cliente", clienteEscolhido.nome);
+  } else {
+    abrirCartao("cliente");
+  }
 }
 
 document.getElementById("select-deposito").addEventListener("change", async (e) => {
