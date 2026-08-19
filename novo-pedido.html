@@ -163,6 +163,12 @@
   .barra-final { position: sticky; bottom: 16px; background: var(--papel); border: 1px solid var(--linha);
     padding: 14px 16px; margin-top: 4px; border-radius: 14px; box-shadow: 0 4px 16px rgba(20,30,40,0.10); }
   a.link-discreto { color: var(--azul); font-size: 13.5px; text-decoration: none; font-weight: 700; }
+
+  .campo { margin-bottom: 12px; }
+  .campo label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--texto-suave); margin-bottom: 6px; font-weight: 600; }
+  .caixa-aviso-forma-pagamento { border-color: var(--laranja); background: #FFF3E0; }
+  .caixa-aviso-forma-pagamento .nome { color: #92600C; }
 </style>
 </head>
 <body>
@@ -227,6 +233,29 @@
           <div class="selecionado-caixa" id="caixa-cliente-selecionado">
             <div class="nome" id="nome-cliente-selecionado"></div>
             <div class="chips-info" id="chips-cliente-info"></div>
+          </div>
+          <div class="selecionado-caixa caixa-aviso-forma-pagamento" id="caixa-forma-pagamento-faltando">
+            <div class="nome">Esse cliente ainda não tem forma de pagamento cadastrada</div>
+            <div class="campo" style="margin-top:10px">
+              <label>Forma de pagamento</label>
+              <select id="campo-forma-pagamento-cliente">
+                <option value="">Selecione...</option>
+                <option value="boleto">Boleto</option>
+                <option value="pix">PIX</option>
+                <option value="deposito">Depósito em conta</option>
+              </select>
+            </div>
+            <div style="display:flex; gap:10px">
+              <div class="campo" style="flex:1">
+                <label>Prazo (dias)</label>
+                <input type="number" id="campo-prazo-cliente" min="0" placeholder="Ex: 30">
+              </div>
+              <div class="campo" style="flex:1">
+                <label>Parcelas</label>
+                <input type="number" id="campo-parcelas-cliente" min="1" placeholder="Ex: 1">
+              </div>
+            </div>
+            <p class="ajuda-nota-fiscal">Isso fica salvo no cadastro do cliente pras próximas vendas.</p>
           </div>
         </div>
       </div>
@@ -447,6 +476,24 @@ function formatarMoeda(valor) {
   return "R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
 }
 
+// --- forma de pagamento em falta: quando o cliente escolhido nao tem
+// forma_pagamento cadastrada, usa o que foi preenchido na caixa de aviso
+// (ainda nao salvo no cadastro dele) como "valor efetivo" pra tudo que
+// depende disso na tela (parcelas, card de desconto no boleto etc) ---
+function formaPagamentoEfetiva() {
+  if (!clienteEscolhido) return null;
+  return clienteEscolhido.forma_pagamento || document.getElementById("campo-forma-pagamento-cliente").value || null;
+}
+
+function obterPrazoEParcelasEfetivos() {
+  if (clienteEscolhido && clienteEscolhido.forma_pagamento) {
+    return { prazo: clienteEscolhido.prazo_dias || 30, parcelas: Math.max(1, clienteEscolhido.parcelas || 1) };
+  }
+  const prazo = Number(document.getElementById("campo-prazo-cliente").value) || 30;
+  const parcelas = Math.max(1, Number(document.getElementById("campo-parcelas-cliente").value) || 1);
+  return { prazo, parcelas };
+}
+
 // --- cartoes colapsaveis: abrir/fechar manual + resumo quando completo ---
 function abrirCartao(id) {
   const cartao = document.getElementById(`cartao-${id}`);
@@ -497,6 +544,10 @@ function aplicarTipoOperacaoNaTela() {
   document.getElementById("campo-busca-cliente").value = "";
   document.getElementById("lista-clientes").innerHTML = "";
   document.getElementById("caixa-cliente-selecionado").style.display = "none";
+  document.getElementById("caixa-forma-pagamento-faltando").style.display = "none";
+  document.getElementById("campo-forma-pagamento-cliente").value = "";
+  document.getElementById("campo-prazo-cliente").value = "";
+  document.getElementById("campo-parcelas-cliente").value = "";
   document.getElementById("campo-descricao-equipamento").value = "";
   document.getElementById("campo-valor-equipamento").value = "";
   document.getElementById("campo-busca-equipamento").value = "";
@@ -572,8 +623,7 @@ function distribuirValoresParcelas(total, quantidade) {
 }
 
 function gerarParcelasPadrao() {
-  const quantidade = Math.max(1, clienteEscolhido.parcelas || 1);
-  const prazo = clienteEscolhido.prazo_dias || 30;
+  const { prazo, parcelas: quantidade } = obterPrazoEParcelasEfetivos();
   const hoje = new Date();
   parcelasPedido = [];
   for (let i = 1; i <= quantidade; i++) {
@@ -614,7 +664,7 @@ function desenharParcelas() {
 }
 
 document.getElementById("botao-add-parcela").addEventListener("click", () => {
-  const prazo = (clienteEscolhido && clienteEscolhido.prazo_dias) || 30;
+  const { prazo } = obterPrazoEParcelasEfetivos();
   const ultima = parcelasPedido[parcelasPedido.length - 1];
   const dataBase = ultima ? new Date(ultima.data_vencimento + "T00:00:00") : new Date();
   dataBase.setDate(dataBase.getDate() + prazo);
@@ -730,7 +780,7 @@ document.getElementById("campo-busca-cliente").addEventListener("input", (e) => 
 
 function atualizarCardDescontoBoleto() {
   const cartao = document.getElementById("cartao-desconto-boleto");
-  const mostrar = tipoOperacao === "venda" && clienteEscolhido && clienteEscolhido.forma_pagamento === "boleto";
+  const mostrar = tipoOperacao === "venda" && clienteEscolhido && formaPagamentoEfetiva() === "boleto";
   cartao.style.display = mostrar ? "" : "none";
   if (mostrar) {
     document.getElementById("campo-desconto-tipo-pedido").value = clienteEscolhido.desconto_boleto_tipo || "nenhum";
@@ -745,6 +795,19 @@ function atualizarVisibilidadeValorDescontoPedido() {
 }
 document.getElementById("campo-desconto-tipo-pedido").addEventListener("change", atualizarVisibilidadeValorDescontoPedido);
 
+// caixa de "forma de pagamento em falta": ao mudar qualquer campo dela,
+// reflete na hora nas parcelas (que passam a usar prazo/qtd escolhidos
+// aqui), no card de desconto no boleto (se escolher boleto) e no botao
+function atualizarAposEscolherFormaPagamentoPendente() {
+  gerarParcelasPadrao();
+  desenharParcelas();
+  atualizarCardDescontoBoleto();
+  atualizarBotaoConfirmar();
+}
+document.getElementById("campo-forma-pagamento-cliente").addEventListener("change", atualizarAposEscolherFormaPagamentoPendente);
+document.getElementById("campo-prazo-cliente").addEventListener("input", atualizarAposEscolherFormaPagamentoPendente);
+document.getElementById("campo-parcelas-cliente").addEventListener("input", atualizarAposEscolherFormaPagamentoPendente);
+
 async function escolherCliente(id) {
   clienteEscolhido = clientes.find(c => c.id === id);
   document.getElementById("campo-busca-cliente").value = "";
@@ -758,6 +821,13 @@ async function escolherCliente(id) {
   document.getElementById("chips-cliente-info").innerHTML =
     (chips.length ? chips : ["Sem forma de pagamento cadastrada"]).map(c => `<span class="chip-info">${c}</span>`).join("");
   document.getElementById("caixa-cliente-selecionado").style.display = "block";
+
+  // reseta a caixa de "forma de pagamento em falta" e so' mostra ela se
+  // o cliente realmente nao tiver forma de pagamento cadastrada
+  document.getElementById("campo-forma-pagamento-cliente").value = "";
+  document.getElementById("campo-prazo-cliente").value = "";
+  document.getElementById("campo-parcelas-cliente").value = "";
+  document.getElementById("caixa-forma-pagamento-faltando").style.display = clienteEscolhido.forma_pagamento ? "none" : "block";
 
   document.getElementById("cartao-parcelas").classList.remove("desabilitado");
   gerarParcelasPadrao();
@@ -923,7 +993,13 @@ function atualizarBotaoConfirmar() {
 
   if (tipoOperacao === "venda") {
     const parcelasValidas = parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento);
-    tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa &&
+    const formaPagamentoDefinida = clienteEscolhido && (
+      clienteEscolhido.forma_pagamento ||
+      (document.getElementById("campo-forma-pagamento-cliente").value &&
+       document.getElementById("campo-prazo-cliente").value &&
+       document.getElementById("campo-parcelas-cliente").value)
+    );
+    tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa && formaPagamentoDefinida &&
       itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
       !algumItemExcedeEstoque() && parcelasValidas;
   } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
@@ -951,6 +1027,28 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     let resultadoId;
 
     if (tipoOperacao === "venda") {
+      // se o cliente ainda nao tinha forma de pagamento cadastrada, salva
+      // agora o que foi preenchido na caixa de aviso - direto no cadastro
+      // do cliente, pra proxima venda ja vir com tudo preenchido sozinho
+      if (!clienteEscolhido.forma_pagamento) {
+        const formaEscolhida = document.getElementById("campo-forma-pagamento-cliente").value;
+        const { prazo: prazoEscolhido, parcelas: parcelasEscolhidas } = obterPrazoEParcelasEfetivos();
+
+        await chamarSupabase(`clientes?id=eq.${clienteEscolhido.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            forma_pagamento: formaEscolhida,
+            prazo_dias: prazoEscolhido,
+            parcelas: parcelasEscolhidas,
+          }),
+        });
+        clienteEscolhido.forma_pagamento = formaEscolhida;
+        clienteEscolhido.prazo_dias = prazoEscolhido;
+        clienteEscolhido.parcelas = parcelasEscolhidas;
+        const indiceCliente = clientes.findIndex(c => c.id === clienteEscolhido.id);
+        if (indiceCliente >= 0) clientes[indiceCliente] = { ...clientes[indiceCliente], ...clienteEscolhido };
+      }
+
       const totalFinal = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
       const valoresParcelas = distribuirValoresParcelas(totalFinal, parcelasPedido.length);
       const parcelasDetalhe = parcelasPedido.map((p, indice) => ({
@@ -1053,6 +1151,10 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     depositoDestinoEscolhidoId = null;
     parcelasPedido = [];
     document.getElementById("caixa-cliente-selecionado").style.display = "none";
+    document.getElementById("caixa-forma-pagamento-faltando").style.display = "none";
+    document.getElementById("campo-forma-pagamento-cliente").value = "";
+    document.getElementById("campo-prazo-cliente").value = "";
+    document.getElementById("campo-parcelas-cliente").value = "";
     document.getElementById("select-deposito").value = "";
     document.getElementById("select-deposito-destino").value = "";
     document.getElementById("cartao-itens").classList.add("desabilitado");
