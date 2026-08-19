@@ -401,6 +401,26 @@ async function gerarBoletosDoPedido(pedidoId) {
   return resultados;
 }
 
+// a Focus NFe as vezes nao autoriza na hora - devolve "processando_autorizacao"
+// e o resultado final so' sai alguns segundos depois. Em vez de tratar isso
+// como erro (que nao e'), consulta de novo por algumas vezes ate' o status
+// definitivo (autorizado, erro_autorizacao, etc) sair - ou desiste depois
+// de um tempo e avisa que ainda esta processando, sem soar como falha.
+async function aguardarStatusFinalNota(pedidoId, tentativas = 6, intervaloMs = 2500) {
+  for (let i = 0; i < tentativas; i++) {
+    await new Promise((resolver) => setTimeout(resolver, intervaloMs));
+    try {
+      const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId });
+      if (ok && dados.focus && dados.focus.status && dados.focus.status !== "processando_autorizacao") {
+        return dados.focus;
+      }
+    } catch {
+      // se uma consulta falhar no meio do caminho, so' tenta de novo na proxima volta
+    }
+  }
+  return null; // continuou "processando" ate' esgotar as tentativas
+}
+
 // --- identificação: primeiro tenta a sessão de login (localStorage),
 // depois o parâmetro ?pessoa= da URL, depois pede manualmente ---
 const CHAVE_LOCAL_AUTH = "dram_auth";
@@ -1091,10 +1111,20 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         botao.textContent = "Emitindo nota fiscal...";
         try {
           const { ok, dados } = await chamarFunction("emitir-nota-fiscal", { pedido_id: resultadoId });
-          if (ok && dados.focus && dados.focus.status === "autorizado") {
-            textoNota = ` Nota fiscal nº ${dados.focus.numero || ""} emitida.`;
+          let focusFinal = dados.focus;
+
+          if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
+            botao.textContent = "Aguardando autorização da SEFAZ...";
+            const resultadoEspera = await aguardarStatusFinalNota(resultadoId);
+            if (resultadoEspera) focusFinal = resultadoEspera;
+          }
+
+          if (focusFinal && focusFinal.status === "autorizado") {
+            textoNota = ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`;
+          } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
+            textoNota = ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Pedidos.`;
           } else {
-            const motivo = (dados.focus && dados.focus.mensagem_sefaz) || dados.erro || "erro desconhecido";
+            const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
             textoNota = ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Pedidos.`;
           }
         } catch (erro) {
