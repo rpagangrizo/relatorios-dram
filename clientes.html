@@ -41,6 +41,7 @@
 
   .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
   .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+  .cartao h2.subtitulo { margin-top: 20px; }
 
   input[type=text], input[type=number], select {
     width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
@@ -64,11 +65,15 @@
   .botao:active { background: var(--laranja-escuro); }
   .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
 
+  .botao-secundario { padding: 11px 16px; border-radius: 9px; border: 1.5px solid var(--azul); background: #fff; color: var(--azul);
+    font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 10px; }
+  .botao-secundario:active { background: #F0F5F8; }
+
   .mensagem { margin-top: 12px; padding: 13px 15px; border-radius: 9px; font-size: 14px; font-weight: 600; display: none; }
   .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
   .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
 
-  .nome-selecionado { font-weight: 700; color: var(--azul); font-size: 15px; margin-bottom: 14px; }
+  .status-cadastro { font-weight: 700; color: var(--azul); font-size: 13px; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.4px; }
   .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
 
   nav.nav-dram {
@@ -99,7 +104,7 @@
   <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
   <div class="titulos">
     <h1>Clientes</h1>
-    <p>Tabela de preço e forma de pagamento</p>
+    <p>Cadastro, tabela de preço e forma de pagamento</p>
   </div>
 </header>
 <nav class="nav-dram">
@@ -118,12 +123,69 @@
     <h2>Buscar cliente</h2>
     <input type="text" id="campo-busca-cliente" placeholder="Digite o nome do cliente...">
     <div class="lista-busca" id="lista-clientes" style="display:none"></div>
+    <button class="botao-secundario" id="botao-novo-cliente">+ Cadastrar cliente novo</button>
   </div>
 
   <div class="cartao" id="cartao-edicao" style="display:none">
-    <h2>Configuração do cliente</h2>
-    <div class="nome-selecionado" id="nome-cliente-selecionado"></div>
+    <div class="status-cadastro" id="status-cadastro"></div>
 
+    <h2>Dados cadastrais</h2>
+    <div class="campo">
+      <label>Nome</label>
+      <input type="text" id="campo-nome" placeholder="Nome do cliente">
+    </div>
+    <div class="campo">
+      <label>Razão social</label>
+      <input type="text" id="campo-razao-social" placeholder="Razão social (nota fiscal)">
+    </div>
+    <div class="linha-dupla">
+      <div class="campo">
+        <label>CNPJ / CPF</label>
+        <input type="text" id="campo-cnpj-cpf" placeholder="00.000.000/0000-00">
+      </div>
+      <div class="campo">
+        <label>Inscrição estadual</label>
+        <input type="text" id="campo-inscricao-estadual" placeholder="Isento ou nº">
+      </div>
+    </div>
+
+    <h2 class="subtitulo">Endereço</h2>
+    <div class="campo">
+      <label>Logradouro</label>
+      <input type="text" id="campo-endereco-logradouro" placeholder="Rua, avenida, rodovia...">
+    </div>
+    <div class="linha-dupla">
+      <div class="campo" style="flex:2">
+        <label>Número</label>
+        <input type="text" id="campo-endereco-numero" placeholder="Nº ou S/N">
+      </div>
+      <div class="campo" style="flex:3">
+        <label>Complemento</label>
+        <input type="text" id="campo-endereco-complemento" placeholder="Opcional">
+      </div>
+    </div>
+    <div class="linha-dupla">
+      <div class="campo" style="flex:3">
+        <label>Bairro</label>
+        <input type="text" id="campo-endereco-bairro">
+      </div>
+      <div class="campo" style="flex:2">
+        <label>CEP</label>
+        <input type="text" id="campo-endereco-cep" placeholder="00000-000">
+      </div>
+    </div>
+    <div class="linha-dupla">
+      <div class="campo" style="flex:3">
+        <label>Cidade</label>
+        <input type="text" id="campo-endereco-municipio">
+      </div>
+      <div class="campo" style="flex:1">
+        <label>UF</label>
+        <input type="text" id="campo-endereco-uf" maxlength="2" style="text-transform:uppercase">
+      </div>
+    </div>
+
+    <h2 class="subtitulo">Dados comerciais</h2>
     <div class="campo">
       <label>Tabela de preço</label>
       <select id="campo-tabela-preco"><option value="">— Nenhuma —</option></select>
@@ -192,13 +254,18 @@ async function chamarSupabase(caminho, opcoes = {}) {
   return texto ? JSON.parse(texto) : null;
 }
 
+const CAMPOS_CLIENTE =
+  "id,nome,razao_social,cnpj_cpf,inscricao_estadual," +
+  "endereco_logradouro,endereco_numero,endereco_complemento,endereco_bairro,endereco_cep,endereco_municipio,endereco_uf," +
+  "tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor";
+
 let clientes = [];
 let tabelasPreco = [];
-let clienteSelecionado = null;
+let clienteSelecionado = null; // null = cadastrando cliente novo
 
 async function carregarDados() {
   [clientes, tabelasPreco] = await Promise.all([
-    chamarSupabase("clientes?select=id,nome,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor&order=nome"),
+    chamarSupabase(`clientes?select=${CAMPOS_CLIENTE}&order=nome`),
     chamarSupabase("tabelas_preco?select=id,nome&order=nome"),
   ]);
   const selectTabela = document.getElementById("campo-tabela-preco");
@@ -241,28 +308,81 @@ document.getElementById("campo-busca-cliente").addEventListener("input", (e) => 
   alvo.style.display = "block";
 });
 
+function limparFormulario() {
+  document.getElementById("campo-nome").value = "";
+  document.getElementById("campo-razao-social").value = "";
+  document.getElementById("campo-cnpj-cpf").value = "";
+  document.getElementById("campo-inscricao-estadual").value = "";
+  document.getElementById("campo-endereco-logradouro").value = "";
+  document.getElementById("campo-endereco-numero").value = "";
+  document.getElementById("campo-endereco-complemento").value = "";
+  document.getElementById("campo-endereco-bairro").value = "";
+  document.getElementById("campo-endereco-cep").value = "";
+  document.getElementById("campo-endereco-municipio").value = "";
+  document.getElementById("campo-endereco-uf").value = "";
+  document.getElementById("campo-tabela-preco").value = "";
+  document.getElementById("campo-forma-pagamento").value = "";
+  document.getElementById("campo-prazo").value = "";
+  document.getElementById("campo-parcelas").value = "";
+  document.getElementById("campo-desconto-tipo").value = "nenhum";
+  document.getElementById("campo-desconto-valor").value = "";
+}
+
+function abrirFormulario() {
+  atualizarVisibilidadeDesconto();
+  atualizarVisibilidadeValorDesconto();
+  document.getElementById("mensagem").className = "mensagem";
+  document.getElementById("cartao-edicao").style.display = "block";
+}
+
+document.getElementById("botao-novo-cliente").addEventListener("click", () => {
+  clienteSelecionado = null;
+  document.getElementById("campo-busca-cliente").value = "";
+  document.getElementById("lista-clientes").style.display = "none";
+  limparFormulario();
+  document.getElementById("status-cadastro").textContent = "Novo cliente";
+  abrirFormulario();
+  document.getElementById("campo-nome").focus();
+});
+
 function selecionarCliente(id) {
   clienteSelecionado = clientes.find(c => c.id === id);
   document.getElementById("campo-busca-cliente").value = "";
   document.getElementById("lista-clientes").style.display = "none";
-  document.getElementById("nome-cliente-selecionado").textContent = clienteSelecionado.nome;
+  document.getElementById("status-cadastro").textContent = `Editando: ${clienteSelecionado.nome}`;
 
+  document.getElementById("campo-nome").value = clienteSelecionado.nome || "";
+  document.getElementById("campo-razao-social").value = clienteSelecionado.razao_social || "";
+  document.getElementById("campo-cnpj-cpf").value = clienteSelecionado.cnpj_cpf || "";
+  document.getElementById("campo-inscricao-estadual").value = clienteSelecionado.inscricao_estadual || "";
+  document.getElementById("campo-endereco-logradouro").value = clienteSelecionado.endereco_logradouro || "";
+  document.getElementById("campo-endereco-numero").value = clienteSelecionado.endereco_numero || "";
+  document.getElementById("campo-endereco-complemento").value = clienteSelecionado.endereco_complemento || "";
+  document.getElementById("campo-endereco-bairro").value = clienteSelecionado.endereco_bairro || "";
+  document.getElementById("campo-endereco-cep").value = clienteSelecionado.endereco_cep || "";
+  document.getElementById("campo-endereco-municipio").value = clienteSelecionado.endereco_municipio || "";
+  document.getElementById("campo-endereco-uf").value = clienteSelecionado.endereco_uf || "";
   document.getElementById("campo-tabela-preco").value = clienteSelecionado.tabela_preco_id || "";
   document.getElementById("campo-forma-pagamento").value = clienteSelecionado.forma_pagamento || "";
   document.getElementById("campo-prazo").value = clienteSelecionado.prazo_dias || "";
   document.getElementById("campo-parcelas").value = clienteSelecionado.parcelas || "";
   document.getElementById("campo-desconto-tipo").value = clienteSelecionado.desconto_boleto_tipo || "nenhum";
   document.getElementById("campo-desconto-valor").value = clienteSelecionado.desconto_boleto_valor || "";
-  atualizarVisibilidadeDesconto();
-  atualizarVisibilidadeValorDesconto();
 
-  document.getElementById("mensagem").className = "mensagem";
-  document.getElementById("cartao-edicao").style.display = "block";
+  abrirFormulario();
 }
 
 document.getElementById("botao-salvar").addEventListener("click", async () => {
   const botao = document.getElementById("botao-salvar");
   const mensagem = document.getElementById("mensagem");
+
+  const nomeValor = document.getElementById("campo-nome").value.trim();
+  if (!nomeValor) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = "Preencha ao menos o nome do cliente.";
+    return;
+  }
+
   botao.disabled = true;
   botao.textContent = "Salvando...";
 
@@ -277,31 +397,53 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
   const descontoValorValor = formaValor === "boleto" && descontoTipoValor !== "nenhum"
     ? document.getElementById("campo-desconto-valor").value : null;
 
-  try {
-    await chamarSupabase(`clientes?id=eq.${clienteSelecionado.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        tabela_preco_id: tabelaValor ? Number(tabelaValor) : null,
-        forma_pagamento: formaValor || null,
-        prazo_dias: prazoValor ? Number(prazoValor) : null,
-        parcelas: parcelasValor ? Number(parcelasValor) : null,
-        desconto_boleto_tipo: descontoTipoValor,
-        desconto_boleto_valor: descontoValorValor ? Number(descontoValorValor) : null,
-      }),
-    });
-    mensagem.className = "mensagem sucesso";
-    mensagem.textContent = "Salvo com sucesso!";
+  const payload = {
+    nome: nomeValor,
+    razao_social: document.getElementById("campo-razao-social").value.trim() || null,
+    cnpj_cpf: document.getElementById("campo-cnpj-cpf").value.trim() || null,
+    inscricao_estadual: document.getElementById("campo-inscricao-estadual").value.trim() || null,
+    endereco_logradouro: document.getElementById("campo-endereco-logradouro").value.trim() || null,
+    endereco_numero: document.getElementById("campo-endereco-numero").value.trim() || null,
+    endereco_complemento: document.getElementById("campo-endereco-complemento").value.trim() || null,
+    endereco_bairro: document.getElementById("campo-endereco-bairro").value.trim() || null,
+    endereco_cep: document.getElementById("campo-endereco-cep").value.trim() || null,
+    endereco_municipio: document.getElementById("campo-endereco-municipio").value.trim() || null,
+    endereco_uf: document.getElementById("campo-endereco-uf").value.trim().toUpperCase() || null,
+    tabela_preco_id: tabelaValor ? Number(tabelaValor) : null,
+    forma_pagamento: formaValor || null,
+    prazo_dias: prazoValor ? Number(prazoValor) : null,
+    parcelas: parcelasValor ? Number(parcelasValor) : null,
+    desconto_boleto_tipo: descontoTipoValor,
+    desconto_boleto_valor: descontoValorValor ? Number(descontoValorValor) : null,
+  };
 
-    const indice = clientes.findIndex(c => c.id === clienteSelecionado.id);
-    clientes[indice] = {
-      ...clientes[indice],
-      tabela_preco_id: tabelaValor ? Number(tabelaValor) : null,
-      forma_pagamento: formaValor || null,
-      prazo_dias: prazoValor ? Number(prazoValor) : null,
-      parcelas: parcelasValor ? Number(parcelasValor) : null,
-      desconto_boleto_tipo: descontoTipoValor,
-      desconto_boleto_valor: descontoValorValor ? Number(descontoValorValor) : null,
-    };
+  try {
+    if (clienteSelecionado) {
+      // cliente ja existe -> atualiza
+      await chamarSupabase(`clientes?id=eq.${clienteSelecionado.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      const indice = clientes.findIndex(c => c.id === clienteSelecionado.id);
+      clientes[indice] = { ...clientes[indice], ...payload };
+      clienteSelecionado = clientes[indice];
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = "Salvo com sucesso!";
+    } else {
+      // cliente novo -> cria, e pede o registro completo de volta (com o id gerado)
+      const criados = await chamarSupabase("clientes", {
+        method: "POST",
+        headers: { "Prefer": "return=representation" },
+        body: JSON.stringify(payload),
+      });
+      const novoCliente = criados[0];
+      clientes.push(novoCliente);
+      clientes.sort((a, b) => a.nome.localeCompare(b.nome));
+      clienteSelecionado = novoCliente;
+      document.getElementById("status-cadastro").textContent = `Editando: ${novoCliente.nome}`;
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = "Cliente cadastrado com sucesso!";
+    }
   } catch (erro) {
     mensagem.className = "mensagem erro";
     mensagem.textContent = `Não consegui salvar: ${erro.message}`;
