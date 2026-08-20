@@ -436,7 +436,7 @@ async function carregarMateriaPrima() {
   const alvo = document.getElementById("conteudo-materia");
   try {
     const [itens, estoque] = await Promise.all([
-      chamarSupabase("itens_materia_prima?select=id,nome&order=nome"),
+      chamarSupabase("itens_materia_prima?select=id,nome,custo_medio&order=nome"),
       chamarSupabase("estoque_materia_prima?select=item_id,quantidade"),
     ]);
     const saldos = new Map();
@@ -448,6 +448,10 @@ async function carregarMateriaPrima() {
   } catch (erro) {
     alvo.innerHTML = `<div class="erro">Não consegui carregar a matéria-prima. ${erro.message}</div>`;
   }
+}
+
+function formatarMoeda(valor) {
+  return "R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
 }
 
 function desenharMateriaPrima(filtro) {
@@ -462,10 +466,12 @@ function desenharMateriaPrima(filtro) {
     return;
   }
 
-  let html = `<table><thead><tr><th>Item</th><th class="num">Quantidade</th></tr></thead><tbody>`;
+  let html = `<table><thead><tr><th>Item</th><th class="num">Quantidade</th><th class="num">Custo médio</th></tr></thead><tbody>`;
   for (const item of itensFiltrados) {
     const qtd = saldos.get(item.id) || 0;
-    html += `<tr><td>${item.nome}</td><td class="num">${celulaSelo(qtd)}</td></tr>`;
+    const custoTexto = item.custo_medio !== null && item.custo_medio !== undefined
+      ? formatarMoeda(item.custo_medio) : "—";
+    html += `<tr><td>${item.nome}</td><td class="num">${celulaSelo(qtd)}</td><td class="num">${custoTexto}</td></tr>`;
   }
   html += `</tbody></table>`;
   alvo.innerHTML = html;
