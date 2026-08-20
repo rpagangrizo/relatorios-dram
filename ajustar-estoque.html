@@ -84,6 +84,11 @@
     font-weight: 600;
     color: var(--azul);
   }
+  .passo .ajuda-campo {
+    color: var(--texto-suave);
+    font-size: 12px;
+    margin: 6px 0 0;
+  }
 
   .opcoes-estoque { display: flex; flex-direction: column; gap: 8px; }
   .opcao-estoque {
@@ -294,6 +299,12 @@
     <input type="number" id="campo-quantidade" placeholder="0" min="0" step="0.01">
   </div>
 
+  <div class="passo desabilitado" id="passo-custo" style="display:none">
+    <h2>5. Custo unitário (R$)</h2>
+    <input type="number" id="campo-custo-unitario" placeholder="0,00" min="0" step="0.01">
+    <p class="ajuda-campo" id="ajuda-custo-medio"></p>
+  </div>
+
   <button class="botao-confirmar" id="botao-confirmar" disabled>Confirmar ajuste</button>
   <div class="mensagem" id="mensagem"></div>
 
@@ -340,6 +351,10 @@ if (sessaoDram && sessaoDram.email) {
     pessoa = e.target.value.trim() || null;
     atualizarBotaoConfirmar();
   });
+}
+
+function formatarMoeda(valor) {
+  return "R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
 }
 
 async function chamarSupabase(caminho, opcoes = {}) {
@@ -394,15 +409,19 @@ async function escolherEstoque(botao) {
   // o botao "+ Cadastrar" so' faz sentido pra materia-prima
   document.getElementById("botao-abrir-cadastro-materia").style.display =
     estoqueEscolhido.tipo === "materia" ? "block" : "none";
+  esconderPassoCusto();
   atualizarBotaoConfirmar();
 
   if (estoqueEscolhido.tipo === "materia") {
     const [itens, saldos] = await Promise.all([
-      chamarSupabase("itens_materia_prima?select=id,nome,unidade&order=nome"),
+      chamarSupabase("itens_materia_prima?select=id,nome,unidade,custo_medio&order=nome"),
       chamarSupabase("estoque_materia_prima?select=item_id,quantidade"),
     ]);
     const mapaSaldo = new Map(saldos.map(s => [s.item_id, Number(s.quantidade)]));
-    itensDoEstoque = itens.map(i => ({ id: i.id, nome: i.nome, unidade: i.unidade, saldo: mapaSaldo.get(i.id) || 0 }));
+    itensDoEstoque = itens.map(i => ({
+      id: i.id, nome: i.nome, unidade: i.unidade, saldo: mapaSaldo.get(i.id) || 0,
+      custoMedio: i.custo_medio !== null ? Number(i.custo_medio) : null,
+    }));
   } else {
     const depositoId = Number(estoqueEscolhido.id);
     const [itens, saldos] = await Promise.all([
@@ -428,7 +447,8 @@ function desenharListaProdutos(filtro) {
     ).join("");
     alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
       linha.addEventListener("click", () => {
-        selecionarProduto({ id: Number(linha.dataset.id), nome: linha.dataset.nome });
+        const item = itensDoEstoque.find(i => i.id === Number(linha.dataset.id));
+        selecionarProduto(item);
       });
     });
   }
@@ -446,6 +466,7 @@ function selecionarProduto(produto) {
   rotulo.style.display = "block";
   esconderCadastroMateria();
   document.getElementById("passo-3").classList.remove("desabilitado");
+  atualizarVisibilidadePassoCusto();
   atualizarBotaoConfirmar();
 }
 
@@ -486,11 +507,13 @@ document.getElementById("botao-confirmar-cadastro-materia").addEventListener("cl
       headers: { "Prefer": "return=representation" },
       body: JSON.stringify({ nome, unidade }),
     });
-    const novoItem = { id: criado[0].id, nome: criado[0].nome, unidade: criado[0].unidade, saldo: 0 };
+    const novoItem = {
+      id: criado[0].id, nome: criado[0].nome, unidade: criado[0].unidade, saldo: 0, custoMedio: null,
+    };
     itensDoEstoque.push(novoItem);
     document.getElementById("campo-busca-produto").value = "";
     desenharListaProdutos("");
-    selecionarProduto({ id: novoItem.id, nome: novoItem.nome });
+    selecionarProduto(novoItem);
     mensagem.className = "mensagem";
   } catch (erro) {
     mensagem.className = "mensagem erro";
@@ -509,19 +532,52 @@ function escolherTipo(tipo) {
   document.getElementById("botao-entrada").classList.toggle("ativa", tipo === "entrada");
   document.getElementById("botao-saida").classList.toggle("ativa", tipo === "saida");
   document.getElementById("passo-4").classList.remove("desabilitado");
+  atualizarVisibilidadePassoCusto();
   atualizarBotaoConfirmar();
 }
 
+// o passo de custo so' aparece pra Entrada de Matéria-Prima - saída nunca
+// pede custo (não mexe na média), e produto acabado não tem essa lógica.
+function atualizarVisibilidadePassoCusto() {
+  const passoCusto = document.getElementById("passo-custo");
+  const deveAparecer = estoqueEscolhido && estoqueEscolhido.tipo === "materia" &&
+    tipoEscolhido === "entrada" && produtoEscolhido;
+  passoCusto.style.display = deveAparecer ? "block" : "none";
+  passoCusto.classList.toggle("desabilitado", !deveAparecer);
+
+  const ajuda = document.getElementById("ajuda-custo-medio");
+  if (deveAparecer) {
+    ajuda.textContent = produtoEscolhido.custoMedio !== null
+      ? `Custo médio atual: ${formatarMoeda(produtoEscolhido.custoMedio)}`
+      : "Esse item ainda não tem custo médio registrado — esse valor vira o custo inicial.";
+  } else {
+    document.getElementById("campo-custo-unitario").value = "";
+  }
+}
+
+function esconderPassoCusto() {
+  document.getElementById("passo-custo").style.display = "none";
+  document.getElementById("campo-custo-unitario").value = "";
+}
+
 document.getElementById("campo-quantidade").addEventListener("input", atualizarBotaoConfirmar);
+document.getElementById("campo-custo-unitario").addEventListener("input", atualizarBotaoConfirmar);
+
+function precisaDeCusto() {
+  return estoqueEscolhido && estoqueEscolhido.tipo === "materia" && tipoEscolhido === "entrada";
+}
 
 function atualizarBotaoConfirmar() {
   const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
-  const tudoPreenchido = estoqueEscolhido && produtoEscolhido && tipoEscolhido && quantidade > 0 && pessoa;
+  const custoUnitario = parseFloat(document.getElementById("campo-custo-unitario").value);
+  const custoOk = !precisaDeCusto() || custoUnitario > 0;
+  const tudoPreenchido = estoqueEscolhido && produtoEscolhido && tipoEscolhido && quantidade > 0 && pessoa && custoOk;
   document.getElementById("botao-confirmar").disabled = !tudoPreenchido;
 }
 
 document.getElementById("botao-confirmar").addEventListener("click", async () => {
   const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
+  const custoUnitario = parseFloat(document.getElementById("campo-custo-unitario").value);
   const mensagem = document.getElementById("mensagem");
   const botao = document.getElementById("botao-confirmar");
   botao.disabled = true;
@@ -529,12 +585,14 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
 
   try {
     if (estoqueEscolhido.tipo === "materia") {
+      const corpo = {
+        p_item_id: produtoEscolhido.id, p_tipo: tipoEscolhido,
+        p_quantidade: quantidade, p_pessoa: pessoa,
+      };
+      if (precisaDeCusto()) corpo.p_custo_unitario = custoUnitario;
       await chamarSupabase("rpc/ajustar_estoque_materia_prima", {
         method: "POST",
-        body: JSON.stringify({
-          p_item_id: produtoEscolhido.id, p_tipo: tipoEscolhido,
-          p_quantidade: quantidade, p_pessoa: pessoa,
-        }),
+        body: JSON.stringify(corpo),
       });
     } else {
       await chamarSupabase("rpc/ajustar_estoque_produto_acabado", {
@@ -558,6 +616,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     document.getElementById("botao-saida").classList.remove("ativa");
     document.getElementById("passo-3").classList.add("desabilitado");
     document.getElementById("passo-4").classList.add("desabilitado");
+    esconderPassoCusto();
     await escolherEstoque(document.querySelector(`.opcao-estoque[data-id="${estoqueEscolhido.id}"]`));
   } catch (erro) {
     mensagem.className = "mensagem erro";
