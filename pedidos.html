@@ -152,7 +152,7 @@
 <script>
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
-const FOCUS_BASE_URL = "https://homologacao.focusnfe.com.br"; // homologação por enquanto
+const FOCUS_BASE_URL = "https://api.focusnfe.com.br"; // produção (estava apontando pra homologação por engano)
 const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 function obterSessao() {
@@ -309,6 +309,10 @@ function desenharTabela() {
           const caminhoDanfe = nota.resposta_bruta && nota.resposta_bruta.caminho_danfe;
           if (caminhoDanfe) {
             botoesNota += `<a class="botao-nf" href="${FOCUS_BASE_URL}${caminhoDanfe}" target="_blank" rel="noopener">Ver NF</a>`;
+          }
+          const caminhoXml = nota.resposta_bruta && nota.resposta_bruta.caminho_xml_nota_fiscal;
+          if (caminhoXml) {
+            botoesNota += `<a class="botao-nf" href="${FOCUS_BASE_URL}${caminhoXml}" target="_blank" rel="noopener" download>Baixar XML</a>`;
           }
           botoesNota += `<button type="button" class="botao-nf perigo" data-pedido="${p.id}" data-acao="cancelar-nf">Cancelar</button>`;
         } else if (nota && nota.status === "cancelado") {
