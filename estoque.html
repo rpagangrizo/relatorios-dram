@@ -302,7 +302,12 @@
   </div>
 
   <div class="cartao-secao" id="secao-materia" style="display:none">
-    <h2>Matéria-prima</h2>
+    <div class="cabecalho-secao">
+      <h2>Matéria-prima</h2>
+      <div class="controles-exportar">
+        <button type="button" class="botao-exportar" id="botao-exportar-excel-materia">⬇️ Exportar Excel</button>
+      </div>
+    </div>
     <div id="conteudo-materia" class="carregando">Carregando...</div>
   </div>
 
@@ -562,6 +567,43 @@ function exportarEstoqueParaExcel() {
   const hoje = new Date().toISOString().slice(0, 10);
   const sufixo = filtroDeposito === "todos" ? "consolidado" : nomeAba.toLowerCase().replace(/\s+/g, "-");
   XLSX.writeFile(pasta, `estoque_${sufixo}_${hoje}.xlsx`);
+}
+
+document.getElementById("botao-exportar-excel-materia").addEventListener("click", () => {
+  const botao = document.getElementById("botao-exportar-excel-materia");
+  if (!dadosMateriaPrima) return;
+  botao.disabled = true;
+  botao.textContent = "Gerando...";
+  try {
+    exportarMateriaPrimaParaExcel();
+  } catch (erro) {
+    alert(`Não consegui gerar o Excel: ${erro.message}`);
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "⬇️ Exportar Excel";
+  }
+});
+
+function exportarMateriaPrimaParaExcel() {
+  const { itens, saldos } = dadosMateriaPrima;
+  const filtroTexto = document.getElementById("campo-busca").value.trim().toLowerCase();
+  const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes(filtroTexto));
+
+  const linhas = [["Item", "Quantidade", "Custo médio (R$)"]];
+  for (const item of itensFiltrados) {
+    const qtd = saldos.get(item.id) || 0;
+    const custo = item.custo_medio !== null && item.custo_medio !== undefined ? Number(item.custo_medio) : "";
+    linhas.push([item.nome, qtd, custo]);
+  }
+
+  const planilha = XLSX.utils.aoa_to_sheet(linhas);
+  planilha["!cols"] = [{ wch: 34 }, { wch: 14 }, { wch: 16 }];
+
+  const pasta = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(pasta, planilha, "Matéria-Prima");
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(pasta, `materia_prima_${hoje}.xlsx`);
 }
 
 carregarProdutoAcabado();
