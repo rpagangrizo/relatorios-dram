@@ -43,11 +43,12 @@
   .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
   .cartao h2.subtitulo { margin-top: 20px; }
 
-  input[type=text], input[type=number], select {
+  input[type=text], input[type=number], select, textarea {
     width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
-    font-size: 14.5px; color: var(--texto); background: #fff;
+    font-size: 14.5px; color: var(--texto); background: #fff; font-family: inherit;
   }
-  input:focus, select:focus { outline: none; border-color: var(--azul); }
+  textarea { resize: vertical; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--azul); }
 
   .lista-busca { max-height: 220px; overflow-y: auto; margin-top: 8px; border-radius: 9px; border: 1px solid var(--linha); }
   .item-busca { padding: 11px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14px; }
@@ -230,6 +231,15 @@
       </p>
     </div>
 
+    <h2 class="subtitulo">Nota fiscal</h2>
+    <div class="campo">
+      <label>Observação padrão da nota</label>
+      <textarea id="campo-observacao-padrao-nota" rows="3" placeholder="Ex: Entregar somente no período da manhã. Contato: (11) 99999-9999."></textarea>
+      <p style="color:var(--texto-suave); font-size:12.5px; margin:6px 0 0;">
+        Vem pré-preenchida no campo Observações do Novo Pedido pra esse cliente — pode ser ajustada (ou apagada) pra cada venda específica, sem alterar esse cadastro.
+      </p>
+    </div>
+
     <button class="botao" id="botao-salvar">Salvar</button>
     <div class="mensagem" id="mensagem"></div>
   </div>
@@ -257,7 +267,7 @@ async function chamarSupabase(caminho, opcoes = {}) {
 const CAMPOS_CLIENTE =
   "id,nome,razao_social,cnpj_cpf,inscricao_estadual," +
   "endereco_logradouro,endereco_numero,endereco_complemento,endereco_bairro,endereco_cep,endereco_municipio,endereco_uf," +
-  "tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor";
+  "tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota";
 
 let clientes = [];
 let tabelasPreco = [];
@@ -326,6 +336,7 @@ function limparFormulario() {
   document.getElementById("campo-parcelas").value = "";
   document.getElementById("campo-desconto-tipo").value = "nenhum";
   document.getElementById("campo-desconto-valor").value = "";
+  document.getElementById("campo-observacao-padrao-nota").value = "";
 }
 
 function abrirFormulario() {
@@ -368,6 +379,7 @@ function selecionarCliente(id) {
   document.getElementById("campo-parcelas").value = clienteSelecionado.parcelas || "";
   document.getElementById("campo-desconto-tipo").value = clienteSelecionado.desconto_boleto_tipo || "nenhum";
   document.getElementById("campo-desconto-valor").value = clienteSelecionado.desconto_boleto_valor || "";
+  document.getElementById("campo-observacao-padrao-nota").value = clienteSelecionado.observacao_padrao_nota || "";
 
   abrirFormulario();
 }
@@ -415,6 +427,7 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
     parcelas: parcelasValor ? Number(parcelasValor) : null,
     desconto_boleto_tipo: descontoTipoValor,
     desconto_boleto_valor: descontoValorValor ? Number(descontoValorValor) : null,
+    observacao_padrao_nota: document.getElementById("campo-observacao-padrao-nota").value.trim() || null,
   };
 
   try {
