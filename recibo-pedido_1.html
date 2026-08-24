@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Recibo do Pedido</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .barra-acoes { max-width: 720px; margin: 0 auto; padding: 16px 16px 0; display: flex; justify-content: flex-end; gap: 8px; }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+
+  .folha { max-width: 720px; margin: 16px auto 60px; background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 30px 34px; }
+  .cabecalho-folha { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--azul); padding-bottom: 16px; margin-bottom: 20px; }
+  .cabecalho-folha img { height: 34px; }
+  .cabecalho-folha .numero { text-align: right; }
+  .cabecalho-folha .numero .rotulo { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.5px; }
+  .cabecalho-folha .numero .valor { font-size: 22px; font-weight: 700; color: var(--azul); }
+  .banner-cancelado { background: #FBE7E4; color: #C0392B; font-weight: 700; text-align: center;
+    padding: 10px; border-radius: 9px; margin-bottom: 18px; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .grade-info { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .bloco-info.largo { grid-column: 1 / -1; }
+  .bloco-info .rotulo { font-size: 10.5px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.5px; margin-bottom: 3px; }
+  .bloco-info .valor { font-size: 14px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 4px; border-bottom: 1.5px solid var(--azul); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 4px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; }
+
+  .linha-total { display: flex; justify-content: flex-end; padding: 14px 4px 0; font-size: 17px; font-weight: 700; color: var(--azul); }
+  .linha-total span:first-child { margin-right: 20px; }
+
+  .secao-parcelas { margin-top: 26px; }
+  .secao-parcelas h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 8px; padding-top: 14px; border-top: 1px solid var(--linha); }
+  .secao-parcelas table thead th { border-bottom: 1px solid var(--linha); }
+
+  .secao-observacoes { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--linha); }
+  .secao-observacoes h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 6px; }
+  .secao-observacoes p { font-size: 13.5px; white-space: pre-wrap; margin: 0; }
+
+  .secao-nota-fiscal { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--linha); }
+  .secao-nota-fiscal h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 8px; }
+  .caixa-nota { border-radius: 9px; padding: 12px 14px; font-size: 13.5px; }
+  .caixa-nota.autorizada { background: #E4F3E8; }
+  .caixa-nota.cancelada { background: #FBE7E4; }
+  .caixa-nota .linha1 { font-weight: 700; margin-bottom: 4px; }
+  .caixa-nota .chave { font-size: 11.5px; color: var(--texto-suave); word-break: break-all; }
+  .botoes-nota { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .botao-nota { padding: 9px 14px; border-radius: 8px; border: 1.5px solid var(--linha); background: #fff;
+    font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--texto); }
+  .botao-nota.perigo { border-color: #E5B4AC; color: #C0392B; }
+  .botao-nota:disabled { opacity: 0.5; cursor: not-allowed; }
+  .lista-cce { margin-top: 10px; }
+  .item-cce { font-size: 12.5px; padding: 8px 0; border-top: 1px solid var(--linha); }
+  .item-cce .numero { font-weight: 700; color: var(--azul); }
+
+  .rodape-folha { text-align: center; color: #93A0A8; font-size: 11px; margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--linha); }
+
+  .carregando, .erro { padding: 40px; text-align: center; color: var(--texto-suave); }
+
+  @media print {
+    body { background: #fff; }
+    .barra-acoes { display: none; }
+    .folha { border: none; margin: 0; max-width: none; }
+    .botoes-nota { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barra-acoes"><button class="botao" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button></div>
+
+<div class="folha" id="folha">
+  <div class="carregando">Carregando pedido...</div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatarData(isoTexto) {
+  const data = new Date(isoTexto);
+  return data.toLocaleDateString("pt-BR") + " às " + data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+// datas "puras" (sem hora, ex: vencimento de parcela) sao formatadas sem
+// passar por new Date(texto) direto, pra nao correr risco de virar o dia
+// anterior por causa de fuso horario (new Date("2026-08-10") e' UTC 00:00,
+// que em horario do Brasil vira dia 09 a noite)
+function formatarDataPura(isoTexto) {
+  const [ano, mes, dia] = isoTexto.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+function escaparHtml(texto) {
+  const div = document.createElement("div");
+  div.textContent = texto;
+  return div.innerHTML;
+}
+
+// monta "Rua Tal, 123 - Bairro, Cidade/UF" a partir dos campos de
+// endereco do cliente, pulando com elegancia qualquer campo vazio (nem
+// todo cliente tem cadastro fiscal completo)
+function formatarEnderecoCliente(cliente) {
+  const partes = [];
+  if (cliente.endereco_logradouro) {
+    let linha = cliente.endereco_logradouro;
+    if (cliente.endereco_numero) linha += `, ${cliente.endereco_numero}`;
+    if (cliente.endereco_complemento) linha += ` - ${cliente.endereco_complemento}`;
+    partes.push(linha);
+  }
+  if (cliente.endereco_bairro) partes.push(cliente.endereco_bairro);
+  const cidadeUf = [cliente.endereco_municipio, cliente.endereco_uf].filter(Boolean).join("/");
+  if (cidadeUf) partes.push(cidadeUf);
+  if (cliente.endereco_cep) partes.push(`CEP ${cliente.endereco_cep}`);
+  return partes.join(" - ") || null;
+}
+
+const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito em conta" };
+
+async function carregarRecibo() {
+  const alvo = document.getElementById("folha");
+  const parametros = new URLSearchParams(window.location.search);
+  const pedidoId = parametros.get("pedido");
+  if (!pedidoId) {
+    alvo.innerHTML = `<div class="erro">Nenhum pedido informado no link.</div>`;
+    return;
+  }
+
+  try {
+    const [pedidos, itens, parcelas] = await Promise.all([
+      chamarSupabase(
+        `pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,observacoes,status,tipo,` +
+        `clientes(nome,endereco_logradouro,endereco_numero,endereco_complemento,endereco_bairro,endereco_municipio,endereco_uf,endereco_cep),` +
+        `depositos(nome)&id=eq.${pedidoId}`
+      ),
+      chamarSupabase(`pedido_itens?select=quantidade,preco_unitario,itens(nome)&pedido_id=eq.${pedidoId}`),
+      chamarSupabase(`pedido_parcelas?select=numero_parcela,data_vencimento,valor&pedido_id=eq.${pedidoId}&order=numero_parcela`),
+    ]);
+
+    if (pedidos.length === 0) {
+      alvo.innerHTML = `<div class="erro">Pedido nº ${pedidoId} não encontrado.</div>`;
+      return;
+    }
+    const pedido = pedidos[0];
+
+    const linhasItens = itens.map(i => `
+      <tr>
+        <td>${i.itens.nome}</td>
+        <td class="num">${Number(i.quantidade).toLocaleString("pt-BR")}</td>
+        <td class="num">${formatarMoeda(i.preco_unitario)}</td>
+        <td class="num">${formatarMoeda(i.quantidade * i.preco_unitario)}</td>
+      </tr>
+    `).join("");
+
+    const formaPagTexto = pedido.forma_pagamento ? (FORMAS_PAGAMENTO[pedido.forma_pagamento] || pedido.forma_pagamento) : "—";
+
+    // pedidos antigos (feitos antes das parcelas com data individual) nao
+    // tem nada em pedido_parcelas - nesse caso cai no texto resumido de
+    // antes ("30 dia(s), 2x"). Pedidos novos mostram a tabela com cada
+    // vencimento de verdade. Bonificacao nao tem pagamento nenhum.
+    const ehBonificacao = pedido.tipo === "bonificacao";
+    let blocoPagamentoInfo;
+    let secaoParcelasHtml = "";
+    if (ehBonificacao) {
+      blocoPagamentoInfo = "— (bonificação, sem cobrança)";
+    } else if (parcelas.length > 0) {
+      blocoPagamentoInfo = formaPagTexto;
+      const linhasParcelas = parcelas.map(p => `
+        <tr>
+          <td>Parcela ${p.numero_parcela}</td>
+          <td class="num">${formatarDataPura(p.data_vencimento)}</td>
+          <td class="num">${formatarMoeda(p.valor)}</td>
+        </tr>
+      `).join("");
+      secaoParcelasHtml = `
+        <div class="secao-parcelas">
+          <h2>Parcelas — ${formaPagTexto}</h2>
+          <table>
+            <thead><tr><th>Parcela</th><th class="num">Vencimento</th><th class="num">Valor</th></tr></thead>
+            <tbody>${linhasParcelas}</tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      const prazoTexto = pedido.prazo_dias ? `${pedido.prazo_dias} dia(s)` + (pedido.parcelas > 1 ? `, ${pedido.parcelas}x` : "") : "—";
+      blocoPagamentoInfo = `${formaPagTexto} — ${prazoTexto}`;
+    }
+
+    const enderecoTexto = formatarEnderecoCliente(pedido.clientes);
+
+    alvo.innerHTML = `
+      ${pedido.status === "cancelado" ? `<div class="banner-cancelado">Pedido Cancelado</div>` : ""}
+      <div class="cabecalho-folha">
+        <img src="logo.png" alt="Arco Íris" onerror="this.style.display='none'">
+        <div class="numero">
+          <div class="rotulo">${ehBonificacao ? "Bonificação" : "Pedido de Venda"}</div>
+          <div class="valor">Nº ${pedido.id}</div>
+        </div>
+      </div>
+
+      <div class="grade-info">
+        <div class="bloco-info"><div class="rotulo">Cliente</div><div class="valor">${pedido.clientes.nome}</div></div>
+        <div class="bloco-info"><div class="rotulo">Data</div><div class="valor">${formatarData(pedido.criado_em)}</div></div>
+        ${enderecoTexto ? `<div class="bloco-info largo"><div class="rotulo">Endereço</div><div class="valor">${enderecoTexto}</div></div>` : ""}
+        <div class="bloco-info"><div class="rotulo">Depósito de origem</div><div class="valor">${pedido.depositos.nome}</div></div>
+        <div class="bloco-info"><div class="rotulo">Pagamento</div><div class="valor">${blocoPagamentoInfo}</div></div>
+      </div>
+
+      <table>
+        <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Preço unit.</th><th class="num">Subtotal</th></tr></thead>
+        <tbody>${linhasItens}</tbody>
+      </table>
+      <div class="linha-total"><span>Total</span><span>${formatarMoeda(pedido.total)}</span></div>
+
+      ${secaoParcelasHtml}
+
+      ${pedido.observacoes ? `
+        <div class="secao-observacoes">
+          <h2>Observações</h2>
+          <p>${escaparHtml(pedido.observacoes)}</p>
+        </div>
+      ` : ""}
+
+      <div class="secao-nota-fiscal" id="secao-nota-fiscal"></div>
+
+      <div class="rodape-folha">
+        Este é um ${ehBonificacao ? "Pedido de Bonificação" : "Pedido de Venda"}, sem valor fiscal (não é Nota Fiscal).<br>
+        Powered by DRAM
+      </div>
+    `;
+    desenharSecaoNotaFiscal(pedido.id, pedido.status);
+  } catch (erro) {
+    alvo.innerHTML = `<div class="erro">Não consegui carregar o pedido: ${erro.message}</div>`;
+  }
+}
+
+const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
+
+function obterSessao() {
+  try {
+    return JSON.parse(localStorage.getItem("dram_auth") || "null");
+  } catch {
+    return null;
+  }
+}
+
+async function chamarFunction(nome, corpo) {
+  const sessao = obterSessao();
+  const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
+      "apikey": SUPABASE_KEY,
+    },
+    body: JSON.stringify(corpo),
+  });
+  const dados = await resposta.json();
+  return { ok: resposta.ok, dados };
+}
+
+async function desenharSecaoNotaFiscal(pedidoId, statusPedido) {
+  const alvo = document.getElementById("secao-nota-fiscal");
+  const [notas, cartas] = await Promise.all([
+    chamarSupabase(`notas_fiscais?pedido_id=eq.${pedidoId}&order=criado_em.desc`),
+    chamarSupabase(`cartas_correcao?pedido_id=eq.${pedidoId}&order=criado_em.desc`),
+  ]);
+
+  const notaAutorizada = notas.find(n => n.status === "autorizado");
+  const notaCancelada = notas.find(n => n.status === "cancelado");
+  const notaAtual = notaCancelada || notaAutorizada;
+
+  let html = "";
+
+  if (notaAtual) {
+    const dadosNota = notaAtual.resposta_bruta || {};
+    const numero = dadosNota.numero || "—";
+    const chave = dadosNota.chave_nfe || "";
+    html += `<h2>Nota Fiscal</h2>`;
+    if (notaCancelada) {
+      html += `
+        <div class="caixa-nota cancelada">
+          <div class="linha1">Nota nº ${numero} — CANCELADA</div>
+          <div class="chave">${chave}</div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="caixa-nota autorizada">
+          <div class="linha1">Nota nº ${numero} — Autorizada</div>
+          <div class="chave">${chave}</div>
+        </div>
+      `;
+    }
+  }
+
+  const cartasAutorizadas = cartas.filter(c => c.status === "autorizado");
+  if (cartasAutorizadas.length > 0) {
+    html += `<div class="lista-cce">`;
+    for (const carta of cartasAutorizadas) {
+      const numeroCce = carta.resposta_bruta && carta.resposta_bruta.numero_carta_correcao;
+      html += `<div class="item-cce"><span class="numero">CC-e nº ${numeroCce || "—"}</span> — ${escaparHtml(carta.correcao)}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // "Cancelar Pedido" fica disponível pra qualquer pedido ainda não
+  // cancelado, tenha nota ou não (cuida de tudo: cancela a nota se tiver,
+  // devolve o estoque, marca o pedido como cancelado). "Emitir Carta de
+  // Correção" só faz sentido se já tiver uma nota autorizada.
+  if (statusPedido !== "cancelado") {
+    html += `<div class="botoes-nota">`;
+    if (notaAutorizada) {
+      html += `<button type="button" class="botao-nota" id="botao-emitir-cce">Emitir Carta de Correção</button>`;
+    }
+    html += `<button type="button" class="botao-nota perigo" id="botao-cancelar-pedido">Cancelar Pedido</button>`;
+    html += `</div>`;
+  }
+
+  alvo.innerHTML = html;
+
+  const botaoCancelarPedido = document.getElementById("botao-cancelar-pedido");
+  if (botaoCancelarPedido) {
+    botaoCancelarPedido.addEventListener("click", async () => {
+      const aviso = notaAutorizada
+        ? "Motivo do cancelamento (mínimo 15 caracteres). Isso vai cancelar a nota fiscal E devolver o estoque:"
+        : "Motivo do cancelamento (mínimo 15 caracteres). Isso vai devolver o estoque:";
+      const justificativa = window.prompt(aviso);
+      if (!justificativa) return;
+      if (justificativa.length < 15) {
+        alert("A justificativa precisa ter pelo menos 15 caracteres.");
+        return;
+      }
+      if (!confirm(`Confirma o cancelamento do pedido nº ${pedidoId}? Essa ação não pode ser desfeita.`)) return;
+      botaoCancelarPedido.disabled = true;
+      botaoCancelarPedido.textContent = "Cancelando...";
+      try {
+        const { ok, dados } = await chamarFunction("cancelar-pedido", { pedido_id: pedidoId, justificativa });
+        if (ok) {
+          alert("Pedido cancelado com sucesso. O estoque foi devolvido.");
+          location.reload();
+        } else {
+          alert(`Não consegui cancelar: ${dados.erro || JSON.stringify(dados)}`);
+          botaoCancelarPedido.disabled = false;
+          botaoCancelarPedido.textContent = "Cancelar Pedido";
+        }
+      } catch (erro) {
+        alert(`Erro: ${erro.message}`);
+        botaoCancelarPedido.disabled = false;
+        botaoCancelarPedido.textContent = "Cancelar Pedido";
+      }
+    });
+  }
+
+  const botaoCce = document.getElementById("botao-emitir-cce");
+  if (botaoCce) {
+    botaoCce.addEventListener("click", async () => {
+      const correcao = window.prompt("Texto da Carta de Correção (mínimo 15 caracteres):");
+      if (!correcao) return;
+      if (correcao.length < 15) {
+        alert("O texto precisa ter pelo menos 15 caracteres.");
+        return;
+      }
+      botaoCce.disabled = true;
+      botaoCce.textContent = "Enviando...";
+      try {
+        const { ok, dados } = await chamarFunction("emitir-carta-correcao", { pedido_id: pedidoId, correcao });
+        if (ok && dados.focus && dados.focus.status === "autorizado") {
+          alert("Carta de Correção emitida com sucesso.");
+          desenharSecaoNotaFiscal(pedidoId, statusPedido);
+        } else {
+          alert(`Não consegui emitir: ${(dados.focus && (dados.focus.mensagem_sefaz || dados.focus.mensagem)) || dados.erro || JSON.stringify(dados)}`);
+        }
+      } catch (erro) {
+        alert(`Erro: ${erro.message}`);
+      } finally {
+        botaoCce.disabled = false;
+        botaoCce.textContent = "Emitir Carta de Correção";
+      }
+    });
+  }
+}
+
+carregarRecibo();
+</script>
+</body>
+</html>

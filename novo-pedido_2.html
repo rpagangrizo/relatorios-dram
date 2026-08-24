@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Novo Pedido</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --azul-claro: #EAF1F6; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870;
+    --linha: #DCE3E7; --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+  main { max-width: 1080px; margin: 0 auto; padding: 20px 16px 80px; }
+
+  nav.nav-dram {
+    background: #123551;
+    display: flex;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 12px;
+  }
+  nav.nav-dram a {
+    color: #C9DCEA;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 14px;
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+  }
+  nav.nav-dram a.ativa {
+    color: #fff;
+    border-bottom-color: #D9662F;
+  }
+
+  /* --- cartoes (base) --- */
+  .cartao {
+    background: var(--papel); border-radius: 14px; border: 1px solid var(--linha);
+    padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(20,30,40,0.04);
+  }
+  .cartao.desabilitado { opacity: 0.45; pointer-events: none; }
+  .titulo-cartao { font-size: 14px; font-weight: 700; color: var(--texto); margin: 0 0 12px; }
+
+  /* --- barra de topo: tipo de operacao + depositos, lado a lado --- */
+  .barra-topo { display: flex; gap: 14px; flex-wrap: wrap; }
+  .barra-topo .campo-select { flex: 1; min-width: 200px; }
+  .campo-select label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--texto-suave); margin-bottom: 6px; font-weight: 600; }
+  select {
+    width: 100%; padding: 11px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 14.5px; color: var(--texto); background: #fff; font-weight: 600;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235C6870' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center;
+  }
+  select:focus { outline: none; border-color: var(--azul); }
+
+  /* --- layout de 2 colunas (desktop-first, empilha em telas estreitas) --- */
+  .colunas { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; align-items: start; margin-top: 16px; }
+  @media (max-width: 860px) {
+    .colunas { grid-template-columns: 1fr; }
+  }
+
+  /* --- cartoes colapsaveis (encolhem quando a secao ta preenchida) --- */
+  .cartao-colapsavel .cabecalho-colapsavel {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer;
+  }
+  .cartao-colapsavel .cabecalho-colapsavel:hover .titulo-cartao { color: var(--azul); }
+  .seta-colapsavel { color: var(--texto-suave); font-size: 11px; transition: transform 0.15s; flex-shrink: 0; }
+  .cartao-colapsavel.fechado .seta-colapsavel { transform: rotate(-90deg); }
+  .resumo-colapsavel { display: none; color: var(--azul); font-weight: 700; font-size: 13.5px; margin-right: auto; margin-left: 4px; }
+  .cartao-colapsavel.fechado .resumo-colapsavel { display: inline; }
+  .cartao-colapsavel.fechado .titulo-cartao { color: var(--verde); }
+  .cartao-colapsavel.fechado .titulo-cartao::before { content: "✓ "; }
+  .cartao-colapsavel .conteudo-colapsavel { margin-top: 12px; }
+  .cartao-colapsavel.fechado .conteudo-colapsavel { display: none; }
+  .cartao-colapsavel.fechado { padding-bottom: 14px; }
+
+  input[type=text], input[type=number] {
+    width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 14.5px; color: var(--texto); background: #fff;
+  }
+  input:focus { outline: none; border-color: var(--azul); }
+  textarea {
+    width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 14.5px; color: var(--texto); background: #fff; font-family: inherit; resize: vertical;
+  }
+  textarea:focus { outline: none; border-color: var(--azul); }
+
+  .lista-produtos { max-height: 220px; overflow-y: auto; margin-top: 8px; border-radius: 9px; border: 1px solid var(--linha); }
+  .item-produto { padding: 11px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14px; display: flex; justify-content: space-between; }
+  .item-produto:last-child { border-bottom: none; }
+  .item-produto:hover { background: #F6F9FA; }
+  .item-produto .saldo-atual { color: var(--texto-suave); font-size: 12.5px; }
+  .item-produto.zerado .saldo-atual { color: var(--vermelho); font-weight: 700; }
+
+  .selecionado-caixa { margin-top: 10px; padding: 12px 14px; border-radius: 9px; background: var(--azul-claro); border: 1.5px solid var(--azul); display: none; }
+  .selecionado-caixa .nome { font-weight: 700; color: var(--azul); font-size: 14.5px; }
+  .chips-info { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip-info { background: #fff; border: 1px solid var(--linha); border-radius: 100px; padding: 5px 11px; font-size: 12px; color: var(--texto-suave); }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 6px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: center; }
+  tbody td { padding: 9px 6px; border-bottom: 1px solid var(--linha); font-size: 13.5px; vertical-align: middle; }
+  tbody td.num { text-align: center; white-space: nowrap; }
+  tbody tr.linha-erro { background: #FBE7E4; }
+  .aviso-linha { color: var(--vermelho); font-size: 11px; margin-top: 2px; }
+  .campo-tabela { width: 78px; padding: 7px 8px; font-size: 13.5px; text-align: center; }
+  .botao-remover { background: none; border: none; color: var(--vermelho); font-size: 18px; cursor: pointer; padding: 0 6px; }
+
+  .botao { padding: 13px 20px; border-radius: 9px; border: none; background: var(--laranja); color: #fff;
+    font-size: 15px; font-weight: 700; cursor: pointer; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+
+  .total-caixa { display: flex; justify-content: space-between; align-items: center;
+    background: #F6F9FA; border-radius: 9px; padding: 12px 14px; margin-top: 10px; font-size: 15px; font-weight: 700; display: none; }
+  .total-caixa .valor { color: var(--azul); font-size: 18px; }
+
+  .mensagem { margin-top: 14px; padding: 13px 15px; border-radius: 9px; font-size: 14px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .aviso-pessoa { background: #FFF3E0; color: #92600C; border-radius: 9px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 14px; }
+  .opcao-checkbox { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600; color: var(--texto); cursor: pointer; }
+  .opcao-checkbox input { width: auto; }
+  .ajuda-nota-fiscal { color: var(--texto-suave); font-size: 12.5px; margin: 8px 0 0; }
+  .linha-parcela { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--linha); }
+  .linha-parcela:last-child { border-bottom: none; }
+  .linha-parcela .numero-parcela { font-size: 13.5px; font-weight: 700; color: var(--texto-suave); width: 60px; flex-shrink: 0; }
+  .linha-parcela input[type=date] { flex: 1; }
+  .linha-parcela .valor-parcela { width: 90px; text-align: right; font-size: 13.5px; color: var(--texto-suave); flex-shrink: 0; }
+  .linha-parcela .botao-remover-parcela { background: none; border: none; color: var(--vermelho); font-size: 17px; cursor: pointer; padding: 0 4px; flex-shrink: 0; }
+  .botao-link { background: none; border: none; color: var(--azul); font-weight: 700; font-size: 13.5px; cursor: pointer; padding: 8px 0 0; }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+  .barra-final { position: sticky; bottom: 16px; background: var(--papel); border: 1px solid var(--linha);
+    padding: 14px 16px; margin-top: 4px; border-radius: 14px; box-shadow: 0 4px 16px rgba(20,30,40,0.10); }
+  a.link-discreto { color: var(--azul); font-size: 13.5px; text-decoration: none; font-weight: 700; }
+
+  .campo { margin-bottom: 12px; }
+  .campo label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--texto-suave); margin-bottom: 6px; font-weight: 600; }
+  .caixa-aviso-forma-pagamento { border-color: var(--laranja); background: #FFF3E0; }
+  .caixa-aviso-forma-pagamento .nome { color: #92600C; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Novo Pedido</h1>
+    <p id="texto-pessoa">Identificando...</p>
+  </div>
+</header>
+<nav class="nav-dram">
+  <a href="estoque.html">Estoque</a>
+  <a href="ajustar-estoque.html">Ajustar Estoque</a>
+  <a href="tabelas-preco.html">Tabelas de Preço</a>
+  <a href="clientes.html">Clientes</a>
+  <a href="novo-pedido.html" class="ativa">Novo Pedido</a>
+  <a href="pedidos.html">Pedidos</a>
+  <a href="operacoes-especiais.html">Operações Especiais</a>
+</nav>
+
+<main>
+  <div id="aviso-pessoa" class="aviso-pessoa" style="display:none">
+    Não identifiquei quem está fazendo esse pedido pelo link. Confirme seu nome abaixo antes de continuar.
+    <div style="margin-top:8px"><input type="text" id="campo-pessoa-manual" placeholder="Seu nome"></div>
+  </div>
+
+  <div class="cartao">
+    <div class="barra-topo">
+      <div class="campo-select">
+        <label>Tipo de operação</label>
+        <select id="select-tipo-operacao">
+          <option value="venda">Venda</option>
+          <option value="bonificacao">Bonificação</option>
+          <option value="comodato">Comodato</option>
+          <option value="devolucao_comodato">Devolução de Comodato</option>
+          <option value="transferencia">Transferência</option>
+        </select>
+      </div>
+      <div class="campo-select" id="grupo-deposito">
+        <label id="rotulo-deposito">Depósito</label>
+        <select id="select-deposito"><option value="">Selecione...</option></select>
+      </div>
+      <div class="campo-select" id="grupo-deposito-destino" style="display:none">
+        <label>Depósito de destino</label>
+        <select id="select-deposito-destino"><option value="">Selecione...</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="colunas">
+    <div class="coluna-esquerda">
+
+      <div class="cartao cartao-colapsavel" id="cartao-cliente">
+        <div class="cabecalho-colapsavel">
+          <span class="titulo-cartao" id="titulo-cartao-cliente">Cliente</span>
+          <span class="resumo-colapsavel" id="resumo-cliente"></span>
+          <span class="seta-colapsavel">▾</span>
+        </div>
+        <div class="conteudo-colapsavel" id="conteudo-cliente">
+          <input type="text" id="campo-busca-cliente" placeholder="Buscar cliente...">
+          <div class="lista-produtos" id="lista-clientes"></div>
+          <div class="selecionado-caixa" id="caixa-cliente-selecionado">
+            <div class="nome" id="nome-cliente-selecionado"></div>
+            <div class="chips-info" id="chips-cliente-info"></div>
+          </div>
+          <div class="selecionado-caixa caixa-aviso-forma-pagamento" id="caixa-forma-pagamento-faltando">
+            <div class="nome">Esse cliente ainda não tem forma de pagamento cadastrada</div>
+            <div class="campo" style="margin-top:10px">
+              <label>Forma de pagamento</label>
+              <select id="campo-forma-pagamento-cliente">
+                <option value="">Selecione...</option>
+                <option value="boleto">Boleto</option>
+                <option value="pix">PIX</option>
+                <option value="deposito">Depósito em conta</option>
+              </select>
+            </div>
+            <div style="display:flex; gap:10px">
+              <div class="campo" style="flex:1">
+                <label>Prazo (dias)</label>
+                <input type="number" id="campo-prazo-cliente" min="0" placeholder="Ex: 30">
+              </div>
+              <div class="campo" style="flex:1">
+                <label>Parcelas</label>
+                <input type="number" id="campo-parcelas-cliente" min="1" placeholder="Ex: 1">
+              </div>
+            </div>
+            <p class="ajuda-nota-fiscal">Isso fica salvo no cadastro do cliente pras próximas vendas.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="cartao cartao-colapsavel" id="cartao-equipamento" style="display:none">
+        <div class="cabecalho-colapsavel">
+          <span class="titulo-cartao" id="titulo-cartao-equipamento">Equipamento</span>
+          <span class="resumo-colapsavel" id="resumo-equipamento"></span>
+          <span class="seta-colapsavel">▾</span>
+        </div>
+        <div class="conteudo-colapsavel" id="conteudo-equipamento">
+          <input type="text" id="campo-busca-equipamento" placeholder="Buscar equipamento já cadastrado...">
+          <div class="lista-produtos" id="lista-equipamentos"></div>
+          <div class="campo" style="margin-top:10px">
+            <label>Descrição do equipamento</label>
+            <input type="text" id="campo-descricao-equipamento" placeholder="Ex: Freezer horizontal 300L">
+          </div>
+          <div class="campo" style="margin-top:10px">
+            <label>Valor de referência (R$)</label>
+            <input type="number" id="campo-valor-equipamento" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <button type="button" class="botao-link" id="botao-novo-equipamento">+ Cadastrar esse equipamento pra próxima vez</button>
+        </div>
+      </div>
+
+      <div class="cartao desabilitado" id="cartao-itens">
+        <div class="titulo-cartao">Itens do pedido</div>
+        <div id="conteudo-itens">
+          <input type="text" id="campo-busca-produto" placeholder="Buscar produto pra adicionar...">
+          <div class="lista-produtos" id="lista-produtos"></div>
+
+          <table id="tabela-itens-pedido" style="display:none">
+            <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Subtotal</th><th></th></tr></thead>
+            <tbody id="corpo-itens-pedido"></tbody>
+          </table>
+          <div class="total-caixa" id="total-caixa">
+            <span>Total do pedido</span>
+            <span class="valor" id="valor-total-pedido">R$ 0,00</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="coluna-direita">
+
+      <div class="cartao cartao-colapsavel desabilitado" id="cartao-parcelas">
+        <div class="cabecalho-colapsavel">
+          <span class="titulo-cartao">Parcelas</span>
+          <span class="resumo-colapsavel" id="resumo-parcelas"></span>
+          <span class="seta-colapsavel">▾</span>
+        </div>
+        <div class="conteudo-colapsavel" id="conteudo-parcelas">
+          <div id="linhas-parcelas"></div>
+          <button type="button" class="botao-link" id="botao-add-parcela">+ Adicionar parcela</button>
+          <p class="ajuda-nota-fiscal">Os vencimentos vêm pré-preenchidos a partir do cadastro do cliente, mas cada um pode ser ajustado livremente (ex: 30/45, 30/35...).</p>
+        </div>
+      </div>
+
+      <div class="cartao" id="cartao-nota-fiscal">
+        <div class="titulo-cartao">Nota fiscal</div>
+        <label class="opcao-checkbox" id="linha-checkbox-nota">
+          <input type="checkbox" id="campo-emite-nota">
+          Emitir nota fiscal para este pedido
+        </label>
+        <p class="ajuda-nota-fiscal" id="texto-ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
+      </div>
+
+      <div class="cartao" id="cartao-desconto-boleto" style="display:none">
+        <div class="titulo-cartao">Desconto no boleto</div>
+        <select id="campo-desconto-tipo-pedido">
+          <option value="nenhum">— Sem desconto —</option>
+          <option value="fixo">Valor fixo (R$)</option>
+          <option value="percentual">Percentual (%)</option>
+        </select>
+        <div id="campo-desconto-valor-pedido-caixa" style="display:none; margin-top:10px">
+          <input type="number" id="campo-desconto-valor-pedido" min="0" step="0.01" placeholder="0,00">
+        </div>
+        <p class="ajuda-nota-fiscal">Só se aplica a este pedido específico. Aparece aqui porque o cliente paga via boleto.</p>
+      </div>
+
+      <div class="cartao" id="cartao-observacoes">
+        <div class="titulo-cartao">Observações</div>
+        <textarea id="campo-observacoes" rows="3" placeholder="Endereço de entrega, horário do cliente, número do pedido, etc."></textarea>
+        <p class="ajuda-nota-fiscal">Se marcar "Emitir nota fiscal", esse texto vai junto no campo de Informações Complementares da nota.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="barra-final">
+    <button class="botao" id="botao-confirmar" disabled>Confirmar Pedido</button>
+    <div class="mensagem" id="mensagem"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
+const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito" };
+
+function obterSessao() {
+  try {
+    return JSON.parse(localStorage.getItem("dram_auth") || "null");
+  } catch {
+    return null;
+  }
+}
+
+async function chamarFunction(nome, corpo) {
+  const sessao = obterSessao();
+  const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
+      "apikey": SUPABASE_KEY,
+    },
+    body: JSON.stringify(corpo),
+  });
+  const dados = await resposta.json();
+  return { ok: resposta.ok, dados };
+}
+
+// depois que um pedido de venda (pago por boleto) e' confirmado, gera o
+// boleto de CADA parcela automaticamente - sem isso, ficaria em aberto
+// ate' alguem lembrar de rodar manualmente. Se algum boleto falhar, nao
+// desfaz o pedido (a venda ja aconteceu) - so' avisa qual parcela precisa
+// de atencao manual.
+async function gerarBoletosDoPedido(pedidoId) {
+  const parcelas = await chamarSupabase(`pedido_parcelas?pedido_id=eq.${pedidoId}&select=id,numero_parcela`);
+  const resultados = [];
+  for (const parcela of parcelas) {
+    try {
+      const { ok, dados } = await chamarFunction("emitir-boleto", { pedido_parcela_id: parcela.id });
+      resultados.push({ numero_parcela: parcela.numero_parcela, ok, erro: ok ? null : (dados.erro || JSON.stringify(dados)) });
+    } catch (erro) {
+      resultados.push({ numero_parcela: parcela.numero_parcela, ok: false, erro: erro.message });
+    }
+  }
+  return resultados;
+}
+
+// a Focus NFe as vezes nao autoriza na hora - devolve "processando_autorizacao"
+// e o resultado final so' sai alguns segundos depois. Em vez de tratar isso
+// como erro (que nao e'), consulta de novo por algumas vezes ate' o status
+// definitivo (autorizado, erro_autorizacao, etc) sair - ou desiste depois
+// de um tempo e avisa que ainda esta processando, sem soar como falha.
+async function aguardarStatusFinalNota(pedidoId, tentativas = 6, intervaloMs = 2500) {
+  for (let i = 0; i < tentativas; i++) {
+    await new Promise((resolver) => setTimeout(resolver, intervaloMs));
+    try {
+      const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId });
+      if (ok && dados.focus && dados.focus.status && dados.focus.status !== "processando_autorizacao") {
+        return dados.focus;
+      }
+    } catch {
+      // se uma consulta falhar no meio do caminho, so' tenta de novo na proxima volta
+    }
+  }
+  return null; // continuou "processando" ate' esgotar as tentativas
+}
+
+// --- identificação: primeiro tenta a sessão de login (localStorage),
+// depois o parâmetro ?pessoa= da URL, depois pede manualmente ---
+const CHAVE_LOCAL_AUTH = "dram_auth";
+
+function lerSessaoDram() {
+  try {
+    const texto = localStorage.getItem(CHAVE_LOCAL_AUTH);
+    if (!texto) return null;
+    const sessao = JSON.parse(texto);
+    if (sessao && sessao.expira_em > Date.now()) return sessao;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+const parametros = new URLSearchParams(window.location.search);
+const sessaoDram = lerSessaoDram();
+let pessoa = null;
+const textoPessoa = document.getElementById("texto-pessoa");
+const avisoPessoa = document.getElementById("aviso-pessoa");
+
+if (sessaoDram && sessaoDram.email) {
+  pessoa = sessaoDram.email;
+  textoPessoa.textContent = `Lançado por ${sessaoDram.email}`;
+} else if (parametros.get("pessoa")) {
+  pessoa = parametros.get("pessoa");
+  textoPessoa.textContent = `Lançado por ${pessoa}`;
+} else {
+  textoPessoa.textContent = "Identificação não encontrada";
+  avisoPessoa.style.display = "block";
+  document.getElementById("campo-pessoa-manual").addEventListener("input", (e) => {
+    pessoa = e.target.value.trim() || null;
+    atualizarBotaoConfirmar();
+  });
+}
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(corpoErro || `Erro ${resposta.status}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+let clientes = [];
+let depositos = [];
+let itensCatalogo = [];
+let clienteEscolhido = null;
+let depositoEscolhidoId = null;
+let depositoDestinoEscolhidoId = null;
+let saldosEstoque = new Map();
+let precosTabela = new Map();
+let itensPedido = [];
+let parcelasPedido = []; // [{numero_parcela, data_vencimento}] - data_vencimento em formato AAAA-MM-DD
+let tipoOperacao = "venda"; // 'venda' | 'bonificacao' | 'comodato' | 'devolucao_comodato' | 'transferencia'
+
+// CNPJ da Filial (Barueri), cadastrada como cliente normal - usada como
+// destinatario automatico quando a transferencia envolve o deposito dela.
+const CNPJ_FILIAL = "13086597000261";
+
+function nomeDepositoContem(depositoId, trecho) {
+  const dep = depositos.find(d => d.id === depositoId);
+  return dep ? dep.nome.toLowerCase().includes(trecho.toLowerCase()) : false;
+}
+
+function formatarMoeda(valor) {
+  return "R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
+}
+
+// --- forma de pagamento em falta: quando o cliente escolhido nao tem
+// forma_pagamento cadastrada, usa o que foi preenchido na caixa de aviso
+// (ainda nao salvo no cadastro dele) como "valor efetivo" pra tudo que
+// depende disso na tela (parcelas, card de desconto no boleto etc) ---
+function formaPagamentoEfetiva() {
+  if (!clienteEscolhido) return null;
+  return clienteEscolhido.forma_pagamento || document.getElementById("campo-forma-pagamento-cliente").value || null;
+}
+
+function obterPrazoEParcelasEfetivos() {
+  if (clienteEscolhido && clienteEscolhido.forma_pagamento) {
+    return { prazo: clienteEscolhido.prazo_dias || 30, parcelas: Math.max(1, clienteEscolhido.parcelas || 1) };
+  }
+  const prazo = Number(document.getElementById("campo-prazo-cliente").value) || 30;
+  const parcelas = Math.max(1, Number(document.getElementById("campo-parcelas-cliente").value) || 1);
+  return { prazo, parcelas };
+}
+
+// --- cartoes colapsaveis: abrir/fechar manual + resumo quando completo ---
+function abrirCartao(id) {
+  const cartao = document.getElementById(`cartao-${id}`);
+  if (cartao) cartao.classList.remove("fechado");
+}
+function fecharCartaoComResumo(id, texto) {
+  const cartao = document.getElementById(`cartao-${id}`);
+  const resumo = document.getElementById(`resumo-${id}`);
+  if (!cartao) return;
+  if (resumo) resumo.textContent = texto;
+  cartao.classList.add("fechado");
+}
+document.querySelectorAll(".cabecalho-colapsavel").forEach(cabecalho => {
+  cabecalho.addEventListener("click", () => {
+    const cartao = cabecalho.closest(".cartao-colapsavel");
+    if (cartao.classList.contains("desabilitado")) return;
+    cartao.classList.toggle("fechado");
+  });
+});
+
+// fecha um cartao sozinho quando o foco sai dele, se a condicao de
+// "completo" for verdadeira - usado pra Itens, Parcelas e Equipamento,
+// que nao tem uma unica acao discreta de "terminei" como o Cliente tem
+function ativarFechamentoAutomatico(idConteudo, idCartao, condicaoCompleta, gerarResumo) {
+  document.getElementById(idConteudo).addEventListener("focusout", () => {
+    setTimeout(() => {
+      const cartao = document.getElementById(idCartao);
+      if (cartao.classList.contains("fechado")) return;
+      if (!cartao.contains(document.activeElement) && condicaoCompleta()) {
+        fecharCartaoComResumo(idCartao.replace("cartao-", ""), gerarResumo());
+      }
+    }, 150);
+  });
+}
+
+document.getElementById("select-tipo-operacao").addEventListener("change", (e) => {
+  tipoOperacao = e.target.value;
+  aplicarTipoOperacaoNaTela();
+});
+
+function aplicarTipoOperacaoNaTela() {
+  // reseta selecoes ao trocar de tipo, pra nao misturar dado de um fluxo com outro
+  clienteEscolhido = null;
+  depositoEscolhidoId = null;
+  depositoDestinoEscolhidoId = null;
+  itensPedido = [];
+  parcelasPedido = [];
+  document.getElementById("campo-busca-cliente").value = "";
+  document.getElementById("lista-clientes").innerHTML = "";
+  document.getElementById("caixa-cliente-selecionado").style.display = "none";
+  document.getElementById("caixa-forma-pagamento-faltando").style.display = "none";
+  document.getElementById("campo-forma-pagamento-cliente").value = "";
+  document.getElementById("campo-prazo-cliente").value = "";
+  document.getElementById("campo-parcelas-cliente").value = "";
+  document.getElementById("campo-descricao-equipamento").value = "";
+  document.getElementById("campo-valor-equipamento").value = "";
+  document.getElementById("campo-busca-equipamento").value = "";
+  document.getElementById("lista-equipamentos").innerHTML = "";
+  document.getElementById("select-deposito").value = "";
+  document.getElementById("select-deposito-destino").value = "";
+  document.getElementById("cartao-desconto-boleto").style.display = "none";
+  document.getElementById("campo-observacoes").value = "";
+  abrirCartao("cliente");
+  abrirCartao("equipamento");
+  abrirCartao("itens");
+  abrirCartao("parcelas");
+  desenharTabelaItensPedido();
+  desenharParcelas();
+
+  const ehComodatoOuDevolucao = tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato";
+  const ehTransferencia = tipoOperacao === "transferencia";
+  const ehVenda = tipoOperacao === "venda";
+  const ehBonificacao = tipoOperacao === "bonificacao";
+  // bonificacao usa a mesma tela de itens/deposito que venda, so' sem
+  // parcelas/forma de pagamento (nao ha' cobranca)
+  const usaCartaoItens = ehVenda || ehBonificacao || ehTransferencia;
+
+  document.getElementById("cartao-cliente").style.display = ehTransferencia ? "none" : "";
+  document.getElementById("titulo-cartao-cliente").textContent =
+    tipoOperacao === "devolucao_comodato" ? "Cliente que está devolvendo" :
+    tipoOperacao === "comodato" ? "Cliente que vai receber" : "Cliente";
+
+  document.getElementById("cartao-equipamento").style.display = ehComodatoOuDevolucao ? "" : "none";
+  document.getElementById("cartao-equipamento").classList.remove("desabilitado");
+  document.getElementById("titulo-cartao-equipamento").textContent =
+    tipoOperacao === "devolucao_comodato" ? "Equipamento sendo devolvido" : "Equipamento";
+
+  document.getElementById("grupo-deposito").style.display = (usaCartaoItens) ? "" : "none";
+  document.getElementById("rotulo-deposito").textContent = ehTransferencia ? "Depósito de origem" : "Depósito";
+
+  document.getElementById("grupo-deposito-destino").style.display = ehTransferencia ? "" : "none";
+
+  document.getElementById("cartao-itens").style.display = usaCartaoItens ? "" : "none";
+  document.getElementById("cartao-itens").classList.add("desabilitado");
+  // bonificacao nao tem parcela (sem cobranca) - so' venda tem
+  document.getElementById("cartao-parcelas").style.display = ehVenda ? "" : "none";
+  document.getElementById("cartao-parcelas").classList.add("desabilitado");
+
+  // nota fiscal: em bonificacao/comodato/devolucao sempre precisa (sem
+  // checkbox, forcado); em transferencia, so' precisa se envolver o
+  // deposito da Filial (Barueri) - isso e' calculado automaticamente
+  const linhaCheckbox = document.getElementById("linha-checkbox-nota");
+  const textoAjuda = document.getElementById("texto-ajuda-nota-fiscal");
+  if (ehVenda) {
+    linhaCheckbox.style.display = "";
+    textoAjuda.textContent = "Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.";
+  } else if (ehBonificacao) {
+    linhaCheckbox.style.display = "none";
+    document.getElementById("campo-emite-nota").checked = true;
+    textoAjuda.textContent = "Bonificação sempre emite nota fiscal (CFOP 5910/6910), sem cobrança — os preços dos itens são só a referência de valor exigida na nota.";
+  } else if (ehComodatoOuDevolucao) {
+    linhaCheckbox.style.display = "none";
+    document.getElementById("campo-emite-nota").checked = true;
+    textoAjuda.textContent = "Comodato e devolução de comodato sempre emitem nota fiscal.";
+  } else {
+    linhaCheckbox.style.display = "none";
+    textoAjuda.textContent = "Se a transferência envolver o depósito da Filial (Estoque Barueri), a nota fiscal é obrigatória (calculado automaticamente). Entre depósitos da Matriz, não precisa de nota.";
+  }
+
+  atualizarBotaoConfirmar();
+}
+
+function formatarDataISO(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function distribuirValoresParcelas(total, quantidade) {
+  if (quantidade <= 0) return [];
+  const valorBase = Math.round((total / quantidade) * 100) / 100;
+  const valores = new Array(quantidade).fill(valorBase);
+  const diferenca = Math.round((total - valorBase * quantidade) * 100) / 100;
+  valores[quantidade - 1] = Math.round((valores[quantidade - 1] + diferenca) * 100) / 100;
+  return valores;
+}
+
+function gerarParcelasPadrao() {
+  const { prazo, parcelas: quantidade } = obterPrazoEParcelasEfetivos();
+  const hoje = new Date();
+  parcelasPedido = [];
+  for (let i = 1; i <= quantidade; i++) {
+    const data = new Date(hoje);
+    data.setDate(data.getDate() + prazo * i);
+    parcelasPedido.push({ numero_parcela: i, data_vencimento: formatarDataISO(data) });
+  }
+}
+
+function desenharParcelas() {
+  const alvo = document.getElementById("linhas-parcelas");
+  const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+  const valores = distribuirValoresParcelas(total, parcelasPedido.length);
+
+  alvo.innerHTML = parcelasPedido.map((p, indice) => `
+    <div class="linha-parcela">
+      <span class="numero-parcela">Parcela ${p.numero_parcela}</span>
+      <input type="date" class="campo-data-parcela" data-indice="${indice}" value="${p.data_vencimento}">
+      <span class="valor-parcela">${formatarMoeda(valores[indice])}</span>
+      ${parcelasPedido.length > 1 ? `<button type="button" class="botao-remover-parcela" data-indice="${indice}">✕</button>` : ""}
+    </div>
+  `).join("");
+
+  alvo.querySelectorAll(".campo-data-parcela").forEach(campo => {
+    campo.addEventListener("input", () => {
+      parcelasPedido[Number(campo.dataset.indice)].data_vencimento = campo.value;
+      atualizarBotaoConfirmar();
+    });
+  });
+  alvo.querySelectorAll(".botao-remover-parcela").forEach(botao => {
+    botao.addEventListener("click", () => {
+      parcelasPedido.splice(Number(botao.dataset.indice), 1);
+      parcelasPedido.forEach((p, i) => { p.numero_parcela = i + 1; });
+      desenharParcelas();
+      atualizarBotaoConfirmar();
+    });
+  });
+}
+
+document.getElementById("botao-add-parcela").addEventListener("click", () => {
+  const { prazo } = obterPrazoEParcelasEfetivos();
+  const ultima = parcelasPedido[parcelasPedido.length - 1];
+  const dataBase = ultima ? new Date(ultima.data_vencimento + "T00:00:00") : new Date();
+  dataBase.setDate(dataBase.getDate() + prazo);
+  parcelasPedido.push({ numero_parcela: parcelasPedido.length + 1, data_vencimento: formatarDataISO(dataBase) });
+  desenharParcelas();
+  atualizarBotaoConfirmar();
+});
+
+ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
+  () => parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento),
+  () => {
+    const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+    return `${parcelasPedido.length} parcela${parcelasPedido.length > 1 ? "s" : ""} · ${formatarMoeda(total)}`;
+  });
+
+async function iniciar() {
+  [clientes, depositos] = await Promise.all([
+    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota&order=nome"),
+    chamarSupabase("depositos?select=id,nome&order=id"),
+  ]);
+  popularSelectsDeposito();
+  await carregarEquipamentosComodato();
+}
+
+function popularSelectsDeposito() {
+  const opcoes = '<option value="">Selecione...</option>' + depositos.map(d => `<option value="${d.id}">${d.nome}</option>`).join("");
+  document.getElementById("select-deposito").innerHTML = opcoes;
+  document.getElementById("select-deposito-destino").innerHTML = opcoes;
+}
+
+let equipamentosComodato = [];
+
+async function carregarEquipamentosComodato() {
+  equipamentosComodato = await chamarSupabase("equipamentos_comodato?select=id,nome,valor_referencia&order=nome");
+}
+
+function desenharListaEquipamentos(filtro) {
+  const alvo = document.getElementById("lista-equipamentos");
+  if (!filtro) { alvo.innerHTML = ""; return; }
+  const filtrados = equipamentosComodato.filter(e => e.nome.toLowerCase().includes(filtro.toLowerCase()));
+  if (filtrados.length === 0) {
+    alvo.innerHTML = `<div class="item-produto">Nenhum equipamento encontrado.</div>`;
+    return;
+  }
+  alvo.innerHTML = filtrados.map(e =>
+    `<div class="item-produto" data-id="${e.id}">
+      <span>${e.nome}</span><span class="saldo-atual">${formatarMoeda(e.valor_referencia)}</span>
+    </div>`
+  ).join("");
+  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+    linha.addEventListener("click", () => {
+      const equipamento = equipamentosComodato.find(e => e.id === Number(linha.dataset.id));
+      document.getElementById("campo-descricao-equipamento").value = equipamento.nome;
+      document.getElementById("campo-valor-equipamento").value = equipamento.valor_referencia;
+      document.getElementById("campo-busca-equipamento").value = "";
+      alvo.innerHTML = "";
+      atualizarBotaoConfirmar();
+    });
+  });
+}
+document.getElementById("campo-busca-equipamento").addEventListener("input", (e) => desenharListaEquipamentos(e.target.value));
+document.getElementById("campo-descricao-equipamento").addEventListener("input", atualizarBotaoConfirmar);
+document.getElementById("campo-valor-equipamento").addEventListener("input", atualizarBotaoConfirmar);
+
+document.getElementById("botao-novo-equipamento").addEventListener("click", async () => {
+  const nome = document.getElementById("campo-descricao-equipamento").value.trim();
+  const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+  if (!nome || !(valor > 0)) {
+    alert("Preencha a descrição e o valor antes de cadastrar pra próxima vez.");
+    return;
+  }
+  try {
+    await chamarSupabase("equipamentos_comodato", {
+      method: "POST",
+      headers: { "Prefer": "return=minimal" },
+      body: JSON.stringify({ nome, valor_referencia: valor }),
+    });
+    alert(`"${nome}" cadastrado! Já vai aparecer na busca da próxima vez.`);
+    await carregarEquipamentosComodato();
+  } catch (erro) {
+    alert(`Não consegui cadastrar: ${erro.message}`);
+  }
+});
+
+ativarFechamentoAutomatico("conteudo-equipamento", "cartao-equipamento",
+  () => {
+    const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+    const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+    return !!descricao && valor > 0;
+  },
+  () => {
+    const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+    const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+    return `${descricao} · ${formatarMoeda(valor)}`;
+  });
+
+function desenharListaClientes(filtro) {
+  const alvo = document.getElementById("lista-clientes");
+  if (!filtro) { alvo.innerHTML = ""; return; }
+  const filtrados = clientes.filter(c => c.nome.toLowerCase().includes(filtro.toLowerCase()));
+  if (filtrados.length === 0) {
+    alvo.innerHTML = `<div class="item-produto">Nenhum cliente encontrado.</div>`;
+    return;
+  }
+  alvo.innerHTML = filtrados.slice(0, 30).map(c =>
+    `<div class="item-produto" data-id="${c.id}">${c.nome}</div>`
+  ).join("");
+  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+    linha.addEventListener("click", () => escolherCliente(Number(linha.dataset.id)));
+  });
+}
+document.getElementById("campo-busca-cliente").addEventListener("input", (e) => desenharListaClientes(e.target.value));
+
+function atualizarCardDescontoBoleto() {
+  const cartao = document.getElementById("cartao-desconto-boleto");
+  const mostrar = tipoOperacao === "venda" && clienteEscolhido && formaPagamentoEfetiva() === "boleto";
+  cartao.style.display = mostrar ? "" : "none";
+  if (mostrar) {
+    document.getElementById("campo-desconto-tipo-pedido").value = clienteEscolhido.desconto_boleto_tipo || "nenhum";
+    document.getElementById("campo-desconto-valor-pedido").value = clienteEscolhido.desconto_boleto_valor || "";
+    atualizarVisibilidadeValorDescontoPedido();
+  }
+}
+
+function atualizarVisibilidadeValorDescontoPedido() {
+  const tipo = document.getElementById("campo-desconto-tipo-pedido").value;
+  document.getElementById("campo-desconto-valor-pedido-caixa").style.display = tipo === "nenhum" ? "none" : "block";
+}
+document.getElementById("campo-desconto-tipo-pedido").addEventListener("change", atualizarVisibilidadeValorDescontoPedido);
+
+// caixa de "forma de pagamento em falta": ao mudar qualquer campo dela,
+// reflete na hora nas parcelas (que passam a usar prazo/qtd escolhidos
+// aqui), no card de desconto no boleto (se escolher boleto) e no botao
+function atualizarAposEscolherFormaPagamentoPendente() {
+  gerarParcelasPadrao();
+  desenharParcelas();
+  atualizarCardDescontoBoleto();
+  atualizarBotaoConfirmar();
+}
+document.getElementById("campo-forma-pagamento-cliente").addEventListener("change", atualizarAposEscolherFormaPagamentoPendente);
+document.getElementById("campo-prazo-cliente").addEventListener("input", atualizarAposEscolherFormaPagamentoPendente);
+document.getElementById("campo-parcelas-cliente").addEventListener("input", atualizarAposEscolherFormaPagamentoPendente);
+
+async function escolherCliente(id) {
+  clienteEscolhido = clientes.find(c => c.id === id);
+  document.getElementById("campo-busca-cliente").value = "";
+  document.getElementById("lista-clientes").innerHTML = "";
+  document.getElementById("nome-cliente-selecionado").textContent = clienteEscolhido.nome;
+
+  const chips = [];
+  if (clienteEscolhido.forma_pagamento) chips.push(FORMAS_PAGAMENTO[clienteEscolhido.forma_pagamento] || clienteEscolhido.forma_pagamento);
+  if (clienteEscolhido.prazo_dias) chips.push(`Prazo: ${clienteEscolhido.prazo_dias} dia(s)`);
+  if (clienteEscolhido.parcelas && clienteEscolhido.parcelas > 1) chips.push(`${clienteEscolhido.parcelas}x`);
+  document.getElementById("chips-cliente-info").innerHTML =
+    (chips.length ? chips : ["Sem forma de pagamento cadastrada"]).map(c => `<span class="chip-info">${c}</span>`).join("");
+  document.getElementById("caixa-cliente-selecionado").style.display = "block";
+
+  // reseta a caixa de "forma de pagamento em falta" e so' mostra ela se
+  // o cliente realmente nao tiver forma de pagamento cadastrada (bonificacao
+  // nunca usa isso, ja que nao ha' cobranca)
+  document.getElementById("campo-forma-pagamento-cliente").value = "";
+  document.getElementById("campo-prazo-cliente").value = "";
+  document.getElementById("campo-parcelas-cliente").value = "";
+  document.getElementById("caixa-forma-pagamento-faltando").style.display =
+    (tipoOperacao === "venda" && !clienteEscolhido.forma_pagamento) ? "block" : "none";
+
+  if (tipoOperacao === "venda") {
+    document.getElementById("cartao-parcelas").classList.remove("desabilitado");
+    gerarParcelasPadrao();
+    desenharParcelas();
+    atualizarCardDescontoBoleto();
+  }
+
+  // pre-preenche a Observacao com o padrao cadastrado no cliente, so' se
+  // o campo ainda estiver vazio (nao sobrescreve o que ja foi digitado
+  // manualmente pra essa venda especifica)
+  const campoObservacoes = document.getElementById("campo-observacoes");
+  if (!campoObservacoes.value.trim() && clienteEscolhido.observacao_padrao_nota) {
+    campoObservacoes.value = clienteEscolhido.observacao_padrao_nota;
+  }
+
+  precosTabela.clear();
+  if (clienteEscolhido.tabela_preco_id) {
+    const precos = await chamarSupabase(`tabela_preco_itens?select=item_id,preco&tabela_id=eq.${clienteEscolhido.tabela_preco_id}`);
+    for (const p of precos) if (p.preco !== null) precosTabela.set(p.item_id, Number(p.preco));
+  }
+  for (const item of itensPedido) {
+    if (precosTabela.has(item.item_id)) item.preco_unitario = precosTabela.get(item.item_id);
+  }
+  desenharTabelaItensPedido();
+  atualizarBotaoConfirmar();
+
+  // cliente e' uma escolha unica e discreta - fecha na hora, sem esperar
+  // o foco sair (diferente de itens/parcelas/equipamento, que ficam
+  // sendo ajustados aos poucos). Excecao: se falta forma de pagamento
+  // (so' pode acontecer em venda), deixa o cartao aberto - senao a caixa
+  // de preenchimento fica escondida e ninguem consegue completar o
+  // cadastro pra destravar o pedido.
+  if (tipoOperacao !== "venda" || clienteEscolhido.forma_pagamento) {
+    fecharCartaoComResumo("cliente", clienteEscolhido.nome);
+  } else {
+    abrirCartao("cliente");
+  }
+}
+
+document.getElementById("select-deposito").addEventListener("change", async (e) => {
+  const id = Number(e.target.value);
+  if (!id) return;
+  depositoEscolhidoId = id;
+  document.getElementById("cartao-itens").classList.remove("desabilitado");
+
+  if (itensCatalogo.length === 0) {
+    itensCatalogo = await chamarSupabase("itens?select=id,nome&order=nome");
+  }
+  const saldos = await chamarSupabase(`estoque_produto_acabado?select=item_id,quantidade&deposito_id=eq.${depositoEscolhidoId}`);
+  saldosEstoque = new Map(saldos.map(s => [s.item_id, Number(s.quantidade)]));
+  desenharListaProdutosParaAdicionar("");
+  desenharTabelaItensPedido();
+  atualizarBotaoConfirmar();
+});
+
+document.getElementById("select-deposito-destino").addEventListener("change", (e) => {
+  depositoDestinoEscolhidoId = Number(e.target.value) || null;
+  atualizarBotaoConfirmar();
+});
+
+function desenharListaProdutosParaAdicionar(filtro) {
+  const alvo = document.getElementById("lista-produtos");
+  if (!filtro) { alvo.innerHTML = ""; return; }
+  const filtrados = itensCatalogo.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
+  if (filtrados.length === 0) {
+    alvo.innerHTML = `<div class="item-produto">Nenhum produto encontrado.</div>`;
+    return;
+  }
+  alvo.innerHTML = filtrados.slice(0, 40).map(i => {
+    const saldo = saldosEstoque.get(i.id) || 0;
+    return `<div class="item-produto ${saldo <= 0 ? 'zerado' : ''}" data-id="${i.id}" data-nome="${i.nome}">
+      <span>${i.nome}</span><span class="saldo-atual">${saldo} em estoque</span></div>`;
+  }).join("");
+  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+    linha.addEventListener("click", () => adicionarItemAoPedido(Number(linha.dataset.id), linha.dataset.nome));
+  });
+}
+document.getElementById("campo-busca-produto").addEventListener("input", (e) => desenharListaProdutosParaAdicionar(e.target.value));
+
+function adicionarItemAoPedido(itemId, nome) {
+  if (itensPedido.some(i => i.item_id === itemId)) return;
+  const precoSugerido = precosTabela.get(itemId) ?? 0;
+  itensPedido.push({ item_id: itemId, nome, quantidade: 1, preco_unitario: precoSugerido });
+  document.getElementById("campo-busca-produto").value = "";
+  document.getElementById("lista-produtos").innerHTML = "";
+  desenharTabelaItensPedido();
+}
+
+function desenharTabelaItensPedido() {
+  const tabela = document.getElementById("tabela-itens-pedido");
+  const totalCaixa = document.getElementById("total-caixa");
+  const corpo = document.getElementById("corpo-itens-pedido");
+
+  if (itensPedido.length === 0) {
+    tabela.style.display = "none";
+    totalCaixa.style.display = "none";
+    atualizarBotaoConfirmar();
+    return;
+  }
+  tabela.style.display = "table";
+  totalCaixa.style.display = "flex";
+
+  corpo.innerHTML = itensPedido.map((item, indice) => {
+    const saldo = saldosEstoque.get(item.item_id) || 0;
+    const excede = item.quantidade > saldo;
+    return `
+    <tr class="${excede ? 'linha-erro' : ''}" data-linha-indice="${indice}">
+      <td>${item.nome}<div class="aviso-linha" style="display:${excede ? '' : 'none'}">Só tem ${saldo} em estoque</div></td>
+      <td class="num"><input type="number" min="0.01" step="0.01" class="campo-tabela" data-campo="quantidade" data-indice="${indice}" value="${item.quantidade}"></td>
+      <td class="num"><input type="number" min="0" step="0.01" class="campo-tabela" data-campo="preco_unitario" data-indice="${indice}" value="${item.preco_unitario}" placeholder="0,00"></td>
+      <td class="num" data-subtotal-de="${indice}">${formatarMoeda(item.quantidade * (item.preco_unitario || 0))}</td>
+      <td><button class="botao-remover" data-indice="${indice}">✕</button></td>
+    </tr>`;
+  }).join("");
+
+  corpo.querySelectorAll(".campo-tabela").forEach(campo => {
+    // so' atualiza numeros/subtotal na hora de digitar (sem recriar a
+    // linha inteira) - recriar tudo a cada tecla jogava o foco pra fora
+    // da caixinha, obrigando a clicar de novo pra continuar digitando
+    campo.addEventListener("input", () => {
+      const indice = Number(campo.dataset.indice);
+      const valor = parseFloat(campo.value) || 0;
+      itensPedido[indice][campo.dataset.campo] = valor;
+      atualizarLinhaItemSemRedesenhar(indice);
+    });
+  });
+  corpo.querySelectorAll(".botao-remover").forEach(botao => {
+    botao.addEventListener("click", () => {
+      itensPedido.splice(Number(botao.dataset.indice), 1);
+      desenharTabelaItensPedido();
+    });
+  });
+
+  atualizarTotaisGerais();
+}
+
+function atualizarLinhaItemSemRedesenhar(indice) {
+  const item = itensPedido[indice];
+  const linha = document.querySelector(`#corpo-itens-pedido tr[data-linha-indice="${indice}"]`);
+  if (linha) {
+    const saldo = saldosEstoque.get(item.item_id) || 0;
+    const excede = item.quantidade > saldo;
+    linha.classList.toggle("linha-erro", excede);
+    const aviso = linha.querySelector(".aviso-linha");
+    if (aviso) {
+      aviso.style.display = excede ? "" : "none";
+      aviso.textContent = `Só tem ${saldo} em estoque`;
+    }
+    const celulaSubtotal = linha.querySelector(`[data-subtotal-de="${indice}"]`);
+    if (celulaSubtotal) celulaSubtotal.textContent = formatarMoeda(item.quantidade * (item.preco_unitario || 0));
+  }
+  atualizarTotaisGerais();
+}
+
+function atualizarTotaisGerais() {
+  const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+  document.getElementById("valor-total-pedido").textContent = formatarMoeda(total);
+  if (parcelasPedido.length > 0) desenharParcelas();
+  atualizarBotaoConfirmar();
+}
+
+// Itens fica sempre exposto (sem fechamento automático nem manual) - a
+// lista pode ficar grande, e o usuario quer ver ela inteira o tempo todo
+
+function algumItemExcedeEstoque() {
+  return itensPedido.some(i => (saldosEstoque.get(i.item_id) || 0) < i.quantidade);
+}
+
+function determinarNotaFiscalTransferencia() {
+  // precisa de nota se envolver o deposito da Filial (Estoque Barueri)
+  const origemEhFilial = nomeDepositoContem(depositoEscolhidoId, "Barueri");
+  const destinoEhFilial = nomeDepositoContem(depositoDestinoEscolhidoId, "Barueri");
+  return origemEhFilial || destinoEhFilial;
+}
+
+function atualizarBotaoConfirmar() {
+  let tudoPreenchido = false;
+
+  if (tipoOperacao === "venda") {
+    const parcelasValidas = parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento);
+    const formaPagamentoDefinida = clienteEscolhido && (
+      clienteEscolhido.forma_pagamento ||
+      (document.getElementById("campo-forma-pagamento-cliente").value &&
+       document.getElementById("campo-prazo-cliente").value &&
+       document.getElementById("campo-parcelas-cliente").value)
+    );
+    tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa && formaPagamentoDefinida &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      !algumItemExcedeEstoque() && parcelasValidas;
+  } else if (tipoOperacao === "bonificacao") {
+    // bonificacao nao tem forma de pagamento nem parcela - so' precisa
+    // de cliente, deposito e itens com preco de referencia preenchido
+    tudoPreenchido = !!(clienteEscolhido && depositoEscolhidoId && pessoa &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      !algumItemExcedeEstoque());
+  } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
+    const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+    const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+    tudoPreenchido = !!(clienteEscolhido && pessoa && descricao && valor > 0);
+  } else if (tipoOperacao === "transferencia") {
+    tudoPreenchido = !!(depositoEscolhidoId && depositoDestinoEscolhidoId &&
+      depositoEscolhidoId !== depositoDestinoEscolhidoId && pessoa &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      !algumItemExcedeEstoque());
+  }
+
+  document.getElementById("botao-confirmar").disabled = !tudoPreenchido;
+}
+
+// emite a nota fiscal de um pedido ja confirmado, esperando o resultado
+// final se a SEFAZ demorar (usa aguardarStatusFinalNota). Devolve o texto
+// pronto pra concatenar na mensagem de sucesso/aviso - usada tanto pela
+// Venda (quando o checkbox esta marcado) quanto pela Bonificacao (que
+// sempre emite nota, sem checkbox).
+async function emitirNotaFiscalDoPedido(pedidoId, botao) {
+  botao.textContent = "Emitindo nota fiscal...";
+  try {
+    const { ok, dados } = await chamarFunction("emitir-nota-fiscal", { pedido_id: pedidoId });
+    let focusFinal = dados.focus;
+
+    if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
+      botao.textContent = "Aguardando autorização da SEFAZ...";
+      const resultadoEspera = await aguardarStatusFinalNota(pedidoId);
+      if (resultadoEspera) focusFinal = resultadoEspera;
+    }
+
+    if (focusFinal && focusFinal.status === "autorizado") {
+      return ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`;
+    } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
+      return ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Pedidos.`;
+    } else {
+      const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
+      return ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Pedidos.`;
+    }
+  } catch (erro) {
+    return ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Pedidos.`;
+  }
+}
+
+document.getElementById("botao-confirmar").addEventListener("click", async () => {
+  const botao = document.getElementById("botao-confirmar");
+  const mensagem = document.getElementById("mensagem");
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+  mensagem.className = "mensagem";
+
+  try {
+    let resultadoId;
+
+    if (tipoOperacao === "venda") {
+      // se o cliente ainda nao tinha forma de pagamento cadastrada, salva
+      // agora o que foi preenchido na caixa de aviso - direto no cadastro
+      // do cliente, pra proxima venda ja vir com tudo preenchido sozinho
+      if (!clienteEscolhido.forma_pagamento) {
+        const formaEscolhida = document.getElementById("campo-forma-pagamento-cliente").value;
+        const { prazo: prazoEscolhido, parcelas: parcelasEscolhidas } = obterPrazoEParcelasEfetivos();
+
+        await chamarSupabase(`clientes?id=eq.${clienteEscolhido.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            forma_pagamento: formaEscolhida,
+            prazo_dias: prazoEscolhido,
+            parcelas: parcelasEscolhidas,
+          }),
+        });
+        clienteEscolhido.forma_pagamento = formaEscolhida;
+        clienteEscolhido.prazo_dias = prazoEscolhido;
+        clienteEscolhido.parcelas = parcelasEscolhidas;
+        const indiceCliente = clientes.findIndex(c => c.id === clienteEscolhido.id);
+        if (indiceCliente >= 0) clientes[indiceCliente] = { ...clientes[indiceCliente], ...clienteEscolhido };
+      }
+
+      const totalFinal = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+      const valoresParcelas = distribuirValoresParcelas(totalFinal, parcelasPedido.length);
+      const parcelasDetalhe = parcelasPedido.map((p, indice) => ({
+        numero_parcela: p.numero_parcela,
+        data_vencimento: p.data_vencimento,
+        valor: valoresParcelas[indice],
+      }));
+
+      const ehBoleto = clienteEscolhido.forma_pagamento === "boleto";
+      const descontoTipo = ehBoleto ? document.getElementById("campo-desconto-tipo-pedido").value : "nenhum";
+      const descontoValorCampo = document.getElementById("campo-desconto-valor-pedido").value;
+      const descontoValor = ehBoleto && descontoTipo !== "nenhum" && descontoValorCampo ? Number(descontoValorCampo) : null;
+
+      resultadoId = await chamarSupabase("rpc/confirmar_pedido", {
+        method: "POST",
+        body: JSON.stringify({
+          p_cliente_id: clienteEscolhido.id,
+          p_deposito_id: depositoEscolhidoId,
+          p_forma_pagamento: clienteEscolhido.forma_pagamento || null,
+          p_prazo_dias: clienteEscolhido.prazo_dias || null,
+          p_parcelas: parcelasPedido.length,
+          p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
+          p_com_nota_fiscal: document.getElementById("campo-emite-nota").checked,
+          p_parcelas_detalhe: parcelasDetalhe,
+          p_pessoa: pessoa,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+          p_desconto_boleto_tipo: descontoTipo,
+          p_desconto_boleto_valor: descontoValor,
+        }),
+      });
+
+      let textoNota = "";
+      if (document.getElementById("campo-emite-nota").checked) {
+        textoNota = await emitirNotaFiscalDoPedido(resultadoId, botao);
+      }
+
+      let textoBoleto = "";
+      if (ehBoleto) {
+        botao.textContent = "Gerando boleto(s)...";
+        const resultadosBoletos = await gerarBoletosDoPedido(resultadoId);
+        const falhas = resultadosBoletos.filter(r => !r.ok);
+        if (resultadosBoletos.length === 0) {
+          textoBoleto = "";
+        } else if (falhas.length === 0) {
+          textoBoleto = ` Boleto${resultadosBoletos.length > 1 ? "s" : ""} gerado${resultadosBoletos.length > 1 ? "s" : ""} com sucesso.`;
+        } else {
+          textoBoleto = ` ⚠️ ${falhas.length} de ${resultadosBoletos.length} boleto(s) falharam (parcela ${falhas.map(f => f.numero_parcela).join(", ")}) — confira na tela de Pedidos.`;
+        }
+      }
+
+      mensagem.className = "mensagem sucesso";
+      mensagem.innerHTML = `Pedido nº ${resultadoId} confirmado!${textoNota}${textoBoleto} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
+
+    } else if (tipoOperacao === "bonificacao") {
+      resultadoId = await chamarSupabase("rpc/confirmar_bonificacao", {
+        method: "POST",
+        body: JSON.stringify({
+          p_cliente_id: clienteEscolhido.id,
+          p_deposito_id: depositoEscolhidoId,
+          p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
+          p_pessoa: pessoa,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+        }),
+      });
+
+      // bonificacao sempre emite nota - sem checkbox, sem forma de pagamento/boleto
+      const textoNotaBonificacao = await emitirNotaFiscalDoPedido(resultadoId, botao);
+
+      mensagem.className = "mensagem sucesso";
+      mensagem.innerHTML = `Bonificação nº ${resultadoId} confirmada!${textoNotaBonificacao} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
+
+    } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
+      const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
+      const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
+
+      resultadoId = await chamarSupabase("rpc/confirmar_operacao_especial", {
+        method: "POST",
+        body: JSON.stringify({
+          p_tipo: tipoOperacao,
+          p_cliente_id: clienteEscolhido.id,
+          p_descricao_equipamento: descricao,
+          p_valor_referencia: valor,
+          p_com_nota_fiscal: true,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+          p_pessoa: pessoa,
+        }),
+      });
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = `${tipoOperacao === "comodato" ? "Comodato" : "Devolução de comodato"} nº ${resultadoId} registrado(a) com sucesso.`;
+
+    } else if (tipoOperacao === "transferencia") {
+      const precisaNota = determinarNotaFiscalTransferencia();
+      let clienteFilialId = null;
+      if (precisaNota) {
+        const filial = clientes.find(c => c.cnpj_cpf && c.cnpj_cpf.replace(/\D/g, "") === CNPJ_FILIAL.replace(/\D/g, ""));
+        if (!filial) {
+          throw new Error("Não encontrei a Filial cadastrada como cliente (confira o CNPJ configurado no código).");
+        }
+        clienteFilialId = filial.id;
+      }
+
+      resultadoId = await chamarSupabase("rpc/confirmar_operacao_especial", {
+        method: "POST",
+        body: JSON.stringify({
+          p_tipo: "transferencia",
+          p_cliente_id: clienteFilialId,
+          p_deposito_origem_id: depositoEscolhidoId,
+          p_deposito_destino_id: depositoDestinoEscolhidoId,
+          p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, valor_unitario: i.preco_unitario })),
+          p_com_nota_fiscal: precisaNota,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+          p_pessoa: pessoa,
+        }),
+      });
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = `Transferência nº ${resultadoId} registrada com sucesso.` +
+        (precisaNota ? " Precisa emitir nota fiscal (envolve a Filial)." : " Sem necessidade de nota (só entre depósitos da Matriz).");
+    }
+
+    itensPedido = [];
+    clienteEscolhido = null;
+    depositoEscolhidoId = null;
+    depositoDestinoEscolhidoId = null;
+    parcelasPedido = [];
+    document.getElementById("caixa-cliente-selecionado").style.display = "none";
+    document.getElementById("caixa-forma-pagamento-faltando").style.display = "none";
+    document.getElementById("campo-forma-pagamento-cliente").value = "";
+    document.getElementById("campo-prazo-cliente").value = "";
+    document.getElementById("campo-parcelas-cliente").value = "";
+    document.getElementById("select-deposito").value = "";
+    document.getElementById("select-deposito-destino").value = "";
+    document.getElementById("cartao-itens").classList.add("desabilitado");
+    document.getElementById("cartao-parcelas").classList.add("desabilitado");
+    document.getElementById("campo-emite-nota").checked = false;
+    document.getElementById("campo-observacoes").value = "";
+    document.getElementById("campo-descricao-equipamento").value = "";
+    document.getElementById("campo-valor-equipamento").value = "";
+    document.getElementById("cartao-desconto-boleto").style.display = "none";
+    document.getElementById("campo-desconto-tipo-pedido").value = "nenhum";
+    document.getElementById("campo-desconto-valor-pedido").value = "";
+    abrirCartao("cliente");
+    abrirCartao("equipamento");
+    abrirCartao("itens");
+    abrirCartao("parcelas");
+    desenharParcelas();
+    desenharTabelaItensPedido();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui confirmar: ${erro.message}`;
+  } finally {
+    botao.textContent = "Confirmar Pedido";
+    atualizarBotaoConfirmar();
+  }
+});
+
+iniciar();
+</script>
+</body>
+</html>
