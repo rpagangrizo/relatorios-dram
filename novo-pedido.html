@@ -1071,6 +1071,36 @@ function atualizarBotaoConfirmar() {
   document.getElementById("botao-confirmar").disabled = !tudoPreenchido;
 }
 
+// emite a nota fiscal de um pedido ja confirmado, esperando o resultado
+// final se a SEFAZ demorar (usa aguardarStatusFinalNota). Devolve o texto
+// pronto pra concatenar na mensagem de sucesso/aviso - usada tanto pela
+// Venda (quando o checkbox esta marcado) quanto pela Bonificacao (que
+// sempre emite nota, sem checkbox).
+async function emitirNotaFiscalDoPedido(pedidoId, botao) {
+  botao.textContent = "Emitindo nota fiscal...";
+  try {
+    const { ok, dados } = await chamarFunction("emitir-nota-fiscal", { pedido_id: pedidoId });
+    let focusFinal = dados.focus;
+
+    if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
+      botao.textContent = "Aguardando autorização da SEFAZ...";
+      const resultadoEspera = await aguardarStatusFinalNota(pedidoId);
+      if (resultadoEspera) focusFinal = resultadoEspera;
+    }
+
+    if (focusFinal && focusFinal.status === "autorizado") {
+      return ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`;
+    } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
+      return ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Pedidos.`;
+    } else {
+      const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
+      return ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Pedidos.`;
+    }
+  } catch (erro) {
+    return ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Pedidos.`;
+  }
+}
+
 document.getElementById("botao-confirmar").addEventListener("click", async () => {
   const botao = document.getElementById("botao-confirmar");
   const mensagem = document.getElementById("mensagem");
@@ -1137,28 +1167,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
 
       let textoNota = "";
       if (document.getElementById("campo-emite-nota").checked) {
-        botao.textContent = "Emitindo nota fiscal...";
-        try {
-          const { ok, dados } = await chamarFunction("emitir-nota-fiscal", { pedido_id: resultadoId });
-          let focusFinal = dados.focus;
-
-          if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
-            botao.textContent = "Aguardando autorização da SEFAZ...";
-            const resultadoEspera = await aguardarStatusFinalNota(resultadoId);
-            if (resultadoEspera) focusFinal = resultadoEspera;
-          }
-
-          if (focusFinal && focusFinal.status === "autorizado") {
-            textoNota = ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`;
-          } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
-            textoNota = ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Pedidos.`;
-          } else {
-            const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
-            textoNota = ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Pedidos.`;
-          }
-        } catch (erro) {
-          textoNota = ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Pedidos.`;
-        }
+        textoNota = await emitirNotaFiscalDoPedido(resultadoId, botao);
       }
 
       let textoBoleto = "";
@@ -1179,14 +1188,22 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       mensagem.innerHTML = `Pedido nº ${resultadoId} confirmado!${textoNota}${textoBoleto} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
 
     } else if (tipoOperacao === "bonificacao") {
-      // AINDA NAO IMPLEMENTADO - depende de eu ver a funcao confirmar_pedido
-      // atual pra saber se da' pra reaproveitar ela (com parcelas=0) ou se
-      // precisa de uma rpc nova (ex: confirmar_bonificacao). Por enquanto
-      // so' avisa - nao deixa a pessoa achar que enviou algo que nao foi.
-      throw new Error(
-        "Bonificação ainda não está pronta nessa tela — só a interface foi montada. " +
-        "Peça pro Raphael finalizar a parte de gravação antes de usar."
-      );
+      resultadoId = await chamarSupabase("rpc/confirmar_bonificacao", {
+        method: "POST",
+        body: JSON.stringify({
+          p_cliente_id: clienteEscolhido.id,
+          p_deposito_id: depositoEscolhidoId,
+          p_itens: itensPedido.map(i => ({ item_id: i.item_id, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
+          p_pessoa: pessoa,
+          p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
+        }),
+      });
+
+      // bonificacao sempre emite nota - sem checkbox, sem forma de pagamento/boleto
+      const textoNotaBonificacao = await emitirNotaFiscalDoPedido(resultadoId, botao);
+
+      mensagem.className = "mensagem sucesso";
+      mensagem.innerHTML = `Bonificação nº ${resultadoId} confirmada!${textoNotaBonificacao} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
 
     } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
       const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
