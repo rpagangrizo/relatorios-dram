@@ -43,6 +43,7 @@
     padding: 10px; border-radius: 9px; margin-bottom: 18px; font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px; }
 
   .grade-info { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 22px; }
+  .bloco-info.largo { grid-column: 1 / -1; }
   .bloco-info .rotulo { font-size: 10.5px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.5px; margin-bottom: 3px; }
   .bloco-info .valor { font-size: 14px; font-weight: 600; }
 
@@ -135,6 +136,24 @@ function escaparHtml(texto) {
   return div.innerHTML;
 }
 
+// monta "Rua Tal, 123 - Bairro, Cidade/UF" a partir dos campos de
+// endereco do cliente, pulando com elegancia qualquer campo vazio (nem
+// todo cliente tem cadastro fiscal completo)
+function formatarEnderecoCliente(cliente) {
+  const partes = [];
+  if (cliente.endereco_logradouro) {
+    let linha = cliente.endereco_logradouro;
+    if (cliente.endereco_numero) linha += `, ${cliente.endereco_numero}`;
+    if (cliente.endereco_complemento) linha += ` - ${cliente.endereco_complemento}`;
+    partes.push(linha);
+  }
+  if (cliente.endereco_bairro) partes.push(cliente.endereco_bairro);
+  const cidadeUf = [cliente.endereco_municipio, cliente.endereco_uf].filter(Boolean).join("/");
+  if (cidadeUf) partes.push(cidadeUf);
+  if (cliente.endereco_cep) partes.push(`CEP ${cliente.endereco_cep}`);
+  return partes.join(" - ") || null;
+}
+
 const FORMAS_PAGAMENTO = { boleto: "Boleto", pix: "PIX", deposito: "Depósito em conta" };
 
 async function carregarRecibo() {
@@ -148,7 +167,11 @@ async function carregarRecibo() {
 
   try {
     const [pedidos, itens, parcelas] = await Promise.all([
-      chamarSupabase(`pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,observacoes,status,clientes(nome),depositos(nome)&id=eq.${pedidoId}`),
+      chamarSupabase(
+        `pedidos?select=id,cliente_id,deposito_id,forma_pagamento,prazo_dias,parcelas,total,criado_em,observacoes,status,` +
+        `clientes(nome,endereco_logradouro,endereco_numero,endereco_complemento,endereco_bairro,endereco_municipio,endereco_uf,endereco_cep),` +
+        `depositos(nome)&id=eq.${pedidoId}`
+      ),
       chamarSupabase(`pedido_itens?select=quantidade,preco_unitario,itens(nome)&pedido_id=eq.${pedidoId}`),
       chamarSupabase(`pedido_parcelas?select=numero_parcela,data_vencimento,valor&pedido_id=eq.${pedidoId}&order=numero_parcela`),
     ]);
@@ -199,6 +222,8 @@ async function carregarRecibo() {
       blocoPagamentoInfo = `${formaPagTexto} — ${prazoTexto}`;
     }
 
+    const enderecoTexto = formatarEnderecoCliente(pedido.clientes);
+
     alvo.innerHTML = `
       ${pedido.status === "cancelado" ? `<div class="banner-cancelado">Pedido Cancelado</div>` : ""}
       <div class="cabecalho-folha">
@@ -212,6 +237,7 @@ async function carregarRecibo() {
       <div class="grade-info">
         <div class="bloco-info"><div class="rotulo">Cliente</div><div class="valor">${pedido.clientes.nome}</div></div>
         <div class="bloco-info"><div class="rotulo">Data</div><div class="valor">${formatarData(pedido.criado_em)}</div></div>
+        ${enderecoTexto ? `<div class="bloco-info largo"><div class="rotulo">Endereço</div><div class="valor">${enderecoTexto}</div></div>` : ""}
         <div class="bloco-info"><div class="rotulo">Depósito de origem</div><div class="valor">${pedido.depositos.nome}</div></div>
         <div class="bloco-info"><div class="rotulo">Pagamento</div><div class="valor">${blocoPagamentoInfo}</div></div>
       </div>
