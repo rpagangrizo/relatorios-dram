@@ -966,12 +966,13 @@ function desenharTabelaItensPedido() {
 
   corpo.innerHTML = itensPedido.map((item, indice) => {
     const saldo = saldosEstoque.get(item.item_id) || 0;
-    const excede = item.quantidade > saldo;
+    const excedeEstoque = item.quantidade > saldo;
+    const precoZerado = !(item.preco_unitario > 0);
     return `
-    <tr class="${excede ? 'linha-erro' : ''}" data-linha-indice="${indice}">
-      <td>${item.nome}<div class="aviso-linha" style="display:${excede ? '' : 'none'}">Só tem ${saldo} em estoque</div></td>
+    <tr class="${(excedeEstoque || precoZerado) ? 'linha-erro' : ''}" data-linha-indice="${indice}">
+      <td>${item.nome}<div class="aviso-linha" style="display:${excedeEstoque ? '' : 'none'}">Só tem ${saldo} em estoque</div></td>
       <td class="num"><input type="number" min="0.01" step="0.01" class="campo-tabela" data-campo="quantidade" data-indice="${indice}" value="${item.quantidade}"></td>
-      <td class="num"><input type="number" min="0" step="0.01" class="campo-tabela" data-campo="preco_unitario" data-indice="${indice}" value="${item.preco_unitario}" placeholder="0,00"></td>
+      <td class="num"><input type="number" min="0" step="0.01" class="campo-tabela" data-campo="preco_unitario" data-indice="${indice}" value="${item.preco_unitario}" placeholder="0,00"><div class="aviso-linha" style="display:${precoZerado ? '' : 'none'}">Preço não pode ser R$ 0,00</div></td>
       <td class="num" data-subtotal-de="${indice}">${formatarMoeda(item.quantidade * (item.preco_unitario || 0))}</td>
       <td><button class="botao-remover" data-indice="${indice}">✕</button></td>
     </tr>`;
@@ -1003,13 +1004,19 @@ function atualizarLinhaItemSemRedesenhar(indice) {
   const linha = document.querySelector(`#corpo-itens-pedido tr[data-linha-indice="${indice}"]`);
   if (linha) {
     const saldo = saldosEstoque.get(item.item_id) || 0;
-    const excede = item.quantidade > saldo;
-    linha.classList.toggle("linha-erro", excede);
-    const aviso = linha.querySelector(".aviso-linha");
-    if (aviso) {
-      aviso.style.display = excede ? "" : "none";
-      aviso.textContent = `Só tem ${saldo} em estoque`;
+    const excedeEstoque = item.quantidade > saldo;
+    const precoZerado = !(item.preco_unitario > 0);
+    linha.classList.toggle("linha-erro", excedeEstoque || precoZerado);
+
+    const avisos = linha.querySelectorAll(".aviso-linha");
+    if (avisos[0]) {
+      avisos[0].style.display = excedeEstoque ? "" : "none";
+      avisos[0].textContent = `Só tem ${saldo} em estoque`;
     }
+    if (avisos[1]) {
+      avisos[1].style.display = precoZerado ? "" : "none";
+    }
+
     const celulaSubtotal = linha.querySelector(`[data-subtotal-de="${indice}"]`);
     if (celulaSubtotal) celulaSubtotal.textContent = formatarMoeda(item.quantidade * (item.preco_unitario || 0));
   }
@@ -1049,13 +1056,13 @@ function atualizarBotaoConfirmar() {
        document.getElementById("campo-parcelas-cliente").value)
     );
     tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa && formaPagamentoDefinida &&
-      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario > 0) &&
       !algumItemExcedeEstoque() && parcelasValidas;
   } else if (tipoOperacao === "bonificacao") {
     // bonificacao nao tem forma de pagamento nem parcela - so' precisa
     // de cliente, deposito e itens com preco de referencia preenchido
     tudoPreenchido = !!(clienteEscolhido && depositoEscolhidoId && pessoa &&
-      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario > 0) &&
       !algumItemExcedeEstoque());
   } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
     const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
@@ -1064,7 +1071,7 @@ function atualizarBotaoConfirmar() {
   } else if (tipoOperacao === "transferencia") {
     tudoPreenchido = !!(depositoEscolhidoId && depositoDestinoEscolhidoId &&
       depositoEscolhidoId !== depositoDestinoEscolhidoId && pessoa &&
-      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario > 0) &&
       !algumItemExcedeEstoque());
   }
 
