@@ -202,6 +202,7 @@
         <label>Tipo de operação</label>
         <select id="select-tipo-operacao">
           <option value="venda">Venda</option>
+          <option value="bonificacao">Bonificação</option>
           <option value="comodato">Comodato</option>
           <option value="devolucao_comodato">Devolução de Comodato</option>
           <option value="transferencia">Transferência</option>
@@ -481,7 +482,7 @@ let saldosEstoque = new Map();
 let precosTabela = new Map();
 let itensPedido = [];
 let parcelasPedido = []; // [{numero_parcela, data_vencimento}] - data_vencimento em formato AAAA-MM-DD
-let tipoOperacao = "venda"; // 'venda' | 'comodato' | 'devolucao_comodato' | 'transferencia'
+let tipoOperacao = "venda"; // 'venda' | 'bonificacao' | 'comodato' | 'devolucao_comodato' | 'transferencia'
 
 // CNPJ da Filial (Barueri), cadastrada como cliente normal - usada como
 // destinatario automatico quando a transferencia envolve o deposito dela.
@@ -575,6 +576,7 @@ function aplicarTipoOperacaoNaTela() {
   document.getElementById("select-deposito").value = "";
   document.getElementById("select-deposito-destino").value = "";
   document.getElementById("cartao-desconto-boleto").style.display = "none";
+  document.getElementById("campo-observacoes").value = "";
   abrirCartao("cliente");
   abrirCartao("equipamento");
   abrirCartao("itens");
@@ -585,6 +587,10 @@ function aplicarTipoOperacaoNaTela() {
   const ehComodatoOuDevolucao = tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato";
   const ehTransferencia = tipoOperacao === "transferencia";
   const ehVenda = tipoOperacao === "venda";
+  const ehBonificacao = tipoOperacao === "bonificacao";
+  // bonificacao usa a mesma tela de itens/deposito que venda, so' sem
+  // parcelas/forma de pagamento (nao ha' cobranca)
+  const usaCartaoItens = ehVenda || ehBonificacao || ehTransferencia;
 
   document.getElementById("cartao-cliente").style.display = ehTransferencia ? "none" : "";
   document.getElementById("titulo-cartao-cliente").textContent =
@@ -596,24 +602,29 @@ function aplicarTipoOperacaoNaTela() {
   document.getElementById("titulo-cartao-equipamento").textContent =
     tipoOperacao === "devolucao_comodato" ? "Equipamento sendo devolvido" : "Equipamento";
 
-  document.getElementById("grupo-deposito").style.display = (ehVenda || ehTransferencia) ? "" : "none";
+  document.getElementById("grupo-deposito").style.display = (usaCartaoItens) ? "" : "none";
   document.getElementById("rotulo-deposito").textContent = ehTransferencia ? "Depósito de origem" : "Depósito";
 
   document.getElementById("grupo-deposito-destino").style.display = ehTransferencia ? "" : "none";
 
-  document.getElementById("cartao-itens").style.display = (ehVenda || ehTransferencia) ? "" : "none";
+  document.getElementById("cartao-itens").style.display = usaCartaoItens ? "" : "none";
   document.getElementById("cartao-itens").classList.add("desabilitado");
+  // bonificacao nao tem parcela (sem cobranca) - so' venda tem
   document.getElementById("cartao-parcelas").style.display = ehVenda ? "" : "none";
   document.getElementById("cartao-parcelas").classList.add("desabilitado");
 
-  // nota fiscal: em comodato/devolucao sempre precisa (sem checkbox, forcado);
-  // em transferencia, so' precisa se envolver o deposito da Filial (Barueri) -
-  // isso e' calculado automaticamente, sem o usuario escolher
+  // nota fiscal: em bonificacao/comodato/devolucao sempre precisa (sem
+  // checkbox, forcado); em transferencia, so' precisa se envolver o
+  // deposito da Filial (Barueri) - isso e' calculado automaticamente
   const linhaCheckbox = document.getElementById("linha-checkbox-nota");
   const textoAjuda = document.getElementById("texto-ajuda-nota-fiscal");
   if (ehVenda) {
     linhaCheckbox.style.display = "";
     textoAjuda.textContent = "Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.";
+  } else if (ehBonificacao) {
+    linhaCheckbox.style.display = "none";
+    document.getElementById("campo-emite-nota").checked = true;
+    textoAjuda.textContent = "Bonificação sempre emite nota fiscal (CFOP 5910/6910), sem cobrança — os preços dos itens são só a referência de valor exigida na nota.";
   } else if (ehComodatoOuDevolucao) {
     linhaCheckbox.style.display = "none";
     document.getElementById("campo-emite-nota").checked = true;
@@ -702,7 +713,7 @@ ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
 
 async function iniciar() {
   [clientes, depositos] = await Promise.all([
-    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor&order=nome"),
+    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota&order=nome"),
     chamarSupabase("depositos?select=id,nome&order=id"),
   ]);
   popularSelectsDeposito();
@@ -843,17 +854,28 @@ async function escolherCliente(id) {
   document.getElementById("caixa-cliente-selecionado").style.display = "block";
 
   // reseta a caixa de "forma de pagamento em falta" e so' mostra ela se
-  // o cliente realmente nao tiver forma de pagamento cadastrada
+  // o cliente realmente nao tiver forma de pagamento cadastrada (bonificacao
+  // nunca usa isso, ja que nao ha' cobranca)
   document.getElementById("campo-forma-pagamento-cliente").value = "";
   document.getElementById("campo-prazo-cliente").value = "";
   document.getElementById("campo-parcelas-cliente").value = "";
-  document.getElementById("caixa-forma-pagamento-faltando").style.display = clienteEscolhido.forma_pagamento ? "none" : "block";
+  document.getElementById("caixa-forma-pagamento-faltando").style.display =
+    (tipoOperacao === "venda" && !clienteEscolhido.forma_pagamento) ? "block" : "none";
 
-  document.getElementById("cartao-parcelas").classList.remove("desabilitado");
-  gerarParcelasPadrao();
-  desenharParcelas();
+  if (tipoOperacao === "venda") {
+    document.getElementById("cartao-parcelas").classList.remove("desabilitado");
+    gerarParcelasPadrao();
+    desenharParcelas();
+    atualizarCardDescontoBoleto();
+  }
 
-  atualizarCardDescontoBoleto();
+  // pre-preenche a Observacao com o padrao cadastrado no cliente, so' se
+  // o campo ainda estiver vazio (nao sobrescreve o que ja foi digitado
+  // manualmente pra essa venda especifica)
+  const campoObservacoes = document.getElementById("campo-observacoes");
+  if (!campoObservacoes.value.trim() && clienteEscolhido.observacao_padrao_nota) {
+    campoObservacoes.value = clienteEscolhido.observacao_padrao_nota;
+  }
 
   precosTabela.clear();
   if (clienteEscolhido.tabela_preco_id) {
@@ -868,10 +890,11 @@ async function escolherCliente(id) {
 
   // cliente e' uma escolha unica e discreta - fecha na hora, sem esperar
   // o foco sair (diferente de itens/parcelas/equipamento, que ficam
-  // sendo ajustados aos poucos). Excecao: se falta forma de pagamento,
-  // deixa o cartao aberto - senao a caixa de preenchimento fica escondida
-  // e ninguem consegue completar o cadastro pra destravar o pedido.
-  if (clienteEscolhido.forma_pagamento) {
+  // sendo ajustados aos poucos). Excecao: se falta forma de pagamento
+  // (so' pode acontecer em venda), deixa o cartao aberto - senao a caixa
+  // de preenchimento fica escondida e ninguem consegue completar o
+  // cadastro pra destravar o pedido.
+  if (tipoOperacao !== "venda" || clienteEscolhido.forma_pagamento) {
     fecharCartaoComResumo("cliente", clienteEscolhido.nome);
   } else {
     abrirCartao("cliente");
@@ -1028,6 +1051,12 @@ function atualizarBotaoConfirmar() {
     tudoPreenchido = clienteEscolhido && depositoEscolhidoId && pessoa && formaPagamentoDefinida &&
       itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
       !algumItemExcedeEstoque() && parcelasValidas;
+  } else if (tipoOperacao === "bonificacao") {
+    // bonificacao nao tem forma de pagamento nem parcela - so' precisa
+    // de cliente, deposito e itens com preco de referencia preenchido
+    tudoPreenchido = !!(clienteEscolhido && depositoEscolhidoId && pessoa &&
+      itensPedido.length > 0 && itensPedido.every(i => i.quantidade > 0 && i.preco_unitario >= 0) &&
+      !algumItemExcedeEstoque());
   } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
     const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
     const valor = parseFloat(document.getElementById("campo-valor-equipamento").value);
@@ -1149,6 +1178,15 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       mensagem.className = "mensagem sucesso";
       mensagem.innerHTML = `Pedido nº ${resultadoId} confirmado!${textoNota}${textoBoleto} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
 
+    } else if (tipoOperacao === "bonificacao") {
+      // AINDA NAO IMPLEMENTADO - depende de eu ver a funcao confirmar_pedido
+      // atual pra saber se da' pra reaproveitar ela (com parcelas=0) ou se
+      // precisa de uma rpc nova (ex: confirmar_bonificacao). Por enquanto
+      // so' avisa - nao deixa a pessoa achar que enviou algo que nao foi.
+      throw new Error(
+        "Bonificação ainda não está pronta nessa tela — só a interface foi montada. " +
+        "Peça pro Raphael finalizar a parte de gravação antes de usar."
+      );
 
     } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
       const descricao = document.getElementById("campo-descricao-equipamento").value.trim();
