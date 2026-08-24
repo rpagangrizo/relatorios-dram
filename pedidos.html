@@ -178,6 +178,28 @@ async function chamarFunction(nome, corpo) {
   return { ok: resposta.ok, dados };
 }
 
+// consulta de novo o status da nota na Focus/SEFAZ (NUNCA reemite - so'
+// chama consultar-nota-fiscal, que so' consulta e grava o que encontrar).
+// Usada tanto pra nota ainda "processando" quanto pra nota com erro, pra
+// saber se algo mudou (ex: voce corrigiu o cadastro e quer conferir).
+async function verificarStatusNotaDoPedido(pedidoId, botao) {
+  botao.disabled = true;
+  botao.textContent = "Verificando...";
+  try {
+    const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId });
+    if (!ok && dados.erro) {
+      alert(`Não consegui verificar: ${dados.erro}`);
+    }
+    // recarrega a lista inteira, mais simples e seguro que tentar
+    // remontar so' aquela linha - reflete o status mais atual de tudo
+    await carregarPedidos();
+  } catch (erro) {
+    alert(`Erro: ${erro.message}`);
+    botao.disabled = false;
+    botao.textContent = "Verificar status";
+  }
+}
+
 async function cancelarNotaDoPedido(pedidoId, botao) {
   const justificativa = window.prompt(
     "Motivo do cancelamento (mínimo 15 caracteres). Isso vai cancelar a nota E devolver o estoque:"
@@ -229,8 +251,17 @@ function dataBrParaIso(texto) {
 }
 
 let pedidos = [];
-let notaAutorizadaPorPedido = new Map();
+let notaMaisRecentePorPedido = new Map();
 let boletosPorPedido = new Map();
+
+// extrai um texto de erro legivel da resposta da Focus/SEFAZ guardada -
+// os dois formatos mais comuns sao {mensagem_sefaz} (rejeicao da SEFAZ,
+// vinda do consultar-nota-fiscal) e {mensagem} (erro de validacao antes
+// de chegar na SEFAZ, tipo XML mal formado)
+function extrairMotivoErroNota(respostaBruta) {
+  if (!respostaBruta) return "erro desconhecido";
+  return respostaBruta.mensagem_sefaz || respostaBruta.mensagem || "erro desconhecido";
+}
 
 async function carregarPedidos() {
   const corpo = document.getElementById("corpo-tabela");
@@ -239,11 +270,13 @@ async function carregarPedidos() {
   corpo.innerHTML = "";
   try {
     pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,clientes(nome)&order=criado_em.desc");
+    // busca TODAS as notas (nao so' autorizado/cancelado) - precisamos da
+    // mais recente de cada pedido pra saber se ainda esta' processando,
+    // se deu erro (e qual), ou se realmente nunca foi tentada
     const notas = await chamarSupabase("notas_fiscais?select=id,pedido_id,status,resposta_bruta&pedido_id=not.is.null&order=criado_em.desc");
-    notaAutorizadaPorPedido = new Map();
+    notaMaisRecentePorPedido = new Map();
     for (const n of notas) {
-      if (n.status !== "autorizado" && n.status !== "cancelado") continue;
-      if (!notaAutorizadaPorPedido.has(n.pedido_id)) notaAutorizadaPorPedido.set(n.pedido_id, n);
+      if (!notaMaisRecentePorPedido.has(n.pedido_id)) notaMaisRecentePorPedido.set(n.pedido_id, n);
     }
 
     const [boletosBrutos, parcelas] = await Promise.all([
@@ -303,7 +336,7 @@ function desenharTabela() {
       if (statusCancelado) {
         notaTexto = "Cancelada";
       } else {
-        const nota = notaAutorizadaPorPedido.get(p.id);
+        const nota = notaMaisRecentePorPedido.get(p.id);
         if (nota && nota.status === "autorizado") {
           notaTexto = `Nº ${(nota.resposta_bruta && nota.resposta_bruta.numero) || "—"}`;
           const caminhoDanfe = nota.resposta_bruta && nota.resposta_bruta.caminho_danfe;
@@ -317,7 +350,20 @@ function desenharTabela() {
           botoesNota += `<button type="button" class="botao-nf perigo" data-pedido="${p.id}" data-acao="cancelar-nf">Cancelar</button>`;
         } else if (nota && nota.status === "cancelado") {
           notaTexto = "Cancelada";
+        } else if (nota) {
+          // ja existe pelo menos 1 tentativa (processando, erro ou
+          // erro_autorizacao) - mostra o motivo se for erro, e oferece
+          // "Verificar status" (consulta de novo, nunca reemite)
+          if (nota.status === "erro" || nota.status === "erro_autorizacao") {
+            notaTexto = `Pendente — ${extrairMotivoErroNota(nota.resposta_bruta)}`;
+          } else {
+            notaTexto = "Pendente";
+          }
+          botoesNota += `<button type="button" class="botao-nf" data-pedido="${p.id}" data-acao="verificar-status">Verificar status</button>`;
         } else {
+          // com_nota_fiscal marcado mas NENHUMA tentativa ainda - nao ha'
+          // nada pra "verificar" (isso seria emitir pela primeira vez,
+          // acao diferente e fora do escopo desse botao)
           notaTexto = "Pendente";
         }
       }
@@ -352,6 +398,12 @@ function desenharTabela() {
     botao.addEventListener("click", (evento) => {
       evento.stopPropagation();
       cancelarNotaDoPedido(Number(botao.dataset.pedido), botao);
+    });
+  });
+  corpo.querySelectorAll('[data-acao="verificar-status"]').forEach(botao => {
+    botao.addEventListener("click", (evento) => {
+      evento.stopPropagation();
+      verificarStatusNotaDoPedido(Number(botao.dataset.pedido), botao);
     });
   });
 }
