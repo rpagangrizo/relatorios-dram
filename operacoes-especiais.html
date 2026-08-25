@@ -48,7 +48,7 @@
   .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 
   .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; }
+  table { width: 100%; min-width: 960px; border-collapse: collapse; }
   thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 10px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
   thead th.num { text-align: right; }
   tbody td { padding: 12px 14px; border-bottom: 1px solid var(--linha); font-size: 14px; }
@@ -71,7 +71,7 @@
   .selo-nota.pendente { color: #92600C; font-weight: 700; }
   .selo-nota.cancelada { color: var(--vermelho); font-weight: 700; }
 
-  .botoes-nf-linha { display: flex; gap: 6px; margin-top: 6px; }
+  .botoes-nf-linha { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; max-width: 160px; }
   .botao-nf {
     padding: 4px 10px; border-radius: 7px; border: 1.5px solid var(--linha); background: #fff;
     font-size: 11.5px; font-weight: 700; cursor: pointer; color: var(--azul); text-decoration: none; white-space: nowrap;
@@ -173,7 +173,7 @@
 <script>
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
-const FOCUS_BASE_URL = "https://homologacao.focusnfe.com.br"; // homologação por enquanto
+const FOCUS_BASE_URL = "https://api.focusnfe.com.br"; // produção (estava apontando pra homologação por engano)
 const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 function obterSessao() {
@@ -322,6 +322,10 @@ function desenharTabela() {
         const caminhoDanfe = nota.resposta_bruta && nota.resposta_bruta.caminho_danfe;
         if (caminhoDanfe) {
           botoesNota += `<a class="botao-nf" href="${FOCUS_BASE_URL}${caminhoDanfe}" target="_blank" rel="noopener">Ver NF</a>`;
+        }
+        const caminhoXml = nota.resposta_bruta && nota.resposta_bruta.caminho_xml_nota_fiscal;
+        if (caminhoXml) {
+          botoesNota += `<a class="botao-nf" href="${FOCUS_BASE_URL}${caminhoXml}" target="_blank" rel="noopener" download>XML</a>`;
         }
         botoesNota += `<button type="button" class="botao-nf perigo" data-operacao="${op.id}" data-acao="cancelar-nf">Cancelar</button>`;
       } else if (nota && nota.status === "cancelado") {
