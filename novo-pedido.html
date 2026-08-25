@@ -292,7 +292,15 @@
             <thead><tr><th>Item</th><th class="num">Qtd.</th><th class="num">Preço</th><th class="num">Subtotal</th><th></th></tr></thead>
             <tbody id="corpo-itens-pedido"></tbody>
           </table>
-          <div class="total-caixa" id="total-caixa">
+          <div class="total-caixa" id="total-caixa" style="display:none">
+            <span>Subtotal dos itens</span>
+            <span class="valor" id="valor-subtotal-itens">R$ 0,00</span>
+          </div>
+          <div class="campo" id="campo-frete-container" style="display:none">
+            <label>Frete (R$)</label>
+            <input type="number" id="campo-frete" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <div class="total-caixa" id="total-caixa-geral" style="display:none; background:var(--azul-claro)">
             <span>Total do pedido</span>
             <span class="valor" id="valor-total-pedido">R$ 0,00</span>
           </div>
@@ -497,6 +505,21 @@ function formatarMoeda(valor) {
   return "R$ " + Number(valor || 0).toFixed(2).replace(".", ",");
 }
 
+// --- subtotal/frete/total centralizados - todo lugar que precisa do
+// total do pedido usa essas 3 funcoes, garantindo que a soma dos itens,
+// o frete e as parcelas nunca fiquem dessincronizados entre si. Frete so'
+// existe pra Venda (Bonificacao/Transferencia nao tem esse campo na tela).
+function obterSubtotalItens() {
+  return itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+}
+function obterFrete() {
+  if (tipoOperacao !== "venda") return 0;
+  return parseFloat(document.getElementById("campo-frete").value) || 0;
+}
+function obterTotalPedido() {
+  return obterSubtotalItens() + obterFrete();
+}
+
 // --- forma de pagamento em falta: quando o cliente escolhido nao tem
 // forma_pagamento cadastrada, usa o que foi preenchido na caixa de aviso
 // (ainda nao salvo no cadastro dele) como "valor efetivo" pra tudo que
@@ -577,6 +600,7 @@ function aplicarTipoOperacaoNaTela() {
   document.getElementById("select-deposito-destino").value = "";
   document.getElementById("cartao-desconto-boleto").style.display = "none";
   document.getElementById("campo-observacoes").value = "";
+  document.getElementById("campo-frete").value = "";
   abrirCartao("cliente");
   abrirCartao("equipamento");
   abrirCartao("itens");
@@ -666,7 +690,7 @@ function gerarParcelasPadrao() {
 
 function desenharParcelas() {
   const alvo = document.getElementById("linhas-parcelas");
-  const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+  const total = obterTotalPedido();
   const valores = distribuirValoresParcelas(total, parcelasPedido.length);
 
   alvo.innerHTML = parcelasPedido.map((p, indice) => `
@@ -707,7 +731,7 @@ document.getElementById("botao-add-parcela").addEventListener("click", () => {
 ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
   () => parcelasPedido.length > 0 && parcelasPedido.every(p => p.data_vencimento),
   () => {
-    const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+    const total = obterTotalPedido();
     return `${parcelasPedido.length} parcela${parcelasPedido.length > 1 ? "s" : ""} · ${formatarMoeda(total)}`;
   });
 
@@ -953,16 +977,23 @@ function adicionarItemAoPedido(itemId, nome) {
 function desenharTabelaItensPedido() {
   const tabela = document.getElementById("tabela-itens-pedido");
   const totalCaixa = document.getElementById("total-caixa");
+  const freteContainer = document.getElementById("campo-frete-container");
+  const totalCaixaGeral = document.getElementById("total-caixa-geral");
   const corpo = document.getElementById("corpo-itens-pedido");
 
   if (itensPedido.length === 0) {
     tabela.style.display = "none";
     totalCaixa.style.display = "none";
+    freteContainer.style.display = "none";
+    totalCaixaGeral.style.display = "none";
     atualizarBotaoConfirmar();
     return;
   }
   tabela.style.display = "table";
   totalCaixa.style.display = "flex";
+  // frete so' existe pra Venda - Bonificacao/Transferencia nao mostram o campo
+  freteContainer.style.display = tipoOperacao === "venda" ? "block" : "none";
+  totalCaixaGeral.style.display = "flex";
 
   corpo.innerHTML = itensPedido.map((item, indice) => {
     const saldo = saldosEstoque.get(item.item_id) || 0;
@@ -1024,11 +1055,12 @@ function atualizarLinhaItemSemRedesenhar(indice) {
 }
 
 function atualizarTotaisGerais() {
-  const total = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
-  document.getElementById("valor-total-pedido").textContent = formatarMoeda(total);
+  document.getElementById("valor-subtotal-itens").textContent = formatarMoeda(obterSubtotalItens());
+  document.getElementById("valor-total-pedido").textContent = formatarMoeda(obterTotalPedido());
   if (parcelasPedido.length > 0) desenharParcelas();
   atualizarBotaoConfirmar();
 }
+document.getElementById("campo-frete").addEventListener("input", atualizarTotaisGerais);
 
 // Itens fica sempre exposto (sem fechamento automático nem manual) - a
 // lista pode ficar grande, e o usuario quer ver ela inteira o tempo todo
@@ -1144,7 +1176,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         if (indiceCliente >= 0) clientes[indiceCliente] = { ...clientes[indiceCliente], ...clienteEscolhido };
       }
 
-      const totalFinal = itensPedido.reduce((soma, i) => soma + i.quantidade * (i.preco_unitario || 0), 0);
+      const totalFinal = obterTotalPedido();
       const valoresParcelas = distribuirValoresParcelas(totalFinal, parcelasPedido.length);
       const parcelasDetalhe = parcelasPedido.map((p, indice) => ({
         numero_parcela: p.numero_parcela,
@@ -1172,6 +1204,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
           p_observacoes: document.getElementById("campo-observacoes").value.trim() || null,
           p_desconto_boleto_tipo: descontoTipo,
           p_desconto_boleto_valor: descontoValor,
+          p_valor_frete: obterFrete(),
         }),
       });
 
@@ -1288,6 +1321,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     document.getElementById("cartao-parcelas").classList.add("desabilitado");
     document.getElementById("campo-emite-nota").checked = false;
     document.getElementById("campo-observacoes").value = "";
+    document.getElementById("campo-frete").value = "";
     document.getElementById("campo-descricao-equipamento").value = "";
     document.getElementById("campo-valor-equipamento").value = "";
     document.getElementById("cartao-desconto-boleto").style.display = "none";
