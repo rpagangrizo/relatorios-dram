@@ -7,6 +7,9 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#1B4F72">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <script>
   // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
   // (ou expirada), manda direto pra tela de login, antes de qualquer
@@ -415,11 +418,13 @@ async function gerarBoletosDoPedido(pedidoId) {
 // como erro (que nao e'), consulta de novo por algumas vezes ate' o status
 // definitivo (autorizado, erro_autorizacao, etc) sair - ou desiste depois
 // de um tempo e avisa que ainda esta processando, sem soar como falha.
-async function aguardarStatusFinalNota(pedidoId, tentativas = 6, intervaloMs = 2500) {
+// "parametroConsulta" e' {pedido_id: X} pra venda/bonificacao, ou
+// {operacao_id: X} pra comodato/devolucao/transferencia.
+async function aguardarStatusFinalNota(parametroConsulta, tentativas = 6, intervaloMs = 2500) {
   for (let i = 0; i < tentativas; i++) {
     await new Promise((resolver) => setTimeout(resolver, intervaloMs));
     try {
-      const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId });
+      const { ok, dados } = await chamarFunction("consultar-nota-fiscal", parametroConsulta);
       if (ok && dados.focus && dados.focus.status && dados.focus.status !== "processando_autorizacao") {
         return dados.focus;
       }
@@ -1123,7 +1128,7 @@ async function emitirNotaFiscalDoPedido(pedidoId, botao) {
 
     if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
       botao.textContent = "Aguardando autorização da SEFAZ...";
-      const resultadoEspera = await aguardarStatusFinalNota(pedidoId);
+      const resultadoEspera = await aguardarStatusFinalNota({ pedido_id: pedidoId });
       if (resultadoEspera) focusFinal = resultadoEspera;
     }
 
@@ -1140,6 +1145,37 @@ async function emitirNotaFiscalDoPedido(pedidoId, botao) {
     }
   } catch (erro) {
     return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Pedidos.`, autorizada: false };
+  }
+}
+
+// mesma logica de emitirNotaFiscalDoPedido, so' que pra Comodato/Devolução/
+// Transferência - essas usam a Edge Function emitir-nota-especial (nao
+// emitir-nota-fiscal) e sao identificadas por operacao_id (nao pedido_id).
+async function emitirNotaEspecialDaOperacao(operacaoId, botao) {
+  botao.textContent = "Emitindo nota fiscal...";
+  try {
+    const { ok, dados } = await chamarFunction("emitir-nota-especial", { operacao_id: operacaoId });
+    let focusFinal = dados.focus;
+
+    if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
+      botao.textContent = "Aguardando autorização da SEFAZ...";
+      const resultadoEspera = await aguardarStatusFinalNota({ operacao_id: operacaoId });
+      if (resultadoEspera) focusFinal = resultadoEspera;
+    }
+
+    if (focusFinal && focusFinal.status === "autorizado") {
+      return { texto: ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`, autorizada: true };
+    } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
+      return {
+        texto: ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Operações Especiais.`,
+        autorizada: false,
+      };
+    } else {
+      const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
+      return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Operações Especiais.`, autorizada: false };
+    }
+  } catch (erro) {
+    return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Operações Especiais.`, autorizada: false };
   }
 }
 
@@ -1273,8 +1309,12 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
           p_pessoa: pessoa,
         }),
       });
+
+      // comodato/devolucao SEMPRE emite nota - sem checkbox, direto
+      const textoNotaEspecial = (await emitirNotaEspecialDaOperacao(resultadoId, botao)).texto;
+
       mensagem.className = "mensagem sucesso";
-      mensagem.textContent = `${tipoOperacao === "comodato" ? "Comodato" : "Devolução de comodato"} nº ${resultadoId} registrado(a) com sucesso.`;
+      mensagem.textContent = `${tipoOperacao === "comodato" ? "Comodato" : "Devolução de comodato"} nº ${resultadoId} registrado(a) com sucesso.${textoNotaEspecial}`;
 
     } else if (tipoOperacao === "transferencia") {
       const precisaNota = determinarNotaFiscalTransferencia();
@@ -1300,9 +1340,15 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
           p_pessoa: pessoa,
         }),
       });
+
+      let textoNotaTransferencia = "";
+      if (precisaNota) {
+        textoNotaTransferencia = (await emitirNotaEspecialDaOperacao(resultadoId, botao)).texto;
+      }
+
       mensagem.className = "mensagem sucesso";
       mensagem.textContent = `Transferência nº ${resultadoId} registrada com sucesso.` +
-        (precisaNota ? " Precisa emitir nota fiscal (envolve a Filial)." : " Sem necessidade de nota (só entre depósitos da Matriz).");
+        (precisaNota ? textoNotaTransferencia : " Sem necessidade de nota (só entre depósitos da Matriz).");
     }
 
     itensPedido = [];
