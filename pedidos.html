@@ -178,6 +178,37 @@ async function chamarFunction(nome, corpo) {
   return { ok: resposta.ok, dados };
 }
 
+// gera o boleto de cada parcela do pedido que ainda nao tenha um boleto
+// registrado - usado depois que a nota autoriza (na hora, ou tarde, via
+// "Verificar status"), pra fechar o ciclo sozinho sem precisar rodar nada
+// na mao no painel do Supabase. So' mexe em pedido com forma_pagamento
+// boleto - resto (pix, deposito, sem forma) nao tem boleto pra gerar.
+async function gerarBoletosSeNecessario(pedidoId) {
+  const pedido = pedidos.find(p => p.id === pedidoId);
+  if (!pedido || pedido.forma_pagamento !== "boleto") return null;
+
+  const parcelas = await chamarSupabase(`pedido_parcelas?pedido_id=eq.${pedidoId}&select=id,numero_parcela`);
+  if (parcelas.length === 0) return null;
+
+  const boletosExistentes = await chamarSupabase(
+    `boletos?pedido_id=eq.${pedidoId}&status=eq.registrado&select=pedido_parcela_id`
+  );
+  const parcelasComBoleto = new Set(boletosExistentes.map(b => b.pedido_parcela_id));
+  const parcelasFaltando = parcelas.filter(p => !parcelasComBoleto.has(p.id));
+  if (parcelasFaltando.length === 0) return null;
+
+  const resultados = [];
+  for (const parcela of parcelasFaltando) {
+    try {
+      const { ok } = await chamarFunction("emitir-boleto", { pedido_parcela_id: parcela.id });
+      resultados.push({ numero_parcela: parcela.numero_parcela, ok });
+    } catch {
+      resultados.push({ numero_parcela: parcela.numero_parcela, ok: false });
+    }
+  }
+  return resultados;
+}
+
 // consulta de novo o status da nota na Focus/SEFAZ (NUNCA reemite - so'
 // chama consultar-nota-fiscal, que so' consulta e grava o que encontrar).
 // Usada tanto pra nota ainda "processando" quanto pra nota com erro, pra
@@ -189,6 +220,13 @@ async function verificarStatusNotaDoPedido(pedidoId, botao) {
     const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId });
     if (!ok && dados.erro) {
       alert(`Não consegui verificar: ${dados.erro}`);
+    }
+    // se a nota acabou de autorizar agora, aproveita e ja' gera o(s)
+    // boleto(s) pendente(s) desse pedido - fecha o ciclo sem precisar
+    // clicar em mais nada depois
+    if (ok && dados.focus && dados.focus.status === "autorizado") {
+      botao.textContent = "Gerando boleto...";
+      await gerarBoletosSeNecessario(pedidoId);
     }
     // recarrega a lista inteira, mais simples e seguro que tentar
     // remontar so' aquela linha - reflete o status mais atual de tudo
@@ -269,7 +307,7 @@ async function carregarPedidos() {
   mensagem.innerHTML = `<div class="carregando">Carregando pedidos...</div>`;
   corpo.innerHTML = "";
   try {
-    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,clientes(nome)&order=criado_em.desc");
+    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,forma_pagamento,clientes(nome)&order=criado_em.desc");
     // busca TODAS as notas (nao so' autorizado/cancelado) - precisamos da
     // mais recente de cada pedido pra saber se ainda esta' processando,
     // se deu erro (e qual), ou se realmente nunca foi tentada
