@@ -1096,15 +1096,18 @@ async function emitirNotaFiscalDoPedido(pedidoId, botao) {
     }
 
     if (focusFinal && focusFinal.status === "autorizado") {
-      return ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`;
+      return { texto: ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`, autorizada: true };
     } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
-      return ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Pedidos.`;
+      return {
+        texto: ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Pedidos (o boleto sai sozinho assim que a nota autorizar, ou clique em "Verificar status" lá).`,
+        autorizada: false,
+      };
     } else {
       const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
-      return ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Pedidos.`;
+      return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Pedidos.`, autorizada: false };
     }
   } catch (erro) {
-    return ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Pedidos.`;
+    return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Pedidos.`, autorizada: false };
   }
 }
 
@@ -1173,12 +1176,21 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       });
 
       let textoNota = "";
+      let notaAutorizada = !document.getElementById("campo-emite-nota").checked; // sem nota marcada, nada bloqueia o boleto
       if (document.getElementById("campo-emite-nota").checked) {
-        textoNota = await emitirNotaFiscalDoPedido(resultadoId, botao);
+        const resultadoNota = await emitirNotaFiscalDoPedido(resultadoId, botao);
+        textoNota = resultadoNota.texto;
+        notaAutorizada = resultadoNota.autorizada;
       }
 
       let textoBoleto = "";
-      if (ehBoleto) {
+      if (ehBoleto && !notaAutorizada) {
+        // a nota ainda nao autorizou (ex: SEFAZ demorou mais que o tempo de
+        // espera) - NAO tenta o boleto agora, porque ele so' ia falhar com
+        // "nota nao autorizada ainda". O botao "Verificar status" na tela
+        // de Pedidos gera o boleto sozinho assim que a nota autorizar.
+        textoBoleto = ` ⏳ Boleto será gerado assim que a nota autorizar (confira/clique "Verificar status" na tela de Pedidos).`;
+      } else if (ehBoleto) {
         botao.textContent = "Gerando boleto(s)...";
         const resultadosBoletos = await gerarBoletosDoPedido(resultadoId);
         const falhas = resultadosBoletos.filter(r => !r.ok);
@@ -1207,7 +1219,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       });
 
       // bonificacao sempre emite nota - sem checkbox, sem forma de pagamento/boleto
-      const textoNotaBonificacao = await emitirNotaFiscalDoPedido(resultadoId, botao);
+      const textoNotaBonificacao = (await emitirNotaFiscalDoPedido(resultadoId, botao)).texto;
 
       mensagem.className = "mensagem sucesso";
       mensagem.innerHTML = `Bonificação nº ${resultadoId} confirmada!${textoNotaBonificacao} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
