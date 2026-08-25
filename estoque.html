@@ -345,10 +345,19 @@ function compararItensPorEmbalagemENome(a, b) {
   const pesoA = a.embalagem === "100g" ? 0 : 1;
   const pesoB = b.embalagem === "100g" ? 0 : 1;
   if (pesoA !== pesoB) return pesoA - pesoB;
-  // dentro do mesmo grupo (100g ou barra), produtos "Sandro" vao por ultimo
+  // dentro do mesmo grupo (100g ou barra), produtos "Sandro" vao depois
+  // dos sabores normais, e "caixa mista" (ex: "Manga/Acerola") vai
+  // sempre por ultimo de todos - e' um produto diferente dentro da mesma
+  // embalagem, nao um sabor puro. O "/" e' procurado so' na parte do
+  // nome ANTES do " - " (onde fica o sabor) - depois disso vem sempre
+  // "CX c/ ..." (o "c/" de "com"), que tambem tem uma barra e daria
+  // falso positivo se checasse o nome inteiro.
   const sandroA = a.nome.toLowerCase().includes("sandro") ? 1 : 0;
   const sandroB = b.nome.toLowerCase().includes("sandro") ? 1 : 0;
   if (sandroA !== sandroB) return sandroA - sandroB;
+  const mistaA = a.nome.split(" - ")[0].includes("/") ? 1 : 0;
+  const mistaB = b.nome.split(" - ")[0].includes("/") ? 1 : 0;
+  if (mistaA !== mistaB) return mistaA - mistaB;
   return a.nome.localeCompare(b.nome, "pt-BR");
 }
 
