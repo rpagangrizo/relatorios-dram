@@ -501,6 +501,14 @@ let tipoOperacao = "venda"; // 'venda' | 'bonificacao' | 'comodato' | 'devolucao
 // destinatario automatico quando a transferencia envolve o deposito dela.
 const CNPJ_FILIAL = "13086597000261";
 
+// tabela de preco dedicada pra Transferencia (cadastrada na tela de
+// Tabelas de Preco, com esse nome exato) - transferencia nao tem
+// "cliente" pra puxar preco automatico, entao usa essa tabela fixa em
+// vez disso. Se ela nao existir ainda, o preco so' fica vazio pra
+// digitar na mao (sem quebrar nada).
+const NOME_TABELA_PRECO_TRANSFERENCIA = "Transferência Interna";
+let tabelaPrecoTransferenciaId = null;
+
 function nomeDepositoContem(depositoId, trecho) {
   const dep = depositos.find(d => d.id === depositoId);
   return dep ? dep.nome.toLowerCase().includes(trecho.toLowerCase()) : false;
@@ -578,12 +586,12 @@ function ativarFechamentoAutomatico(idConteudo, idCartao, condicaoCompleta, gera
   });
 }
 
-document.getElementById("select-tipo-operacao").addEventListener("change", (e) => {
+document.getElementById("select-tipo-operacao").addEventListener("change", async (e) => {
   tipoOperacao = e.target.value;
-  aplicarTipoOperacaoNaTela();
+  await aplicarTipoOperacaoNaTela();
 });
 
-function aplicarTipoOperacaoNaTela() {
+async function aplicarTipoOperacaoNaTela() {
   // reseta selecoes ao trocar de tipo, pra nao misturar dado de um fluxo com outro
   clienteEscolhido = null;
   depositoEscolhidoId = null;
@@ -620,6 +628,17 @@ function aplicarTipoOperacaoNaTela() {
   // bonificacao usa a mesma tela de itens/deposito que venda, so' sem
   // parcelas/forma de pagamento (nao ha' cobranca)
   const usaCartaoItens = ehVenda || ehBonificacao || ehTransferencia;
+
+  // transferencia nao tem "cliente" pra puxar tabela de preco dele (o
+  // cartao de cliente nem aparece) - entao usa uma tabela de preco fixa,
+  // dedicada, identificada pelo nome (ver NOME_TABELA_PRECO_TRANSFERENCIA
+  // no topo do arquivo). Se essa tabela ainda nao existir/nao tiver preco
+  // pro produto, o campo so' fica vazio pra digitar na mao, sem erro.
+  precosTabela.clear();
+  if (ehTransferencia && tabelaPrecoTransferenciaId) {
+    const precos = await chamarSupabase(`tabela_preco_itens?select=item_id,preco&tabela_id=eq.${tabelaPrecoTransferenciaId}`);
+    for (const p of precos) if (p.preco !== null) precosTabela.set(p.item_id, Number(p.preco));
+  }
 
   document.getElementById("cartao-cliente").style.display = ehTransferencia ? "none" : "";
   document.getElementById("titulo-cartao-cliente").textContent =
@@ -741,10 +760,15 @@ ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
   });
 
 async function iniciar() {
-  [clientes, depositos] = await Promise.all([
+  const [clientesResp, depositosResp, tabelasPrecoResp] = await Promise.all([
     chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota&order=nome"),
     chamarSupabase("depositos?select=id,nome&order=id"),
+    chamarSupabase("tabelas_preco?select=id,nome"),
   ]);
+  clientes = clientesResp;
+  depositos = depositosResp;
+  const tabelaTransferencia = tabelasPrecoResp.find(t => t.nome === NOME_TABELA_PRECO_TRANSFERENCIA);
+  tabelaPrecoTransferenciaId = tabelaTransferencia ? tabelaTransferencia.id : null;
   popularSelectsDeposito();
   await carregarEquipamentosComodato();
 }
