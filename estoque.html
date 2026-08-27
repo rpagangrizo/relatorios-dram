@@ -550,14 +550,18 @@ async function editarNomeItem(itemId) {
   const item = dadosMateriaPrima.itens.find(i => i.id === itemId);
   if (!item) return;
   const novoNome = window.prompt("Corrigir nome do item:", item.nome);
-  if (!novoNome || !novoNome.trim() || novoNome.trim() === item.nome) return;
+  if (novoNome === null || !novoNome.trim()) return; // cancelou ou deixou vazio
 
   try {
-    await chamarSupabase(`itens_materia_prima?id=eq.${itemId}`, {
+    const atualizados = await chamarSupabase(`itens_materia_prima?id=eq.${itemId}`, {
       method: "PATCH",
-      headers: { "Prefer": "return=minimal" },
+      headers: { "Prefer": "return=representation" },
       body: JSON.stringify({ nome: novoNome.trim() }),
     });
+    if (!atualizados || atualizados.length === 0) {
+      alert("Não encontrei esse item pra atualizar (id não bateu com nada no banco).");
+      return;
+    }
     await carregarMateriaPrima();
   } catch (erro) {
     alert(`Não consegui corrigir: ${erro.message}`);
@@ -569,17 +573,21 @@ async function editarNomeItem(itemId) {
 // tambor E saco, os dois viram "L001" juntos, sem separar os dois)
 async function editarLote(itemId, loteAtual) {
   const novoLote = window.prompt("Corrigir texto do lote:", loteAtual);
-  if (!novoLote || !novoLote.trim() || novoLote.trim() === loteAtual) return;
+  if (novoLote === null || !novoLote.trim()) return; // cancelou ou deixou vazio
 
   try {
-    await chamarSupabase(
+    const atualizados = await chamarSupabase(
       `estoque_materia_prima_lote?item_id=eq.${itemId}&lote=eq.${encodeURIComponent(loteAtual)}`,
       {
         method: "PATCH",
-        headers: { "Prefer": "return=minimal" },
+        headers: { "Prefer": "return=representation" },
         body: JSON.stringify({ lote: novoLote.trim() }),
       },
     );
+    if (!atualizados || atualizados.length === 0) {
+      alert(`Não encontrei nenhuma linha com o lote "${loteAtual}" pra esse item — o filtro não bateu com nada no banco.`);
+      return;
+    }
     await carregarMateriaPrima();
   } catch (erro) {
     alert(`Não consegui corrigir: ${erro.message}`);
