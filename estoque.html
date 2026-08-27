@@ -209,6 +209,16 @@
   }
   tbody tr.linha-categoria:hover { background: #F6F9FA; }
 
+  tbody tr.linha-lote td {
+    font-size: 12.5px;
+    color: var(--texto-suave);
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed var(--linha);
+  }
+  tbody tr.linha-lote .celula-lote { padding-left: 30px; }
+  tbody tr.linha-lote:hover { background: #FAFBFC; }
+
   .selo {
     display: inline-flex;
     align-items: center;
@@ -457,7 +467,24 @@ async function carregarMateriaPrima() {
     for (const linha of estoque) {
       saldos.set(linha.item_id, Number(linha.quantidade));
     }
-    dadosMateriaPrima = { itens, saldos };
+
+    // busca os lotes separado, com fallback seguro - se a tabela ainda nao
+    // existir (migracao de lote ainda nao rodou), so' nao mostra o
+    // detalhamento por lote, sem quebrar a tela toda
+    let lotesPorItem = new Map();
+    try {
+      const lotes = await chamarSupabase(
+        "estoque_materia_prima_lote?select=item_id,lote,tipo_embalagem,capacidade_kg,quantidade_unidades,peso_total_kg&order=lote",
+      );
+      for (const l of lotes) {
+        if (!lotesPorItem.has(l.item_id)) lotesPorItem.set(l.item_id, []);
+        lotesPorItem.get(l.item_id).push(l);
+      }
+    } catch {
+      // tabela ainda nao existe - segue sem detalhamento de lote
+    }
+
+    dadosMateriaPrima = { itens, saldos, lotesPorItem };
     desenharMateriaPrima("");
   } catch (erro) {
     alvo.innerHTML = `<div class="erro">Não consegui carregar a matéria-prima. ${erro.message}</div>`;
@@ -470,7 +497,7 @@ function formatarMoeda(valor) {
 
 function desenharMateriaPrima(filtro) {
   const alvo = document.getElementById("conteudo-materia");
-  const { itens, saldos } = dadosMateriaPrima;
+  const { itens, saldos, lotesPorItem } = dadosMateriaPrima;
   const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
 
   if (itensFiltrados.length === 0) {
@@ -480,12 +507,24 @@ function desenharMateriaPrima(filtro) {
     return;
   }
 
-  let html = `<table><thead><tr><th>Item</th><th class="num">Quantidade</th><th class="num">Custo médio</th></tr></thead><tbody>`;
+  let html = `<table><thead><tr><th>Item / Lote</th><th class="num">Quantidade</th><th class="num">Custo médio</th></tr></thead><tbody>`;
   for (const item of itensFiltrados) {
     const qtd = saldos.get(item.id) || 0;
     const custoTexto = item.custo_medio !== null && item.custo_medio !== undefined
       ? formatarMoeda(item.custo_medio) : "—";
     html += `<tr><td>${item.nome}</td><td class="num">${celulaSelo(qtd)}</td><td class="num">${custoTexto}</td></tr>`;
+
+    // sub-linhas: um lote pode ter mais de uma embalagem (ex: mesmo lote
+    // com tambores de 190kg E sacos de 25kg) - cada combinacao vira uma
+    // linha propria, so' mostra as que ainda tem saldo
+    const lotesDoItem = (lotesPorItem.get(item.id) || []).filter(l => l.quantidade_unidades > 0);
+    for (const lote of lotesDoItem) {
+      html += `<tr class="linha-lote">
+        <td class="celula-lote">Lote ${lote.lote} — ${lote.tipo_embalagem} ${Number(lote.capacidade_kg)}kg</td>
+        <td class="num">${lote.quantidade_unidades} un. (${Number(lote.peso_total_kg).toLocaleString("pt-BR")} kg)</td>
+        <td class="num">—</td>
+      </tr>`;
+    }
   }
   html += `</tbody></table>`;
   alvo.innerHTML = html;
@@ -594,19 +633,30 @@ document.getElementById("botao-exportar-excel-materia").addEventListener("click"
 });
 
 function exportarMateriaPrimaParaExcel() {
-  const { itens, saldos } = dadosMateriaPrima;
+  const { itens, saldos, lotesPorItem } = dadosMateriaPrima;
   const filtroTexto = document.getElementById("campo-busca").value.trim().toLowerCase();
   const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes(filtroTexto));
 
-  const linhas = [["Item", "Quantidade", "Custo médio (R$)"]];
+  const linhas = [["Item", "Lote", "Tipo de embalagem", "Capacidade (kg)", "Nº de unidades", "Quantidade (kg)", "Custo médio (R$)"]];
   for (const item of itensFiltrados) {
     const qtd = saldos.get(item.id) || 0;
     const custo = item.custo_medio !== null && item.custo_medio !== undefined ? Number(item.custo_medio) : "";
-    linhas.push([item.nome, qtd, custo]);
+    // linha de resumo do item (sem lote preenchido)
+    linhas.push([item.nome, "", "", "", "", qtd, custo]);
+
+    // uma linha por lote/embalagem - repete o nome do item, pra filtro e
+    // ordenacao continuarem funcionando normal na planilha
+    const lotesDoItem = (lotesPorItem.get(item.id) || []).filter(l => l.quantidade_unidades > 0);
+    for (const lote of lotesDoItem) {
+      linhas.push([
+        item.nome, lote.lote, lote.tipo_embalagem, Number(lote.capacidade_kg),
+        lote.quantidade_unidades, Number(lote.peso_total_kg), "",
+      ]);
+    }
   }
 
   const planilha = XLSX.utils.aoa_to_sheet(linhas);
-  planilha["!cols"] = [{ wch: 34 }, { wch: 14 }, { wch: 16 }];
+  planilha["!cols"] = [{ wch: 34 }, { wch: 12 }, { wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 16 }];
 
   const pasta = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(pasta, planilha, "Matéria-Prima");
