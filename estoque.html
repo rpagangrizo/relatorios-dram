@@ -547,6 +547,7 @@ function desenharMateriaPrima(filtro) {
 // corrige so' o NOME do item (erro de digitacao) - nunca mexe em
 // quantidade, que so' muda por entrada/saida em Ajustar Estoque
 async function editarNomeItem(itemId) {
+  alert("DEBUG: editarNomeItem foi chamada, itemId=" + itemId);
   const item = dadosMateriaPrima.itens.find(i => i.id === itemId);
   if (!item) return;
   const novoNome = window.prompt("Corrigir nome do item:", item.nome);
