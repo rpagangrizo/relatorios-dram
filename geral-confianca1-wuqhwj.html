@@ -41,7 +41,29 @@
     <a class="botao" href="geral-confianca1-wuqhwj-estoques.html">Estoques</a>
     <a class="botao" href="geral-confianca1-wuqhwj-ordem-producao.html">Ordem de Produção</a>
   </div>
-  <p class="atualizado-em">Atualizado em 28/08/2026 às 09:42</p>
+<script>
+(function() {
+  try {
+    var CHAVE_DEVICE_ID = "dram_device_id_confianca1";
+    var deviceId = localStorage.getItem(CHAVE_DEVICE_ID);
+    if (!deviceId) {
+      deviceId = "dev-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(CHAVE_DEVICE_ID, deviceId);
+    }
+    fetch("https://ictjslaiumgaiphkcxdx.supabase.co/rest/v1/acessos_relatorio_confianca1", {
+      method: "POST",
+      headers: {
+        "apikey": "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX",
+        "Authorization": "Bearer sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX",
+        "Content-Type": "application/json",
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify({ device_id: deviceId, user_agent: navigator.userAgent })
+    }).catch(function() {});
+  } catch (e) {}
+})();
+</script>
+  <p class="atualizado-em">Atualizado em 28/08/2026 às 09:54</p>
   <p class="rodape-dram">Gerado pelo sistema DRAM</p>
 </body>
 </html>
