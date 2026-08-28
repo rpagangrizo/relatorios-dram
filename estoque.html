@@ -333,17 +333,22 @@ const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
 
 
-async function chamarSupabase(caminho) {
+async function chamarSupabase(caminho, opcoes = {}) {
   const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
     headers: {
       "apikey": SUPABASE_KEY,
       "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...(opcoes.headers || {}),
     },
   });
   if (!resposta.ok) {
-    throw new Error(`Erro ${resposta.status} ao buscar ${caminho}`);
+    const corpoErro = await resposta.text();
+    throw new Error(`Erro ${resposta.status} ao acessar ${caminho}: ${corpoErro}`);
   }
-  return resposta.json();
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
 }
 
 function celulaSelo(qtd) {
