@@ -546,8 +546,30 @@ function desenharMateriaPrima(filtro) {
 
 // corrige so' o NOME do item (erro de digitacao) - nunca mexe em
 // quantidade, que so' muda por entrada/saida em Ajustar Estoque
+// mostra uma mensagem temporaria na propria tela (sem usar alert/confirm -
+// o navegador pode bloquear dialogos repetidos na mesma aba depois de
+// mostrar varios seguidos, silenciosamente, sem nenhuma extensao culpada)
+function mostrarMensagemFlutuante(texto, tipo) {
+  let caixa = document.getElementById("mensagem-flutuante");
+  if (!caixa) {
+    caixa = document.createElement("div");
+    caixa.id = "mensagem-flutuante";
+    caixa.style.cssText = "position:fixed; bottom:20px; left:16px; right:16px; max-width:600px; margin:0 auto; " +
+      "padding:13px 16px; border-radius:9px; font-size:14px; font-weight:600; z-index:9999; " +
+      "box-shadow:0 4px 16px rgba(0,0,0,0.15);";
+    document.body.appendChild(caixa);
+  }
+  caixa.style.background = tipo === "erro" ? "#FBE7E4" : "#E4F3E8";
+  caixa.style.color = tipo === "erro" ? "#C0392B" : "#2F8F4E";
+  caixa.textContent = texto;
+  caixa.style.display = "block";
+  clearTimeout(caixa._timeoutId);
+  caixa._timeoutId = setTimeout(() => { caixa.style.display = "none"; }, 4000);
+}
+
+// corrige so' o NOME do item (erro de digitacao) - nunca mexe em
+// quantidade, que so' muda por entrada/saida em Ajustar Estoque
 async function editarNomeItem(itemId) {
-  alert("DEBUG: editarNomeItem foi chamada, itemId=" + itemId);
   const item = dadosMateriaPrima.itens.find(i => i.id === itemId);
   if (!item) return;
   const novoNome = window.prompt("Corrigir nome do item:", item.nome);
@@ -560,12 +582,13 @@ async function editarNomeItem(itemId) {
       body: JSON.stringify({ nome: novoNome.trim() }),
     });
     if (!atualizados || atualizados.length === 0) {
-      alert("Não encontrei esse item pra atualizar (id não bateu com nada no banco).");
+      mostrarMensagemFlutuante("Não encontrei esse item pra atualizar (id não bateu com nada no banco).", "erro");
       return;
     }
     await carregarMateriaPrima();
+    mostrarMensagemFlutuante("Nome corrigido com sucesso.", "sucesso");
   } catch (erro) {
-    alert(`Não consegui corrigir: ${erro.message}`);
+    mostrarMensagemFlutuante(`Não consegui corrigir: ${erro.message}`, "erro");
   }
 }
 
@@ -586,12 +609,13 @@ async function editarLote(itemId, loteAtual) {
       },
     );
     if (!atualizados || atualizados.length === 0) {
-      alert(`Não encontrei nenhuma linha com o lote "${loteAtual}" pra esse item — o filtro não bateu com nada no banco.`);
+      mostrarMensagemFlutuante(`Não encontrei nenhuma linha com o lote "${loteAtual}" pra esse item — o filtro não bateu com nada no banco.`, "erro");
       return;
     }
     await carregarMateriaPrima();
+    mostrarMensagemFlutuante("Lote corrigido com sucesso.", "sucesso");
   } catch (erro) {
-    alert(`Não consegui corrigir: ${erro.message}`);
+    mostrarMensagemFlutuante(`Não consegui corrigir: ${erro.message}`, "erro");
   }
 }
 
