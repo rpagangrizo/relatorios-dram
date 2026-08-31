@@ -88,6 +88,14 @@
   .linha-dupla .campo-mini { flex: 1; margin-bottom: 8px; }
   .campo-mini { margin-bottom: 8px; }
   .campo-mini label { display: block; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); margin-bottom: 4px; }
+
+  .lista-lotes-saida { display: flex; flex-direction: column; gap: 8px; }
+  .opcao-lote { text-align: left; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha); background: #fff; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .opcao-lote .opcao-lote-titulo { font-size: 14.5px; font-weight: 700; color: var(--texto); }
+  .opcao-lote .opcao-lote-detalhe { font-size: 12.5px; color: var(--texto-suave); margin-top: 2px; }
+  .opcao-lote .opcao-lote-saldo { font-size: 13px; font-weight: 700; color: var(--azul); white-space: nowrap; }
+  .opcao-lote.ativa { border-color: var(--vermelho); background: #FBE7E4; }
+  .opcao-lote.ativa .opcao-lote-saldo { color: var(--vermelho); }
 </style>
 </head>
 <body>
@@ -163,32 +171,47 @@
        Controle por lote e' exclusivo de materia-prima. -->
   <div class="passo desabilitado" id="passo-4-materia" style="display:none">
     <h2>4. Lote e embalagem</h2>
-    <div class="campo-mini">
-      <label>Lote (opcional)</label>
-      <input type="text" id="campo-lote" list="lista-lotes-existentes" placeholder="Ex: L001, 15/08...">
-      <datalist id="lista-lotes-existentes"></datalist>
-    </div>
-    <div class="campo-mini">
-      <label>Tipo de embalagem</label>
-      <select id="campo-tipo-embalagem">
-        <option value="">Selecione...</option>
-      </select>
-    </div>
-    <div class="campo-mini" id="caixa-novo-tipo-embalagem" style="display:none">
-      <label>Nome do novo tipo</label>
-      <input type="text" id="campo-novo-tipo-embalagem" placeholder="Ex: Bombona">
-    </div>
-    <div class="linha-dupla">
+
+    <!-- Modo ENTRADA: preenche na mão (pode ser lote novo, ainda nao existente) -->
+    <div id="bloco-entrada-materia">
       <div class="campo-mini">
-        <label>Capacidade (kg)</label>
-        <input type="number" id="campo-capacidade-embalagem" placeholder="0" min="0.01" step="0.01">
+        <label>Lote (opcional)</label>
+        <input type="text" id="campo-lote" list="lista-lotes-existentes" placeholder="Ex: L001, 15/08...">
+        <datalist id="lista-lotes-existentes"></datalist>
       </div>
       <div class="campo-mini">
-        <label>Nº de unidades</label>
-        <input type="number" id="campo-quantidade-unidades" placeholder="0" min="1" step="1">
+        <label>Tipo de embalagem</label>
+        <select id="campo-tipo-embalagem">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+      <div class="campo-mini" id="caixa-novo-tipo-embalagem" style="display:none">
+        <label>Nome do novo tipo</label>
+        <input type="text" id="campo-novo-tipo-embalagem" placeholder="Ex: Bombona">
+      </div>
+      <div class="linha-dupla">
+        <div class="campo-mini">
+          <label>Capacidade (kg)</label>
+          <input type="number" id="campo-capacidade-embalagem" placeholder="0" min="0.01" step="0.01">
+        </div>
+        <div class="campo-mini">
+          <label>Nº de unidades</label>
+          <input type="number" id="campo-quantidade-unidades" placeholder="0" min="1" step="1">
+        </div>
+      </div>
+      <p class="ajuda-campo" id="ajuda-total-kg"></p>
+    </div>
+
+    <!-- Modo SAIDA: escolhe um lote/embalagem que ja existe em estoque, so' digita a quantidade -->
+    <div id="bloco-saida-materia" style="display:none">
+      <p class="ajuda-campo" id="ajuda-sem-lotes" style="display:none">Esse item não tem nenhum lote com saldo em estoque.</p>
+      <div class="lista-lotes-saida" id="lista-lotes-saida"></div>
+      <div class="campo-mini" id="caixa-quantidade-retirada" style="display:none; margin-top:12px">
+        <label>Quantidade a retirar (unidades)</label>
+        <input type="number" id="campo-quantidade-retirada" placeholder="0" min="1" step="1">
+        <p class="ajuda-campo" id="ajuda-quantidade-retirada"></p>
       </div>
     </div>
-    <p class="ajuda-campo" id="ajuda-total-kg"></p>
   </div>
 
   <div class="passo desabilitado" id="passo-custo" style="display:none">
@@ -264,6 +287,7 @@ let produtoEscolhido = null;
 let tipoEscolhido = null;
 let lotesDoItemAtual = [];
 let tiposEmbalagemConhecidos = [];
+let loteSelecionadoSaida = null;
 
 async function carregarEstoques() {
   const depositos = await chamarSupabase("depositos?select=id,nome&order=id");
@@ -391,6 +415,7 @@ async function selecionarProduto(produto) {
   limparCamposLoteEmbalagem();
   if (estoqueEscolhido.tipo === "materia") {
     await carregarLotesDoItem(produtoEscolhido.id);
+    if (tipoEscolhido === "saida") renderizarListaLotesSaida();
   }
   atualizarVisibilidadePassoCusto();
   atualizarBotaoConfirmar();
@@ -455,10 +480,75 @@ function escolherTipo(tipo) {
   document.getElementById("botao-saida").classList.toggle("ativa", tipo === "saida");
   document.getElementById("passo-4").classList.remove("desabilitado");
   document.getElementById("passo-4-materia").classList.remove("desabilitado");
+
+  if (estoqueEscolhido && estoqueEscolhido.tipo === "materia") {
+    document.getElementById("bloco-entrada-materia").style.display = tipo === "entrada" ? "block" : "none";
+    document.getElementById("bloco-saida-materia").style.display = tipo === "saida" ? "block" : "none";
+    if (tipo === "saida") renderizarListaLotesSaida();
+  }
+
   atualizarVisibilidadePassoCusto();
   atualizarAjudaTotalKg();
   atualizarBotaoConfirmar();
 }
+
+function renderizarListaLotesSaida() {
+  loteSelecionadoSaida = null;
+  const caixaQuantidade = document.getElementById("caixa-quantidade-retirada");
+  const campoQuantidade = document.getElementById("campo-quantidade-retirada");
+  caixaQuantidade.style.display = "none";
+  campoQuantidade.value = "";
+
+  const lotesComSaldo = lotesDoItemAtual.filter(l => Number(l.quantidade_unidades) > 0);
+  const alvo = document.getElementById("lista-lotes-saida");
+  const avisoSemLotes = document.getElementById("ajuda-sem-lotes");
+
+  if (lotesComSaldo.length === 0) {
+    alvo.innerHTML = "";
+    avisoSemLotes.style.display = "block";
+    return;
+  }
+  avisoSemLotes.style.display = "none";
+
+  alvo.innerHTML = lotesComSaldo.map((l, indice) => `
+    <div class="opcao-lote" data-indice="${indice}">
+      <div>
+        <div class="opcao-lote-titulo">${l.lote ? "Lote " + l.lote : "Sem lote"} · ${l.tipo_embalagem}</div>
+        <div class="opcao-lote-detalhe">${Number(l.capacidade_kg).toLocaleString("pt-BR")} kg por unidade</div>
+      </div>
+      <div class="opcao-lote-saldo">${l.quantidade_unidades} disponível(is)</div>
+    </div>
+  `).join("");
+
+  alvo.querySelectorAll(".opcao-lote").forEach(cartao => {
+    cartao.addEventListener("click", () => {
+      alvo.querySelectorAll(".opcao-lote").forEach(c => c.classList.remove("ativa"));
+      cartao.classList.add("ativa");
+      loteSelecionadoSaida = lotesComSaldo[Number(cartao.dataset.indice)];
+      caixaQuantidade.style.display = "block";
+      campoQuantidade.value = "";
+      campoQuantidade.max = loteSelecionadoSaida.quantidade_unidades;
+      atualizarAjudaQuantidadeRetirada();
+      atualizarBotaoConfirmar();
+    });
+  });
+}
+
+function atualizarAjudaQuantidadeRetirada() {
+  const ajuda = document.getElementById("ajuda-quantidade-retirada");
+  if (!loteSelecionadoSaida) { ajuda.textContent = ""; return; }
+  const quantidade = parseFloat(document.getElementById("campo-quantidade-retirada").value) || 0;
+  const partes = [`Máximo nesse lote/embalagem: ${loteSelecionadoSaida.quantidade_unidades} unidade(s)`];
+  if (quantidade > 0) {
+    partes.push(`= ${(quantidade * Number(loteSelecionadoSaida.capacidade_kg)).toLocaleString("pt-BR")} kg`);
+  }
+  ajuda.textContent = partes.join(" · ");
+}
+
+document.getElementById("campo-quantidade-retirada").addEventListener("input", () => {
+  atualizarAjudaQuantidadeRetirada();
+  atualizarBotaoConfirmar();
+});
 
 function atualizarVisibilidadePassoCusto() {
   const passoCusto = document.getElementById("passo-custo");
@@ -490,6 +580,13 @@ function limparCamposLoteEmbalagem() {
   document.getElementById("campo-capacidade-embalagem").value = "";
   document.getElementById("campo-quantidade-unidades").value = "";
   document.getElementById("ajuda-total-kg").textContent = "";
+
+  loteSelecionadoSaida = null;
+  document.getElementById("lista-lotes-saida").innerHTML = "";
+  document.getElementById("ajuda-sem-lotes").style.display = "none";
+  document.getElementById("caixa-quantidade-retirada").style.display = "none";
+  document.getElementById("campo-quantidade-retirada").value = "";
+  document.getElementById("ajuda-quantidade-retirada").textContent = "";
 }
 
 function obterTipoEmbalagemEfetivo() {
@@ -536,7 +633,11 @@ function precisaDeCusto() {
 
 function atualizarBotaoConfirmar() {
   let tudoPreenchido = false;
-  if (estoqueEscolhido && estoqueEscolhido.tipo === "materia") {
+  if (estoqueEscolhido && estoqueEscolhido.tipo === "materia" && tipoEscolhido === "saida") {
+    const quantidadeRetirada = parseFloat(document.getElementById("campo-quantidade-retirada").value);
+    tudoPreenchido = !!(produtoEscolhido && pessoa && loteSelecionadoSaida &&
+      quantidadeRetirada > 0 && quantidadeRetirada <= loteSelecionadoSaida.quantidade_unidades);
+  } else if (estoqueEscolhido && estoqueEscolhido.tipo === "materia") {
     const tipoEmbalagem = obterTipoEmbalagemEfetivo();
     const capacidade = parseFloat(document.getElementById("campo-capacidade-embalagem").value);
     const unidades = parseFloat(document.getElementById("campo-quantidade-unidades").value);
@@ -558,7 +659,25 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
   botao.textContent = "Salvando...";
 
   try {
-    if (estoqueEscolhido.tipo === "materia") {
+    if (estoqueEscolhido.tipo === "materia" && tipoEscolhido === "saida") {
+      const unidades = parseFloat(document.getElementById("campo-quantidade-retirada").value);
+      const lote = loteSelecionadoSaida.lote;
+      const tipoEmbalagem = loteSelecionadoSaida.tipo_embalagem;
+      const capacidade = Number(loteSelecionadoSaida.capacidade_kg);
+
+      await chamarSupabase("rpc/ajustar_estoque_materia_prima", {
+        method: "POST",
+        body: JSON.stringify({
+          p_item_id: produtoEscolhido.id, p_tipo: "saida",
+          p_lote: lote, p_tipo_embalagem: tipoEmbalagem,
+          p_capacidade_kg: capacidade, p_quantidade_unidades: unidades,
+          p_pessoa: pessoa,
+        }),
+      });
+      const textoLote = lote ? ` (lote ${lote})` : "";
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = `Ajuste salvo: -${unidades} ${tipoEmbalagem}(s) de ${capacidade}kg${textoLote} em ${produtoEscolhido.nome}.`;
+    } else if (estoqueEscolhido.tipo === "materia") {
       const lote = document.getElementById("campo-lote").value.trim();
       const tipoEmbalagem = obterTipoEmbalagemEfetivo();
       const capacidade = parseFloat(document.getElementById("campo-capacidade-embalagem").value);
@@ -578,7 +697,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       });
       const textoLote = lote ? ` (lote ${lote})` : "";
       mensagem.className = "mensagem sucesso";
-      mensagem.textContent = `Ajuste salvo: ${tipoEscolhido === "entrada" ? "+" : "-"}${unidades} ${tipoEmbalagem}(s) de ${capacidade}kg${textoLote} em ${produtoEscolhido.nome}.`;
+      mensagem.textContent = `Ajuste salvo: +${unidades} ${tipoEmbalagem}(s) de ${capacidade}kg${textoLote} em ${produtoEscolhido.nome}.`;
     } else {
       const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
       await chamarSupabase("rpc/ajustar_estoque_produto_acabado", {
