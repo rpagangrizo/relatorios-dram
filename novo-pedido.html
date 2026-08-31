@@ -709,9 +709,24 @@ function distribuirValoresParcelas(total, quantidade) {
 }
 
 function gerarParcelasPadrao() {
-  const { prazo, parcelas: quantidade } = obterPrazoEParcelasEfetivos();
   const hoje = new Date();
   parcelasPedido = [];
+
+  // clientes com uma condicao especial (ex: 45 dias na 1a parcela, 60 na
+  // 2a - nao e' multiplo do prazo) tem uma lista fixa de dias guardada
+  // no cadastro dele. Se tiver preenchido, usa ela em vez da conta padrao.
+  if (clienteEscolhido && clienteEscolhido.dias_parcelas_customizado) {
+    const diasPorParcela = clienteEscolhido.dias_parcelas_customizado
+      .split(",").map(d => Number(d.trim())).filter(d => d > 0);
+    diasPorParcela.forEach((dias, indice) => {
+      const data = new Date(hoje);
+      data.setDate(data.getDate() + dias);
+      parcelasPedido.push({ numero_parcela: indice + 1, data_vencimento: formatarDataISO(data) });
+    });
+    return;
+  }
+
+  const { prazo, parcelas: quantidade } = obterPrazoEParcelasEfetivos();
   for (let i = 1; i <= quantidade; i++) {
     const data = new Date(hoje);
     data.setDate(data.getDate() + prazo * i);
@@ -768,7 +783,7 @@ ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
 
 async function iniciar() {
   const [clientesResp, depositosResp, tabelasPrecoResp] = await Promise.all([
-    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota&order=nome"),
+    chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota,dias_parcelas_customizado&order=nome"),
     chamarSupabase("depositos?select=id,nome&order=id"),
     chamarSupabase("tabelas_preco?select=id,nome"),
   ]);
@@ -912,8 +927,12 @@ async function escolherCliente(id) {
 
   const chips = [];
   if (clienteEscolhido.forma_pagamento) chips.push(FORMAS_PAGAMENTO[clienteEscolhido.forma_pagamento] || clienteEscolhido.forma_pagamento);
-  if (clienteEscolhido.prazo_dias) chips.push(`Prazo: ${clienteEscolhido.prazo_dias} dia(s)`);
-  if (clienteEscolhido.parcelas && clienteEscolhido.parcelas > 1) chips.push(`${clienteEscolhido.parcelas}x`);
+  if (clienteEscolhido.dias_parcelas_customizado) {
+    chips.push(`Prazo especial: ${clienteEscolhido.dias_parcelas_customizado.replace(/,/g, "/")} dias`);
+  } else {
+    if (clienteEscolhido.prazo_dias) chips.push(`Prazo: ${clienteEscolhido.prazo_dias} dia(s)`);
+    if (clienteEscolhido.parcelas && clienteEscolhido.parcelas > 1) chips.push(`${clienteEscolhido.parcelas}x`);
+  }
   document.getElementById("chips-cliente-info").innerHTML =
     (chips.length ? chips : ["Sem forma de pagamento cadastrada"]).map(c => `<span class="chip-info">${c}</span>`).join("");
   document.getElementById("caixa-cliente-selecionado").style.display = "block";
