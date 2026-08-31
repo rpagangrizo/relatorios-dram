@@ -164,7 +164,7 @@
   <div class="passo desabilitado" id="passo-4-materia" style="display:none">
     <h2>4. Lote e embalagem</h2>
     <div class="campo-mini">
-      <label>Lote</label>
+      <label>Lote (opcional)</label>
       <input type="text" id="campo-lote" list="lista-lotes-existentes" placeholder="Ex: L001, 15/08...">
       <datalist id="lista-lotes-existentes"></datalist>
     </div>
@@ -537,14 +537,13 @@ function precisaDeCusto() {
 function atualizarBotaoConfirmar() {
   let tudoPreenchido = false;
   if (estoqueEscolhido && estoqueEscolhido.tipo === "materia") {
-    const lote = document.getElementById("campo-lote").value.trim();
     const tipoEmbalagem = obterTipoEmbalagemEfetivo();
     const capacidade = parseFloat(document.getElementById("campo-capacidade-embalagem").value);
     const unidades = parseFloat(document.getElementById("campo-quantidade-unidades").value);
     const custoUnitario = parseFloat(document.getElementById("campo-custo-unitario").value);
     const custoOk = !precisaDeCusto() || custoUnitario > 0;
     tudoPreenchido = !!(produtoEscolhido && tipoEscolhido && pessoa &&
-      lote && tipoEmbalagem && capacidade > 0 && unidades > 0 && custoOk);
+      tipoEmbalagem && capacidade > 0 && unidades > 0 && custoOk);
   } else {
     const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
     tudoPreenchido = !!(estoqueEscolhido && produtoEscolhido && tipoEscolhido && quantidade > 0 && pessoa);
@@ -577,8 +576,9 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         method: "POST",
         body: JSON.stringify(corpo),
       });
+      const textoLote = lote ? ` (lote ${lote})` : "";
       mensagem.className = "mensagem sucesso";
-      mensagem.textContent = `Ajuste salvo: ${tipoEscolhido === "entrada" ? "+" : "-"}${unidades} ${tipoEmbalagem}(s) de ${capacidade}kg (lote ${lote}) em ${produtoEscolhido.nome}.`;
+      mensagem.textContent = `Ajuste salvo: ${tipoEscolhido === "entrada" ? "+" : "-"}${unidades} ${tipoEmbalagem}(s) de ${capacidade}kg${textoLote} em ${produtoEscolhido.nome}.`;
     } else {
       const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
       await chamarSupabase("rpc/ajustar_estoque_produto_acabado", {
