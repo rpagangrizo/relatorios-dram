@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Vendas Lançadas</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 150px; position: relative; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro input, .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo-filtro input:focus, .campo-filtro select:focus { outline: none; border-color: var(--azul); }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+
+  .lista-busca { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; max-height: 200px; overflow-y: auto;
+    margin-top: 4px; border-radius: 9px; border: 1px solid var(--linha); background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.10); display: none; }
+  .lista-busca.aberta { display: block; }
+  .item-busca { padding: 9px 12px; cursor: pointer; font-size: 13.5px; border-bottom: 1px solid var(--linha); }
+  .item-busca:last-child { border-bottom: none; }
+  .item-busca:hover { background: #F6F9FA; }
+
+  .aviso-exclusao { font-size: 11.5px; color: var(--texto-suave); margin-top: 6px; }
+
+  .cartoes-destaque { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .cartao-destaque { flex: 1; min-width: 150px; background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; text-align: center; }
+  .cartao-destaque .rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 21px; font-weight: 700; color: var(--azul); margin-top: 6px; }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; min-width: 780px; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Vendas Lançadas</h1>
+    <p>Cruze cliente, produto (ou categoria) e período — só pedidos do tipo Venda</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+<script src="imprimir.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro">
+        <label>Cliente</label>
+        <input type="text" id="campo-busca-cliente" placeholder="Todos os clientes" autocomplete="off">
+        <div class="lista-busca" id="lista-clientes"></div>
+      </div>
+      <div class="campo-filtro">
+        <label>Produto</label>
+        <input type="text" id="campo-busca-produto" placeholder="Todos os produtos" autocomplete="off">
+        <div class="lista-busca" id="lista-produtos"></div>
+      </div>
+      <div class="campo-filtro">
+        <label>Categoria</label>
+        <select id="select-categoria"><option value="">Todas</option></select>
+      </div>
+      <div class="campo-filtro" style="flex:0 0 120px; min-width:120px">
+        <label>De</label>
+        <input type="text" id="campo-data-de" placeholder="DD/MM/AAAA">
+      </div>
+      <div class="campo-filtro" style="flex:0 0 120px; min-width:120px">
+        <label>Até</label>
+        <input type="text" id="campo-data-ate" placeholder="DD/MM/AAAA">
+      </div>
+      <button class="botao" id="botao-filtrar">Filtrar</button>
+      <button class="botao secundario" id="botao-limpar">Limpar filtros</button>
+      <button class="botao secundario" id="botao-gerar-pdf">Gerar PDF</button>
+    </div>
+    <p class="aviso-exclusao" id="aviso-exclusao" style="display:none">
+      Produto e Categoria não se combinam — o Produto selecionado manda, a Categoria é ignorada.
+    </p>
+  </div>
+
+  <div class="cartoes-destaque">
+    <div class="cartao-destaque"><div class="rotulo">Total em Kg</div><div class="valor" id="valor-total-kg">—</div></div>
+    <div class="cartao-destaque"><div class="rotulo">Total em R$</div><div class="valor" id="valor-total-reais">—</div></div>
+  </div>
+
+  <div class="cartao-secao">
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function formatarKg(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function formatarDataISO(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+function dataBrParaIso(texto) {
+  const partes = texto.trim().split("/");
+  if (partes.length !== 3) return null;
+  const [d, m, a] = partes;
+  if (!d || !m || !a) return null;
+  return `${a.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+function formatarDataBrExibicao(dataIso) {
+  const [ano, mes, dia] = dataIso.slice(0, 10).split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+let clientes = [];
+let itensCatalogo = [];
+let categorias = [];
+let clienteSelecionado = null; // {id, nome} ou null (todos)
+let produtoSelecionado = null; // {id, nome} ou null (todos)
+let ultimoResultado = null;    // pra reusar no PDF
+
+async function carregarListasDeApoio() {
+  [clientes, itensCatalogo, categorias] = await Promise.all([
+    chamarSupabase("clientes?select=id,nome&order=nome"),
+    chamarSupabase("itens?select=id,nome,grupo_sabor,categoria_produto_id&order=nome"),
+    chamarSupabase("categorias_produto?select=id,nome&order=id"),
+  ]);
+  const selectCategoria = document.getElementById("select-categoria");
+  selectCategoria.innerHTML = '<option value="">Todas</option>' +
+    categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join("");
+}
+
+function configurarBuscaComLista(idCampo, idLista, itens, aoEscolher) {
+  const campo = document.getElementById(idCampo);
+  const lista = document.getElementById(idLista);
+  campo.addEventListener("input", () => {
+    const filtro = campo.value.trim().toLowerCase();
+    if (!filtro) { lista.classList.remove("aberta"); return; }
+    const filtrados = itens.filter(i => i.nome.toLowerCase().includes(filtro)).slice(0, 20);
+    if (filtrados.length === 0) {
+      lista.innerHTML = `<div class="item-busca">Nenhum resultado.</div>`;
+    } else {
+      lista.innerHTML = filtrados.map(i => `<div class="item-busca" data-id="${i.id}">${i.nome}</div>`).join("");
+      lista.querySelectorAll(".item-busca[data-id]").forEach(el => {
+        el.addEventListener("click", () => {
+          const item = itens.find(i => i.id === Number(el.dataset.id));
+          campo.value = item.nome;
+          lista.classList.remove("aberta");
+          aoEscolher(item);
+        });
+      });
+    }
+    lista.classList.add("aberta");
+  });
+  document.addEventListener("click", (evento) => {
+    if (!campo.contains(evento.target) && !lista.contains(evento.target)) lista.classList.remove("aberta");
+  });
+}
+
+function atualizarAvisoExclusao() {
+  const temCategoria = document.getElementById("select-categoria").value !== "";
+  document.getElementById("aviso-exclusao").style.display = (produtoSelecionado && temCategoria) ? "block" : "none";
+}
+
+// consulta livre: cliente + produto (ou categoria, se produto estiver
+// vazio) + periodo, todos opcionais. So' pedidos tipo="venda", nao
+// cancelados. O nome do item exibido usa grupo_sabor quando existir
+// (mesmo criterio do Desktop).
+async function filtrarVendas() {
+  const alvo = document.getElementById("conteudo-tabela");
+  document.getElementById("valor-total-kg").textContent = "—";
+  document.getElementById("valor-total-reais").textContent = "—";
+  alvo.className = "carregando";
+  alvo.textContent = "Carregando...";
+  atualizarAvisoExclusao();
+
+  try {
+    const categoriaId = produtoSelecionado ? null : (document.getElementById("select-categoria").value || null);
+    const dataDeIso = dataBrParaIso(document.getElementById("campo-data-de").value);
+    const dataAteIso = dataBrParaIso(document.getElementById("campo-data-ate").value);
+
+    let filtro = "select=quantidade,preco_unitario,item_id," +
+      "pedidos!inner(id,criado_em,status,tipo,cliente_id,clientes(nome))," +
+      "itens" + (categoriaId ? "!inner" : "") + "(nome,grupo_sabor,peso_kg,categoria_produto_id)" +
+      "&pedidos.tipo=eq.venda";
+
+    if (clienteSelecionado) filtro += `&pedidos.cliente_id=eq.${clienteSelecionado.id}`;
+    if (produtoSelecionado) filtro += `&item_id=eq.${produtoSelecionado.id}`;
+    else if (categoriaId) filtro += `&itens.categoria_produto_id=eq.${categoriaId}`;
+    if (dataDeIso) filtro += `&pedidos.criado_em=gte.${dataDeIso}`;
+    if (dataAteIso) {
+      const proximoDia = new Date(dataAteIso + "T00:00:00");
+      proximoDia.setDate(proximoDia.getDate() + 1);
+      filtro += `&pedidos.criado_em=lt.${formatarDataISO(proximoDia)}`;
+    }
+
+    const itensVendidos = await chamarSupabase(`pedido_itens?${filtro}`);
+
+    // filtra cancelado aqui, em JS (nao no filtro do banco) - status pode
+    // vir NULL pros pedidos normais, e "neq" na URL excluiria essas
+    // linhas tambem
+    const linhasValidas = itensVendidos.filter(li => li.pedidos.status !== "cancelado");
+
+    const linhas = linhasValidas.map(li => {
+      const item = li.itens;
+      const kg = Number(li.quantidade) * Number(item?.peso_kg || 0);
+      const valor = Number(li.quantidade) * Number(li.preco_unitario);
+      return {
+        pedidoId: li.pedidos.id,
+        data: li.pedidos.criado_em,
+        cliente: li.pedidos.clientes?.nome || "—",
+        item: item ? (item.grupo_sabor || item.nome) : "—",
+        quantidade: Number(li.quantidade),
+        kg,
+        valor,
+      };
+    }).sort((a, b) => a.data.localeCompare(b.data) || a.pedidoId - b.pedidoId);
+
+    const totalKg = linhas.reduce((s, l) => s + l.kg, 0);
+    const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
+
+    document.getElementById("valor-total-kg").textContent = `${formatarKg(totalKg)} kg`;
+    document.getElementById("valor-total-reais").textContent = formatarMoeda(totalValor);
+
+    ultimoResultado = { linhas, totalKg, totalValor };
+    desenharTabela(linhas);
+  } catch (erro) {
+    alvo.className = "erro";
+    alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela(linhas) {
+  const alvo = document.getElementById("conteudo-tabela");
+  if (linhas.length === 0) {
+    alvo.className = "vazio";
+    alvo.textContent = "Nenhuma venda encontrada com esses filtros.";
+    return;
+  }
+  let html = `<table><thead><tr><th>Data</th><th>Nº Pedido</th><th>Cliente</th><th>Item</th>` +
+    `<th class="num">Quantidade</th><th class="num">Kg</th><th class="num">Valor</th></tr></thead><tbody>`;
+  for (const l of linhas) {
+    html += `<tr><td>${formatarDataBrExibicao(l.data)}</td><td>Nº ${l.pedidoId}</td><td>${l.cliente}</td>` +
+      `<td>${l.item}</td><td class="num">${l.quantidade.toLocaleString("pt-BR")}</td>` +
+      `<td class="num">${formatarKg(l.kg)}</td><td class="num">${formatarMoeda(l.valor)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.className = "";
+  alvo.innerHTML = html;
+}
+
+configurarBuscaComLista("campo-busca-cliente", "lista-clientes", [], () => {});
+configurarBuscaComLista("campo-busca-produto", "lista-produtos", [], () => {});
+
+document.getElementById("select-categoria").addEventListener("change", atualizarAvisoExclusao);
+
+document.getElementById("botao-filtrar").addEventListener("click", filtrarVendas);
+
+document.getElementById("botao-limpar").addEventListener("click", () => {
+  document.getElementById("campo-busca-cliente").value = "";
+  document.getElementById("campo-busca-produto").value = "";
+  document.getElementById("select-categoria").value = "";
+  document.getElementById("campo-data-de").value = "";
+  document.getElementById("campo-data-ate").value = "";
+  clienteSelecionado = null;
+  produtoSelecionado = null;
+  filtrarVendas();
+});
+
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimoResultado || ultimoResultado.linhas.length === 0) {
+    alert("Nenhum resultado pra imprimir ainda — filtre primeiro.");
+    return;
+  }
+  const { linhas, totalKg, totalValor } = ultimoResultado;
+  let linhasHtml = linhas.map(l =>
+    `<tr><td>${formatarDataBrExibicao(l.data)}</td><td>Nº ${l.pedidoId}</td><td>${l.cliente}</td>` +
+    `<td>${l.item}</td><td class="num">${l.quantidade.toLocaleString("pt-BR")}</td>` +
+    `<td class="num">${formatarKg(l.kg)}</td><td class="num">${formatarMoeda(l.valor)}</td></tr>`
+  ).join("");
+
+  const filtrosTexto = [
+    clienteSelecionado ? `Cliente: ${clienteSelecionado.nome}` : null,
+    produtoSelecionado ? `Produto: ${produtoSelecionado.nome}` : (document.getElementById("select-categoria").selectedOptions[0].text !== "Todas" ? `Categoria: ${document.getElementById("select-categoria").selectedOptions[0].text}` : null),
+    document.getElementById("campo-data-de").value ? `De: ${document.getElementById("campo-data-de").value}` : null,
+    document.getElementById("campo-data-ate").value ? `Até: ${document.getElementById("campo-data-ate").value}` : null,
+  ].filter(Boolean).join(" · ") || "Todos os pedidos do tipo Venda";
+
+  const conteudo = `
+    <div class="cartoes">
+      <div class="cartao"><div class="rotulo">Total em Kg</div><div class="valor">${formatarKg(totalKg)} kg</div></div>
+      <div class="cartao"><div class="rotulo">Total em R$</div><div class="valor">${formatarMoeda(totalValor)}</div></div>
+    </div>
+    <h2>Vendas encontradas</h2>
+    <table><tr><th>Data</th><th>Nº Pedido</th><th>Cliente</th><th>Item</th><th class="num">Quantidade</th><th class="num">Kg</th><th class="num">Valor</th></tr>${linhasHtml}</table>
+  `;
+  abrirImpressao("Vendas Lançadas", filtrosTexto, conteudo);
+});
+
+async function iniciar() {
+  await carregarListasDeApoio();
+
+  configurarBuscaComLista("campo-busca-cliente", "lista-clientes", clientes, (c) => {
+    clienteSelecionado = c;
+  });
+  configurarBuscaComLista("campo-busca-produto", "lista-produtos", itensCatalogo, (i) => {
+    produtoSelecionado = i;
+    atualizarAvisoExclusao();
+  });
+
+  // se a pessoa apagar o texto do campo, volta a valer "todos"
+  document.getElementById("campo-busca-cliente").addEventListener("input", (e) => {
+    if (!e.target.value.trim()) clienteSelecionado = null;
+  });
+  document.getElementById("campo-busca-produto").addEventListener("input", (e) => {
+    if (!e.target.value.trim()) { produtoSelecionado = null; atualizarAvisoExclusao(); }
+  });
+
+  await filtrarVendas();
+}
+
+iniciar();
+</script>
+</body>
+</html>
