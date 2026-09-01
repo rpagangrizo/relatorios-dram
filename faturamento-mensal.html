@@ -84,6 +84,7 @@
   </div>
 </header>
 <script src="menu.js"></script>
+<script src="imprimir.js"></script>
 
 <main>
   <div class="cartao">
@@ -128,6 +129,7 @@
         <select id="select-ano-detalhe"></select>
       </div>
       <button class="botao" id="botao-atualizar-detalhe">Atualizar</button>
+      <button class="botao" id="botao-gerar-pdf" style="background:#fff; border:1.5px solid var(--azul); color:var(--azul)">Gerar PDF</button>
     </div>
     <div id="conteudo-detalhe" class="carregando">Carregando...</div>
   </div>
@@ -380,6 +382,20 @@ document.getElementById("botao-remover-manual").addEventListener("click", async 
     botao.disabled = false;
     botao.textContent = "Remover (usar cálculo automático)";
   }
+});
+
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  const ano = document.getElementById("select-ano-detalhe").value;
+  const tabelaDetalheHtml = document.getElementById("conteudo-detalhe").innerHTML;
+  const tabelaMatrizHtml = document.getElementById("conteudo-matriz").innerHTML;
+
+  const conteudo = `
+    <h2 style="font-size:14px; margin:0 0 8px">Detalhe de ${ano}</h2>
+    ${tabelaDetalheHtml}
+    <h2 style="font-size:14px; margin:24px 0 8px">Comparativo entre anos</h2>
+    ${tabelaMatrizHtml}
+  `;
+  abrirImpressao(`Faturamento Mensal — ${ano}`, "Meses com vendas calculam sozinhos. Valor manual sempre tem prioridade.", conteudo);
 });
 
 atualizarTudo();
