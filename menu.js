@@ -57,6 +57,7 @@
       itens: [
         { nome: "Faturamento", href: "faturamento.html" },
         { nome: "Faturamento Mensal", href: "faturamento-mensal.html" },
+        { nome: "Vendas Lan\u00e7adas", href: "vendas-lancadas.html" },
         { nome: "Peso Vendido", href: "peso-vendido.html" },
         { nome: "M\u00e9dias", href: "medias.html" },
       ],
