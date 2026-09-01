@@ -73,6 +73,7 @@
   </div>
 </header>
 <script src="menu.js"></script>
+<script src="imprimir.js"></script>
 
 <main>
   <div class="cartao-filtros">
@@ -99,6 +100,7 @@
         </select>
       </div>
       <button class="botao" id="botao-atualizar">Atualizar</button>
+      <button class="botao" id="botao-gerar-pdf" style="background:#fff; border:1.5px solid var(--azul); color:var(--azul)">Gerar PDF do mês</button>
     </div>
   </div>
 
@@ -253,6 +255,17 @@ function desenharTabela(linhas, categorias) {
 }
 
 document.getElementById("botao-atualizar").addEventListener("click", carregarMedias);
+
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  const ano = document.getElementById("select-ano").value;
+  const mesTexto = document.getElementById("select-mes").selectedOptions[0].textContent;
+  const tabelaHtml = document.getElementById("conteudo-tabela").innerHTML;
+  abrirImpressao(
+    `Preço Médio por Sabor — ${mesTexto} de ${ano}`,
+    "Preço médio por kg, ponderado pelos quilos vendidos de cada sabor (100g e barra somados)",
+    tabelaHtml,
+  );
+});
 
 popularSelectAno();
 selecionarMesAtual();
