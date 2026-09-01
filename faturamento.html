@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Faturamento</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 720px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo-filtro select:focus { outline: none; border-color: var(--azul); }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+
+  .cartao-destaque { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 26px; text-align: center; margin-bottom: 14px; }
+  .cartao-destaque .rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 34px; font-weight: 700; color: var(--azul); margin-top: 6px; }
+  .cartao-destaque .subtitulo { font-size: 12.5px; color: var(--texto-suave); margin-top: 6px; }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; }
+  .cartao-secao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0; padding: 14px 16px 10px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 16px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 10px 16px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-hoje td { background: #EAF1F6; font-weight: 700; }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Faturamento</h1>
+    <p>Só pedidos do tipo Venda, sem cancelados — mesmo critério do Desktop</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro">
+        <label>Ano</label>
+        <select id="select-ano"></select>
+      </div>
+      <div class="campo-filtro">
+        <label>Mês</label>
+        <select id="select-mes">
+          <option value="1">Janeiro</option>
+          <option value="2">Fevereiro</option>
+          <option value="3">Março</option>
+          <option value="4">Abril</option>
+          <option value="5">Maio</option>
+          <option value="6">Junho</option>
+          <option value="7">Julho</option>
+          <option value="8">Agosto</option>
+          <option value="9">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
+      </div>
+      <button class="botao" id="botao-atualizar">Atualizar</button>
+    </div>
+  </div>
+
+  <div class="cartao-destaque">
+    <div class="rotulo">Faturamento do mês</div>
+    <div class="valor" id="valor-total-mes">—</div>
+    <div class="subtitulo" id="subtitulo-quantidade"></div>
+  </div>
+
+  <div class="cartao-secao">
+    <h2>Faturamento por dia</h2>
+    <div id="conteudo-diario" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatarDataISO(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+// popula o seletor de ano: do ano atual ate' 3 anos atras (nao ha' venda
+// mais antiga que isso no sistema Web, que comecou a operar recentemente)
+function popularSelectAno() {
+  const anoAtual = new Date().getFullYear();
+  const select = document.getElementById("select-ano");
+  for (let ano = anoAtual; ano >= anoAtual - 3; ano--) {
+    const opcao = document.createElement("option");
+    opcao.value = ano;
+    opcao.textContent = ano;
+    select.appendChild(opcao);
+  }
+}
+
+// pre-seleciona o mes/ano atual, pra abrir a pagina ja' mostrando o
+// periodo mais provavel de interesse
+function selecionarMesAtual() {
+  const hoje = new Date();
+  document.getElementById("select-ano").value = hoje.getFullYear();
+  document.getElementById("select-mes").value = hoje.getMonth() + 1;
+}
+
+// soma "total" (que ja' inclui o frete, sem descontar desconto de
+// boleto - mesmo criterio do calcular_faturamento_do_mes no Desktop) de
+// todo pedido tipo="venda" e nao cancelado, dentro do periodo
+async function carregarFaturamento() {
+  const ano = Number(document.getElementById("select-ano").value);
+  const mes = Number(document.getElementById("select-mes").value);
+  const alvoDiario = document.getElementById("conteudo-diario");
+  const valorTotalEl = document.getElementById("valor-total-mes");
+  const subtituloEl = document.getElementById("subtitulo-quantidade");
+
+  valorTotalEl.textContent = "—";
+  subtituloEl.textContent = "";
+  alvoDiario.className = "carregando";
+  alvoDiario.textContent = "Carregando...";
+
+  try {
+    const dataDe = new Date(ano, mes - 1, 1);
+    const dataAteExclusivo = new Date(ano, mes, 1); // primeiro dia do mes seguinte
+
+    const pedidos = await chamarSupabase(
+      `pedidos?select=total,criado_em,status&tipo=eq.venda` +
+      `&criado_em=gte.${formatarDataISO(dataDe)}` +
+      `&criado_em=lt.${formatarDataISO(dataAteExclusivo)}`
+    );
+
+    // filtra cancelado aqui, em JS (nao no filtro do banco) - a coluna
+    // status pode vir NULL pros pedidos normais, e o operador "neq" do
+    // Supabase excluiria essas linhas tambem se usado direto na URL
+    const pedidosValidos = pedidos.filter(p => p.status !== "cancelado");
+
+    const totalPorDia = new Map(); // "AAAA-MM-DD" -> soma
+    let totalGeral = 0;
+    for (const pedido of pedidosValidos) {
+      const dia = pedido.criado_em.slice(0, 10);
+      totalPorDia.set(dia, (totalPorDia.get(dia) || 0) + Number(pedido.total));
+      totalGeral += Number(pedido.total);
+    }
+
+    valorTotalEl.textContent = formatarMoeda(totalGeral);
+    subtituloEl.textContent = `${pedidosValidos.length} pedido(s) no período`;
+
+    desenharTabelaDiaria(totalPorDia);
+  } catch (erro) {
+    alvoDiario.className = "erro";
+    alvoDiario.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabelaDiaria(totalPorDia) {
+  const alvo = document.getElementById("conteudo-diario");
+
+  if (totalPorDia.size === 0) {
+    alvo.className = "vazio";
+    alvo.textContent = "Nenhuma venda nesse período.";
+    return;
+  }
+
+  const hojeIso = formatarDataISO(new Date());
+  const diasOrdenados = [...totalPorDia.keys()].sort();
+
+  let html = `<table><thead><tr><th>Dia</th><th class="num">Total</th></tr></thead><tbody>`;
+  for (const diaIso of diasOrdenados) {
+    const [ano, mes, dia] = diaIso.split("-");
+    const dataFormatada = `${dia}/${mes}/${ano}`;
+    const classeHoje = diaIso === hojeIso ? "linha-hoje" : "";
+    html += `<tr class="${classeHoje}"><td>${dataFormatada}</td><td class="num">${formatarMoeda(totalPorDia.get(diaIso))}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+
+  alvo.className = "";
+  alvo.innerHTML = html;
+}
+
+document.getElementById("botao-atualizar").addEventListener("click", carregarFaturamento);
+
+popularSelectAno();
+selecionarMesAtual();
+carregarFaturamento();
+</script>
+</body>
+</html>
