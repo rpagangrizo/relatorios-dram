@@ -78,6 +78,7 @@
   </div>
 </header>
 <script src="menu.js"></script>
+<script src="imprimir.js"></script>
 
 <main>
   <div class="cartao-filtros">
@@ -104,6 +105,7 @@
         </select>
       </div>
       <button class="botao" id="botao-atualizar">Atualizar</button>
+      <button class="botao" id="botao-gerar-pdf" style="background:#fff; border:1.5px solid var(--azul); color:var(--azul)">Gerar PDF do mês</button>
     </div>
   </div>
 
@@ -263,6 +265,25 @@ function desenharTabela(linhas, categorias) {
 }
 
 document.getElementById("botao-atualizar").addEventListener("click", carregarPesoVendido);
+
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  const ano = document.getElementById("select-ano").value;
+  const mesTexto = document.getElementById("select-mes").selectedOptions[0].textContent;
+  const totalGeral = document.getElementById("valor-total-geral").textContent;
+  const total100g = document.getElementById("valor-total-100g").textContent;
+  const totalBarra = document.getElementById("valor-total-barra").textContent;
+  const tabelaHtml = document.getElementById("conteudo-tabela").innerHTML;
+
+  const conteudo = `
+    <table style="margin-bottom:22px">
+      <tr><td>Total geral</td><td class="num">${totalGeral}</td></tr>
+      <tr><td>Total 100g</td><td class="num">${total100g}</td></tr>
+      <tr><td>Total barra</td><td class="num">${totalBarra}</td></tr>
+    </table>
+    ${tabelaHtml}
+  `;
+  abrirImpressao(`Peso Vendido — ${mesTexto} de ${ano}`, "Só pedidos do tipo Venda", conteudo);
+});
 
 popularSelectAno();
 selecionarMesAtual();
