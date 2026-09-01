@@ -242,9 +242,9 @@ function desenharTabela(linhas, categorias) {
     if (!gruposPorCategoria.has(chave)) gruposPorCategoria.set(chave, []);
     gruposPorCategoria.get(chave).push(linha);
   }
-  // dentro de cada categoria, maior kg primeiro - igual o Desktop
+  // dentro de cada categoria, ordem alfabetica
   for (const lista of gruposPorCategoria.values()) {
-    lista.sort((a, b) => b.kg - a.kg);
+    lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }
   const ordemCategorias = [...categorias.map(c => c.id), "sem"].filter(id => gruposPorCategoria.has(id));
 
