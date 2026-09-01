@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Faturamento Mensal</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B; --marrom: #854F0B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select, .campo-filtro input { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo-filtro select:focus, .campo-filtro input:focus { outline: none; border-color: var(--azul); }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--vermelho); color: var(--vermelho); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 12px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-manual td { color: var(--marrom); }
+  tbody tr.linha-total td { background: #FCEEE3; font-weight: 700; }
+  .selo-origem { font-size: 11px; padding: 2px 8px; border-radius: 100px; font-weight: 700; }
+  .selo-origem.manual { background: #FFF3E0; color: var(--marrom); }
+  .selo-origem.real { background: #E4F3E8; color: var(--verde); }
+
+  .tabela-scroll { overflow-x: auto; }
+
+  .mensagem { margin-top: 10px; padding: 11px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .vazio, .carregando, .erro-carregamento { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro-carregamento { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Faturamento Mensal</h1>
+    <p>Meses com vendas calculam sozinhos. Valor manual sempre tem prioridade.</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao">
+    <h2>Informar valor manual de um mês</h2>
+    <div class="linha-filtros">
+      <div class="campo-filtro">
+        <label>Ano</label>
+        <select id="select-ano-manual"></select>
+      </div>
+      <div class="campo-filtro">
+        <label>Mês</label>
+        <select id="select-mes-manual">
+          <option value="1">Janeiro</option>
+          <option value="2">Fevereiro</option>
+          <option value="3">Março</option>
+          <option value="4">Abril</option>
+          <option value="5">Maio</option>
+          <option value="6">Junho</option>
+          <option value="7">Julho</option>
+          <option value="8">Agosto</option>
+          <option value="9">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
+      </div>
+      <div class="campo-filtro">
+        <label>Valor (R$)</label>
+        <input type="number" id="campo-valor-manual" min="0" step="0.01" placeholder="0,00" style="width:140px">
+      </div>
+      <button class="botao" id="botao-salvar-manual">Salvar</button>
+      <button class="botao secundario" id="botao-remover-manual">Remover (usar cálculo automático)</button>
+    </div>
+    <div class="mensagem" id="mensagem"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Detalhe do ano</h2>
+    <div class="linha-filtros" style="margin-bottom:12px">
+      <div class="campo-filtro">
+        <label>Ano</label>
+        <select id="select-ano-detalhe"></select>
+      </div>
+      <button class="botao" id="botao-atualizar-detalhe">Atualizar</button>
+    </div>
+    <div id="conteudo-detalhe" class="carregando">Carregando...</div>
+  </div>
+
+  <div class="cartao">
+    <h2>Comparativo entre anos</h2>
+    <div id="conteudo-matriz" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const NOMES_MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(`Erro ${resposta.status}: ${corpoErro}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function formatarMoedaCompacta(valor) {
+  // mesmo formato, sem o prefixo "R$" - poupa espaço na matriz de anos
+  return formatarMoeda(valor).replace("R$", "").trim();
+}
+
+let pedidosVendaCache = [];   // [{total, criado_em, status}] - so' tipo="venda"
+let manuaisCache = new Map(); // "ano-mes" -> valor
+
+// soma pedidos.total (ja' inclui frete) de pedidos tipo="venda", nao
+// cancelados, dentro do ano/mes informado - mesmo criterio da tela de
+// Faturamento
+function calcularRealDoMes(ano, mes) {
+  let total = 0;
+  for (const p of pedidosVendaCache) {
+    if (p.status === "cancelado") continue;
+    const anoP = Number(p.criado_em.slice(0, 4));
+    const mesP = Number(p.criado_em.slice(5, 7));
+    if (anoP === ano && mesP === mes) total += Number(p.total);
+  }
+  return Math.round(total * 100) / 100;
+}
+
+// pra cada um dos 12 meses do ano: se existir valor manual, ele SEMPRE
+// tem prioridade (mesmo que existam vendas reais lançadas nesse mês) -
+// mesma lógica do Desktop
+function calcularFaturamentoMensalDoAno(ano) {
+  const linhas = [];
+  for (let mes = 1; mes <= 12; mes++) {
+    const chave = `${ano}-${mes}`;
+    if (manuaisCache.has(chave)) {
+      linhas.push({ mes, valor: manuaisCache.get(chave), origem: "Manual" });
+    } else {
+      linhas.push({ mes, valor: calcularRealDoMes(ano, mes), origem: "Real" });
+    }
+  }
+  return linhas;
+}
+
+// anos que tem algum dado (venda real ou valor manual), mais o ano atual
+// (mesmo que ainda vazio) - mesma lógica do Desktop
+function listarAnosComDados() {
+  const anos = new Set();
+  for (const p of pedidosVendaCache) anos.add(Number(p.criado_em.slice(0, 4)));
+  for (const chave of manuaisCache.keys()) anos.add(Number(chave.split("-")[0]));
+  anos.add(new Date().getFullYear());
+  return [...anos].sort((a, b) => a - b);
+}
+
+async function carregarDadosBase() {
+  const [pedidos, manuais] = await Promise.all([
+    chamarSupabase("pedidos?select=total,criado_em,status&tipo=eq.venda"),
+    chamarSupabase("faturamento_manual?select=ano,mes,valor"),
+  ]);
+  pedidosVendaCache = pedidos;
+  manuaisCache = new Map(manuais.map(m => [`${m.ano}-${m.mes}`, Number(m.valor)]));
+}
+
+function popularSelectsAno() {
+  const anoAtual = new Date().getFullYear();
+  const anosComDados = listarAnosComDados();
+  // mesma faixa do Desktop: 10 anos pra tras, 1 pra frente, unindo com
+  // qualquer ano que ja tenha dado - assim da pra escolher um ano novo
+  // (tipo 2023) so' pra comecar a digitar o historico dele
+  const todosAnos = [...new Set([
+    ...Array.from({ length: 12 }, (_, i) => anoAtual - 10 + i),
+    ...anosComDados,
+  ])].sort((a, b) => a - b);
+
+  for (const selectId of ["select-ano-manual", "select-ano-detalhe"]) {
+    const select = document.getElementById(selectId);
+    select.innerHTML = todosAnos.map(a => `<option value="${a}">${a}</option>`).join("");
+    select.value = anoAtual;
+  }
+}
+
+function desenharTabelaDetalhe(ano) {
+  const alvo = document.getElementById("conteudo-detalhe");
+  const linhas = calcularFaturamentoMensalDoAno(ano);
+  const totalAno = linhas.reduce((soma, l) => soma + l.valor, 0);
+
+  let html = `<div class="tabela-scroll"><table><thead><tr><th>Mês</th><th class="num">Faturamento</th><th>Origem</th></tr></thead><tbody>`;
+  for (const linha of linhas) {
+    const classeLinha = linha.origem === "Manual" ? "linha-manual" : "";
+    const classeSelo = linha.origem === "Manual" ? "manual" : "real";
+    html += `<tr class="${classeLinha}"><td>${NOMES_MESES_ABREV[linha.mes - 1]}</td>` +
+      `<td class="num">${formatarMoeda(linha.valor)}</td>` +
+      `<td><span class="selo-origem ${classeSelo}">${linha.origem}</span></td></tr>`;
+  }
+  html += `<tr class="linha-total"><td>Total</td><td class="num">${formatarMoeda(totalAno)}</td><td></td></tr>`;
+  html += `</tbody></table></div>`;
+
+  alvo.className = "";
+  alvo.innerHTML = html;
+}
+
+function desenharMatriz() {
+  const alvo = document.getElementById("conteudo-matriz");
+  const anos = listarAnosComDados();
+
+  if (anos.length === 0) {
+    alvo.className = "vazio";
+    alvo.textContent = "Nenhum dado ainda.";
+    return;
+  }
+
+  const valoresPorAno = new Map(); // ano -> [12 valores]
+  const totalPorAno = new Map();
+  for (const ano of anos) {
+    const linhas = calcularFaturamentoMensalDoAno(ano);
+    const valores = linhas.map(l => l.valor);
+    valoresPorAno.set(ano, valores);
+    totalPorAno.set(ano, valores.reduce((s, v) => s + v, 0));
+  }
+
+  let html = `<div class="tabela-scroll"><table><thead><tr><th>Mês</th>`;
+  for (const ano of anos) html += `<th class="num">${ano}</th>`;
+  html += `</tr></thead><tbody>`;
+  for (let mes = 1; mes <= 12; mes++) {
+    html += `<tr><td>${NOMES_MESES_ABREV[mes - 1]}</td>`;
+    for (const ano of anos) {
+      html += `<td class="num">${formatarMoedaCompacta(valoresPorAno.get(ano)[mes - 1])}</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `<tr class="linha-total"><td>Total</td>`;
+  for (const ano of anos) html += `<td class="num">${formatarMoedaCompacta(totalPorAno.get(ano))}</td>`;
+  html += `</tr>`;
+  html += `</tbody></table></div>`;
+
+  alvo.className = "";
+  alvo.innerHTML = html;
+}
+
+async function atualizarTudo() {
+  const alvoDetalhe = document.getElementById("conteudo-detalhe");
+  const alvoMatriz = document.getElementById("conteudo-matriz");
+  alvoDetalhe.className = "carregando";
+  alvoDetalhe.textContent = "Carregando...";
+  alvoMatriz.className = "carregando";
+  alvoMatriz.textContent = "Carregando...";
+
+  try {
+    await carregarDadosBase();
+    popularSelectsAno();
+    const anoDetalhe = Number(document.getElementById("select-ano-detalhe").value);
+    desenharTabelaDetalhe(anoDetalhe);
+    desenharMatriz();
+  } catch (erro) {
+    alvoDetalhe.className = "erro-carregamento";
+    alvoDetalhe.textContent = `Não consegui carregar: ${erro.message}`;
+    alvoMatriz.innerHTML = "";
+  }
+}
+
+document.getElementById("botao-atualizar-detalhe").addEventListener("click", () => {
+  const ano = Number(document.getElementById("select-ano-detalhe").value);
+  desenharTabelaDetalhe(ano);
+});
+
+document.getElementById("botao-salvar-manual").addEventListener("click", async () => {
+  const ano = Number(document.getElementById("select-ano-manual").value);
+  const mes = Number(document.getElementById("select-mes-manual").value);
+  const valorTexto = document.getElementById("campo-valor-manual").value;
+  const mensagem = document.getElementById("mensagem");
+  const botao = document.getElementById("botao-salvar-manual");
+
+  if (valorTexto === "" || isNaN(Number(valorTexto))) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = "Informe um valor válido.";
+    return;
+  }
+
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+  try {
+    await chamarSupabase("faturamento_manual?on_conflict=ano,mes", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify({ ano, mes, valor: Number(valorTexto) }),
+    });
+    manuaisCache.set(`${ano}-${mes}`, Number(valorTexto));
+    document.getElementById("campo-valor-manual").value = "";
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `Valor manual de ${NOMES_MESES_ABREV[mes - 1]}/${ano} salvo com sucesso.`;
+    const anoDetalhe = Number(document.getElementById("select-ano-detalhe").value);
+    desenharTabelaDetalhe(anoDetalhe);
+    desenharMatriz();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Salvar";
+  }
+});
+
+document.getElementById("botao-remover-manual").addEventListener("click", async () => {
+  const ano = Number(document.getElementById("select-ano-manual").value);
+  const mes = Number(document.getElementById("select-mes-manual").value);
+  const mensagem = document.getElementById("mensagem");
+  const botao = document.getElementById("botao-remover-manual");
+
+  botao.disabled = true;
+  botao.textContent = "Removendo...";
+  try {
+    await chamarSupabase(`faturamento_manual?ano=eq.${ano}&mes=eq.${mes}`, { method: "DELETE" });
+    manuaisCache.delete(`${ano}-${mes}`);
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `Valor manual de ${NOMES_MESES_ABREV[mes - 1]}/${ano} removido — volta a calcular automático.`;
+    const anoDetalhe = Number(document.getElementById("select-ano-detalhe").value);
+    desenharTabelaDetalhe(anoDetalhe);
+    desenharMatriz();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui remover: ${erro.message}`;
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Remover (usar cálculo automático)";
+  }
+});
+
+atualizarTudo();
+</script>
+</body>
+</html>
