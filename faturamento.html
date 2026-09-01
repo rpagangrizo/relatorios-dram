@@ -78,6 +78,7 @@
   </div>
 </header>
 <script src="menu.js"></script>
+<script src="imprimir.js"></script>
 
 <main>
   <div class="cartao-filtros">
@@ -104,6 +105,7 @@
         </select>
       </div>
       <button class="botao" id="botao-atualizar">Atualizar</button>
+      <button class="botao" id="botao-gerar-pdf" style="background:#fff; border:1.5px solid var(--azul); color:var(--azul)">Gerar PDF do mês</button>
     </div>
   </div>
 
@@ -239,6 +241,23 @@ function desenharTabelaDiaria(totalPorDia) {
 }
 
 document.getElementById("botao-atualizar").addEventListener("click", carregarFaturamento);
+
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  const ano = document.getElementById("select-ano").value;
+  const mesTexto = document.getElementById("select-mes").selectedOptions[0].textContent;
+  const totalTexto = document.getElementById("valor-total-mes").textContent;
+  const subtitulo = document.getElementById("subtitulo-quantidade").textContent;
+  const tabelaHtml = document.getElementById("conteudo-diario").innerHTML;
+
+  const conteudo = `
+    <div class="cartao-destaque-impressao">
+      <div class="rotulo">Faturamento do mês</div>
+      <div class="valor">${totalTexto}</div>
+    </div>
+    ${tabelaHtml}
+  `;
+  abrirImpressao(`Faturamento — ${mesTexto} de ${ano}`, subtitulo, conteudo);
+});
 
 popularSelectAno();
 selecionarMesAtual();
