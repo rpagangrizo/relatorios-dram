@@ -42,6 +42,7 @@
       chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true,
       itens: [
         { nome: "Faturamento", href: "faturamento.html" },
+        { nome: "Peso Vendido", href: "peso-vendido.html" },
       ],
     },
   ];
