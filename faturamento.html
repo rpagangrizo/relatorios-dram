@@ -146,20 +146,6 @@ function formatarDataISO(data) {
   return `${ano}-${mes}-${dia}`;
 }
 
-// soma pedidos.total de pedidos tipo="venda", nao cancelados, dentro do
-// ano/mes informado - usada tanto pro mes atual quanto pro "mes anterior"
-// do comparativo no PDF
-async function buscarTotalDoMes(ano, mes) {
-  const dataDe = new Date(ano, mes - 1, 1);
-  const dataAteExclusivo = new Date(ano, mes, 1);
-  const pedidos = await chamarSupabase(
-    `pedidos?select=total,status&tipo=eq.venda` +
-    `&criado_em=gte.${formatarDataISO(dataDe)}` +
-    `&criado_em=lt.${formatarDataISO(dataAteExclusivo)}`
-  );
-  return pedidos.filter(p => p.status !== "cancelado").reduce((soma, p) => soma + Number(p.total), 0);
-}
-
 const NOMES_MESES_COMPLETO = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 function popularSelectAno() {
@@ -181,9 +167,35 @@ function selecionarMesAtual() {
   document.getElementById("select-mes").value = hoje.getMonth() + 1;
 }
 
+// busca se existe um valor manual cadastrado pra esse ano/mes (tela
+// Faturamento Mensal) - se existir, ele tem prioridade sobre qualquer
+// calculo automatico, exatamente como no Desktop
+async function buscarValorManual(ano, mes) {
+  const linhas = await chamarSupabase(`faturamento_manual?select=valor&ano=eq.${ano}&mes=eq.${mes}`);
+  return linhas.length > 0 ? Number(linhas[0].valor) : null;
+}
+
 // soma "total" (que ja' inclui o frete, sem descontar desconto de
-// boleto - mesmo criterio do calcular_faturamento_do_mes no Desktop) de
-// todo pedido tipo="venda" e nao cancelado, dentro do periodo
+// boleto) de todo pedido tipo="venda" e nao cancelado, dentro do periodo
+async function calcularTotalRealDoMes(ano, mes) {
+  const dataDe = new Date(ano, mes - 1, 1);
+  const dataAteExclusivo = new Date(ano, mes, 1);
+  const pedidos = await chamarSupabase(
+    `pedidos?select=total,status&tipo=eq.venda` +
+    `&criado_em=gte.${formatarDataISO(dataDe)}` +
+    `&criado_em=lt.${formatarDataISO(dataAteExclusivo)}`
+  );
+  return pedidos.filter(p => p.status !== "cancelado").reduce((soma, p) => soma + Number(p.total), 0);
+}
+
+// valor manual sempre vence, se existir - mesma prioridade usada na tela
+// de Faturamento Mensal. Devolve {valor, origem: "Manual" | "Real"}
+async function buscarTotalManualOuReal(ano, mes) {
+  const valorManual = await buscarValorManual(ano, mes);
+  if (valorManual !== null) return { valor: valorManual, origem: "Manual" };
+  return { valor: await calcularTotalRealDoMes(ano, mes), origem: "Real" };
+}
+
 async function carregarFaturamento() {
   const ano = Number(document.getElementById("select-ano").value);
   const mes = Number(document.getElementById("select-mes").value);
@@ -197,6 +209,17 @@ async function carregarFaturamento() {
   alvoDiario.textContent = "Carregando...";
 
   try {
+    const valorManual = await buscarValorManual(ano, mes);
+    if (valorManual !== null) {
+      // mes com valor manual cadastrado - mostra ele, sem detalhamento
+      // diario (nao existe dado real por tras de um valor digitado a mao)
+      valorTotalEl.textContent = formatarMoeda(valorManual);
+      subtituloEl.textContent = "Valor cadastrado manualmente (Faturamento Mensal)";
+      alvoDiario.className = "vazio";
+      alvoDiario.textContent = "Esse mês usa um valor manual — sem detalhamento diário disponível.";
+      return;
+    }
+
     const dataDe = new Date(ano, mes - 1, 1);
     const dataAteExclusivo = new Date(ano, mes, 1); // primeiro dia do mes seguinte
 
@@ -269,10 +292,12 @@ document.getElementById("botao-gerar-pdf").addEventListener("click", async () =>
     if (mesAnterior === 0) { anoAnterior -= 1; mesAnterior = 12; }
     const nomeMesAnterior = NOMES_MESES_COMPLETO[mesAnterior - 1];
 
-    const [faturamentoAtual, faturamentoAnterior] = await Promise.all([
-      buscarTotalDoMes(ano, mes),
-      buscarTotalDoMes(anoAnterior, mesAnterior),
+    const [resultadoAtual, resultadoAnterior] = await Promise.all([
+      buscarTotalManualOuReal(ano, mes),
+      buscarTotalManualOuReal(anoAnterior, mesAnterior),
     ]);
+    const faturamentoAtual = resultadoAtual.valor;
+    const faturamentoAnterior = resultadoAnterior.valor;
 
     let variacaoHtml = "";
     if (faturamentoAnterior) {
