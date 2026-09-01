@@ -43,6 +43,7 @@
       itens: [
         { nome: "Faturamento", href: "faturamento.html" },
         { nome: "Peso Vendido", href: "peso-vendido.html" },
+        { nome: "M\u00e9dias", href: "medias.html" },
       ],
     },
   ];
