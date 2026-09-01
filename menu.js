@@ -30,6 +30,14 @@
 
   var MODULOS = [
     {
+      chave: "vendas", nome: "Vendas", emoji: "\ud83e\uddfe", ativo: true,
+      itens: [
+        { nome: "Novo Pedido", href: "novo-pedido.html" },
+        { nome: "Opera\u00e7\u00f5es Especiais", href: "operacoes-especiais.html" },
+        { nome: "Pedidos", href: "pedidos.html" },
+      ],
+    },
+    {
       chave: "cadastros", nome: "Cadastros", emoji: "\ud83d\udc64", ativo: true,
       itens: [
         { nome: "Clientes", href: "clientes.html" },
@@ -52,14 +60,6 @@
         { nome: "M\u00e9dias", href: "medias.html" },
         { nome: "Peso Vendido", href: "peso-vendido.html" },
         { nome: "Vendas Lan\u00e7adas", href: "vendas-lancadas.html" },
-      ],
-    },
-    {
-      chave: "vendas", nome: "Vendas", emoji: "\ud83e\uddfe", ativo: true,
-      itens: [
-        { nome: "Novo Pedido", href: "novo-pedido.html" },
-        { nome: "Opera\u00e7\u00f5es Especiais", href: "operacoes-especiais.html" },
-        { nome: "Pedidos", href: "pedidos.html" },
       ],
     },
   ];
