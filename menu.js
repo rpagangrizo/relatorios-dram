@@ -38,7 +38,12 @@
       ],
     },
     { chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: false, itens: [] },
-    { chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: false, itens: [] },
+    {
+      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true,
+      itens: [
+        { nome: "Faturamento", href: "faturamento.html" },
+      ],
+    },
   ];
 
   var ESTILO = ""
