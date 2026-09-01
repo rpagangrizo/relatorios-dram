@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Médias</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo-filtro select:focus { outline: none; border-color: var(--azul); }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; }
+  .cartao-secao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0; padding: 14px 16px 10px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 16px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 10px 16px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-categoria td { background: #F6F9FA; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--azul); padding: 9px 16px; }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Médias</h1>
+    <p>Preço médio por kg, por sabor (100g e barra somados) — mês selecionado abaixo</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro">
+        <label>Ano</label>
+        <select id="select-ano"></select>
+      </div>
+      <div class="campo-filtro">
+        <label>Mês</label>
+        <select id="select-mes">
+          <option value="1">Janeiro</option>
+          <option value="2">Fevereiro</option>
+          <option value="3">Março</option>
+          <option value="4">Abril</option>
+          <option value="5">Maio</option>
+          <option value="6">Junho</option>
+          <option value="7">Julho</option>
+          <option value="8">Agosto</option>
+          <option value="9">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
+      </div>
+      <button class="botao" id="botao-atualizar">Atualizar</button>
+    </div>
+  </div>
+
+  <div class="cartao-secao">
+    <h2>Preço médio por sabor</h2>
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function formatarKg(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " kg";
+}
+
+function formatarDataISO(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function popularSelectAno() {
+  const anoAtual = new Date().getFullYear();
+  const select = document.getElementById("select-ano");
+  for (let ano = anoAtual; ano >= anoAtual - 3; ano--) {
+    const opcao = document.createElement("option");
+    opcao.value = ano;
+    opcao.textContent = ano;
+    select.appendChild(opcao);
+  }
+}
+
+function selecionarMesAtual() {
+  const hoje = new Date();
+  document.getElementById("select-ano").value = hoje.getFullYear();
+  document.getElementById("select-mes").value = hoje.getMonth() + 1;
+}
+
+// mesma formula do Desktop (calcular_medias_do_mes): agrupa por
+// grupo_sabor (ou pelo proprio nome do item, se nao tiver grupo_sabor
+// preenchido) - assim "Manga 100g" e "Manga Barra" viram uma linha so:
+// "Manga". So' pedidos tipo="venda", nao cancelados, e reseta todo mes -
+// mesmo periodo escolhido no seletor Ano/Mes acima, igual as outras
+// telas de Relatorios.
+async function carregarMedias() {
+  const ano = Number(document.getElementById("select-ano").value);
+  const mes = Number(document.getElementById("select-mes").value);
+  const alvo = document.getElementById("conteudo-tabela");
+  alvo.className = "carregando";
+  alvo.textContent = "Carregando...";
+
+  try {
+    const dataDe = new Date(ano, mes - 1, 1);
+    const dataAteExclusivo = new Date(ano, mes, 1);
+
+    const [categorias, itensVendidos] = await Promise.all([
+      chamarSupabase("categorias_produto?select=id,nome&order=id"),
+      chamarSupabase(
+        "pedido_itens?select=quantidade,preco_unitario,itens(nome,peso_kg,grupo_sabor,categoria_produto_id)," +
+        "pedidos!inner(criado_em,tipo,status)" +
+        "&pedidos.tipo=eq.venda" +
+        `&pedidos.criado_em=gte.${formatarDataISO(dataDe)}` +
+        `&pedidos.criado_em=lt.${formatarDataISO(dataAteExclusivo)}`
+      ),
+    ]);
+
+    // filtra cancelado aqui, em JS (nao no filtro do banco) - status pode
+    // vir NULL pros pedidos normais, e "neq" na URL excluiria essas
+    // linhas tambem
+    const linhasValidas = itensVendidos.filter(li => li.pedidos.status !== "cancelado");
+
+    const porSabor = new Map(); // sabor -> {somaReceita, somaKg, categoriaId}
+    for (const linha of linhasValidas) {
+      const item = linha.itens;
+      if (!item) continue; // seguranca: item apagado/sem vinculo
+      const sabor = item.grupo_sabor || item.nome;
+      const kg = Number(linha.quantidade) * Number(item.peso_kg || 0);
+      const receita = Number(linha.quantidade) * Number(linha.preco_unitario);
+      if (!porSabor.has(sabor)) {
+        porSabor.set(sabor, { somaReceita: 0, somaKg: 0, categoriaId: item.categoria_produto_id });
+      }
+      const acumulado = porSabor.get(sabor);
+      acumulado.somaReceita += receita;
+      acumulado.somaKg += kg;
+    }
+
+    const linhas = [...porSabor.entries()].map(([sabor, dados]) => ({
+      sabor,
+      categoriaId: dados.categoriaId,
+      kg: dados.somaKg,
+      precoMedio: dados.somaKg > 0 ? dados.somaReceita / dados.somaKg : 0,
+    }));
+
+    desenharTabela(linhas, categorias);
+  } catch (erro) {
+    alvo.className = "erro";
+    alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela(linhas, categorias) {
+  const alvo = document.getElementById("conteudo-tabela");
+
+  if (linhas.length === 0) {
+    alvo.className = "vazio";
+    alvo.textContent = "Nenhuma venda lançada ainda.";
+    return;
+  }
+
+  const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
+  const gruposPorCategoria = new Map(); // categoria_id (ou "sem") -> [linhas]
+  for (const linha of linhas) {
+    const chave = linha.categoriaId ?? "sem";
+    if (!gruposPorCategoria.has(chave)) gruposPorCategoria.set(chave, []);
+    gruposPorCategoria.get(chave).push(linha);
+  }
+  // dentro de cada categoria, ordem alfabetica pelo sabor
+  for (const lista of gruposPorCategoria.values()) {
+    lista.sort((a, b) => a.sabor.localeCompare(b.sabor, "pt-BR"));
+  }
+  const ordemCategorias = [...categorias.map(c => c.id), "sem"].filter(id => gruposPorCategoria.has(id));
+
+  let html = `<table><thead><tr><th>Item</th><th class="num">Kg vendidos</th><th class="num">Preço médio / kg</th></tr></thead><tbody>`;
+  for (const categoriaId of ordemCategorias) {
+    const nomeCategoria = categoriaId === "sem" ? "Sem categoria" : nomeCategoriaPorId.get(categoriaId);
+    html += `<tr class="linha-categoria"><td colspan="3">${nomeCategoria}</td></tr>`;
+    for (const linha of gruposPorCategoria.get(categoriaId)) {
+      html += `<tr><td>${linha.sabor}</td><td class="num">${formatarKg(linha.kg)}</td><td class="num">${formatarMoeda(linha.precoMedio)}</td></tr>`;
+    }
+  }
+  html += `</tbody></table>`;
+
+  alvo.className = "";
+  alvo.innerHTML = html;
+}
+
+document.getElementById("botao-atualizar").addEventListener("click", carregarMedias);
+
+popularSelectAno();
+selecionarMesAtual();
+carregarMedias();
+</script>
+</body>
+</html>
