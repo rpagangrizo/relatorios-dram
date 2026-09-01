@@ -39,6 +39,12 @@
   main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 60px; }
 
   .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .botoes-periodo { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .botao-periodo {
+    padding: 7px 14px; border-radius: 100px; border: 1.5px solid var(--linha); background: #fff;
+    font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--texto-suave);
+  }
+  .botao-periodo.ativo { border-color: var(--azul); background: #EAF1F6; color: var(--azul); }
   .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
   .campo-filtro { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 130px; }
   .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
@@ -117,6 +123,11 @@
 
 <main>
   <div class="cartao-filtros">
+    <div class="botoes-periodo">
+      <button type="button" class="botao-periodo" id="botao-periodo-mes-atual" data-periodo="mes-atual">Este mês</button>
+      <button type="button" class="botao-periodo" id="botao-periodo-mes-passado" data-periodo="mes-passado">Mês passado</button>
+      <button type="button" class="botao-periodo" id="botao-periodo-tudo" data-periodo="tudo">Ver tudo</button>
+    </div>
     <div class="linha-filtros">
       <div class="campo-filtro">
         <label>Cliente</label>
@@ -288,6 +299,20 @@ function dataBrParaIso(texto) {
   return `${a.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
 }
 
+function formatarDataISO(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+function formatarDataBr(data) {
+  const dia = String(data.getDate()).padStart(2, "0");
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const ano = data.getFullYear();
+  return `${dia}/${mes}/${ano}`;
+}
+
 let pedidos = [];
 let notaMaisRecentePorPedido = new Map();
 let boletosPorPedido = new Map();
@@ -301,13 +326,72 @@ function extrairMotivoErroNota(respostaBruta) {
   return respostaBruta.mensagem_sefaz || respostaBruta.mensagem || "erro desconhecido";
 }
 
+// --- período: por padrão, so' busca o mes atual no banco (nao o
+// historico inteiro) - evita a pagina ficar cada vez mais pesada com o
+// tempo. Os botoes rapidos (Este mes / Mes passado / Ver tudo) so' mexem
+// nos campos De/Ate e recarregam do servidor; os campos De/Ate tambem
+// podem ser digitados na mao pra qualquer periodo especifico.
+function aplicarPeriodoRapido(periodo) {
+  const hoje = new Date();
+  let dataDe = null;
+  let dataAte = null;
+
+  if (periodo === "mes-atual") {
+    dataDe = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    dataAte = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+  } else if (periodo === "mes-passado") {
+    dataDe = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    dataAte = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+  }
+  // "tudo" -> dataDe/dataAte ficam null (sem filtro de data nenhum)
+
+  document.getElementById("filtro-data-de").value = dataDe ? formatarDataBr(dataDe) : "";
+  document.getElementById("filtro-data-ate").value = dataAte ? formatarDataBr(dataAte) : "";
+  marcarBotaoPeriodoAtivo(periodo);
+  carregarPedidos();
+}
+
+function marcarBotaoPeriodoAtivo(periodo) {
+  document.querySelectorAll(".botao-periodo").forEach(botao => {
+    botao.classList.toggle("ativo", botao.dataset.periodo === periodo);
+  });
+}
+
+// quando o usuario digita uma data manualmente (em vez de clicar num dos
+// botoes rapidos), nenhum botao rapido corresponde mais exatamente a
+// esse periodo - tira o destaque de todos, pra nao mostrar "Este mês"
+// marcado enquanto o filtro real e' outra coisa
+function desmarcarBotoesPeriodo() {
+  document.querySelectorAll(".botao-periodo").forEach(botao => botao.classList.remove("ativo"));
+}
+
 async function carregarPedidos() {
   const corpo = document.getElementById("corpo-tabela");
   const mensagem = document.getElementById("area-mensagem");
   mensagem.innerHTML = `<div class="carregando">Carregando pedidos...</div>`;
   corpo.innerHTML = "";
   try {
-    pedidos = await chamarSupabase("pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,forma_pagamento,clientes(nome)&order=criado_em.desc");
+    const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
+    const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
+
+    // filtro de data já vai direto na consulta ao banco (nao busca tudo
+    // pra depois filtrar na tela) - assim a pagina so' carrega o volume
+    // do periodo escolhido, nao o historico inteiro
+    let filtroData = "";
+    if (dataDeIso) {
+      filtroData += `&criado_em=gte.${dataDeIso}`;
+    }
+    if (dataAteIso) {
+      // soma 1 dia ao "ate' " e usa "menor que", pra incluir o dia inteiro
+      // (a coluna tem hora tambem, nao so' a data)
+      const proximoDia = new Date(dataAteIso + "T00:00:00");
+      proximoDia.setDate(proximoDia.getDate() + 1);
+      filtroData += `&criado_em=lt.${formatarDataISO(proximoDia)}`;
+    }
+
+    pedidos = await chamarSupabase(
+      `pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,forma_pagamento,clientes(nome)${filtroData}&order=criado_em.desc`
+    );
     // busca TODAS as notas (nao so' autorizado/cancelado) - precisamos da
     // mais recente de cada pedido pra saber se ainda esta' processando,
     // se deu erro (e qual), ou se realmente nunca foi tentada
@@ -341,15 +425,13 @@ function desenharTabela() {
 
   const filtroCliente = document.getElementById("filtro-cliente").value.trim().toLowerCase();
   const filtroNumero = document.getElementById("filtro-numero").value.trim();
-  const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
-  const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
 
+  // o filtro de data ja' foi aplicado direto na consulta ao banco (ver
+  // carregarPedidos) - aqui so' sobra filtrar cliente/numero em cima do
+  // que ja' foi carregado pro periodo atual
   const filtrados = pedidos.filter(p => {
     if (filtroCliente && !p.clientes.nome.toLowerCase().includes(filtroCliente)) return false;
     if (filtroNumero && String(p.id) !== filtroNumero) return false;
-    const dataPedidoIso = p.criado_em.slice(0, 10);
-    if (dataDeIso && dataPedidoIso < dataDeIso) return false;
-    if (dataAteIso && dataPedidoIso > dataAteIso) return false;
     return true;
   });
 
@@ -446,19 +528,25 @@ function desenharTabela() {
   });
 }
 
+document.querySelectorAll(".botao-periodo").forEach(botao => {
+  botao.addEventListener("click", () => aplicarPeriodoRapido(botao.dataset.periodo));
+});
+
+// cliente/numero filtram na hora, so' na tela (sem recarregar do banco) -
+// a data, se digitada na mao, recarrega do banco so' quando o campo perde
+// o foco ou aperta Enter (evita ficar buscando a cada letra digitada)
 document.getElementById("filtro-cliente").addEventListener("input", desenharTabela);
 document.getElementById("filtro-numero").addEventListener("input", desenharTabela);
-document.getElementById("filtro-data-de").addEventListener("input", desenharTabela);
-document.getElementById("filtro-data-ate").addEventListener("input", desenharTabela);
+document.getElementById("filtro-data-de").addEventListener("change", () => { desmarcarBotoesPeriodo(); carregarPedidos(); });
+document.getElementById("filtro-data-ate").addEventListener("change", () => { desmarcarBotoesPeriodo(); carregarPedidos(); });
+
 document.getElementById("botao-limpar").addEventListener("click", () => {
   document.getElementById("filtro-cliente").value = "";
   document.getElementById("filtro-numero").value = "";
-  document.getElementById("filtro-data-de").value = "";
-  document.getElementById("filtro-data-ate").value = "";
-  desenharTabela();
+  aplicarPeriodoRapido("mes-atual"); // "limpar" volta pro padrao (mes atual), nao pro historico inteiro
 });
 
-carregarPedidos();
+aplicarPeriodoRapido("mes-atual"); // ao abrir a pagina, ja' comeca so' com o mes atual
 </script>
 </body>
 </html>
