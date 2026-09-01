@@ -156,6 +156,8 @@ function selecionarMesAtual() {
   document.getElementById("select-mes").value = hoje.getMonth() + 1;
 }
 
+let ultimasMedias = null; // { linhas, categorias }
+
 // mesma formula do Desktop (calcular_medias_do_mes): agrupa por
 // grupo_sabor (ou pelo proprio nome do item, se nao tiver grupo_sabor
 // preenchido) - assim "Manga 100g" e "Manga Barra" viram uma linha so:
@@ -212,6 +214,7 @@ async function carregarMedias() {
     }));
 
     desenharTabela(linhas, categorias);
+    ultimasMedias = { linhas, categorias };
   } catch (erro) {
     alvo.className = "erro";
     alvo.textContent = `Não consegui carregar: ${erro.message}`;
@@ -257,14 +260,25 @@ function desenharTabela(linhas, categorias) {
 document.getElementById("botao-atualizar").addEventListener("click", carregarMedias);
 
 document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimasMedias) return;
   const ano = document.getElementById("select-ano").value;
   const mesTexto = document.getElementById("select-mes").selectedOptions[0].textContent;
-  const tabelaHtml = document.getElementById("conteudo-tabela").innerHTML;
-  abrirImpressao(
-    `Preço Médio por Sabor — ${mesTexto} de ${ano}`,
-    "Preço médio por kg, ponderado pelos quilos vendidos de cada sabor (100g e barra somados)",
-    tabelaHtml,
-  );
+  const { linhas, categorias } = ultimasMedias;
+
+  const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
+  const linhasOrdenadas = [...linhas].sort((a, b) => a.sabor.localeCompare(b.sabor, "pt-BR"));
+
+  let linhasHtml = linhasOrdenadas.map(l => {
+    const nomeCategoria = l.categoriaId == null ? "Sem categoria" : (nomeCategoriaPorId.get(l.categoriaId) || "Sem categoria");
+    return `<tr><td>${nomeCategoria}</td><td>${l.sabor}</td><td class="num">${l.kg.toFixed(2)}</td><td class="num">${formatarMoeda(l.precoMedio)}</td></tr>`;
+  }).join("");
+  if (!linhasHtml) linhasHtml = `<tr><td colspan="4" class="vazio">Nenhuma venda neste mês.</td></tr>`;
+
+  const conteudo = `
+    <h2>Médias do mês</h2>
+    <table><tr><th>Categoria</th><th>Item</th><th class="num">Kg vendidos</th><th class="num">Preço médio (R$/kg)</th></tr>${linhasHtml}</table>
+  `;
+  abrirImpressao(`Preço médio por item (R$/kg) — ${mesTexto} de ${ano}`, "Preço médio ponderado pelos quilos vendidos no mês.", conteudo);
 });
 
 popularSelectAno();
