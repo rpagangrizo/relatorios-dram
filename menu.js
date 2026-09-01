@@ -14,6 +14,20 @@
 // paginas dele, no mesmo formato dos outros modulos.
 
 (function () {
+  // so' o Raphael pode ver Financeiro/Relatorios - os modulos marcados
+  // com "restrito: true" abaixo ficam escondidos (e a pagina redireciona
+  // sozinha) pra qualquer outra conta logada.
+  var EMAIL_RAPHAEL = "raphael@arcoirisalimentos.com.br";
+
+  function souRaphael() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      return !!sessao && sessao.email === EMAIL_RAPHAEL;
+    } catch (erro) {
+      return false;
+    }
+  }
+
   var MODULOS = [
     {
       chave: "vendas", nome: "Vendas", emoji: "\ud83e\uddfe", ativo: true,
@@ -37,9 +51,9 @@
         { nome: "Tabelas de Pre\u00e7o", href: "tabelas-preco.html" },
       ],
     },
-    { chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: false, itens: [] },
+    { chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: false, restrito: true, itens: [] },
     {
-      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true,
+      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true,
       itens: [
         { nome: "Faturamento", href: "faturamento.html" },
         { nome: "Faturamento Mensal", href: "faturamento-mensal.html" },
@@ -91,19 +105,25 @@
     return MODULOS[0];
   }
 
+  function moduloLiberado(m) {
+    return m.ativo && (!m.restrito || souRaphael());
+  }
+
   function montarSidebarHtml(moduloAtivo) {
     var html = "";
     for (var i = 0; i < MODULOS.length; i++) {
       var m = MODULOS[i];
+      var liberado = moduloLiberado(m);
       var ativo = m === moduloAtivo;
-      var classes = "item-modulo" + (ativo ? " ativo" : "") + (!m.ativo ? " desabilitado" : "");
-      if (m.ativo) {
+      var classes = "item-modulo" + (ativo ? " ativo" : "") + (!liberado ? " desabilitado" : "");
+      if (liberado) {
         html += '<a class="' + classes + '" href="' + m.itens[0].href + '">'
           + '<span aria-hidden="true">' + m.emoji + "</span>" + m.nome + "</a>";
       } else {
+        var textoTag = m.ativo ? "" : "em breve";
         html += '<span class="' + classes + '">'
           + '<span aria-hidden="true">' + m.emoji + "</span>" + m.nome
-          + '<span class="tag-em-breve">em breve</span></span>';
+          + (textoTag ? '<span class="tag-em-breve">' + textoTag + "</span>" : "") + "</span>";
       }
     }
     return html;
@@ -154,5 +174,18 @@
     document.body.appendChild(layout);
   }
 
-  document.addEventListener("DOMContentLoaded", montarMenu);
+  // trava de acesso: roda ANTES de qualquer outra coisa (mesmo antes do
+  // menu ser montado), pra fechar a porta pra quem digitar a URL direto
+  // numa pagina restrita. Se a pessoa nao for o Raphael, manda ela
+  // embora na hora - o "return" impede que o resto do menu.js (e,
+  // criticamente, o script da propria pagina que busca os dados
+  // financeiros) continue rodando, porque a navegacao pra index.html
+  // interrompe o carregamento do resto da pagina.
+  var paginaAgora = paginaAtual();
+  var moduloAgora = moduloDaPagina(paginaAgora);
+  if (moduloAgora.restrito && !souRaphael()) {
+    location.href = "index.html";
+  } else {
+    document.addEventListener("DOMContentLoaded", montarMenu);
+  }
 })();
