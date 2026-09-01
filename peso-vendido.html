@@ -163,6 +163,8 @@ function selecionarMesAtual() {
   document.getElementById("select-mes").value = hoje.getMonth() + 1;
 }
 
+let ultimoPesoVendido = null; // { linhas, categorias, totalGeral, total100g, totalBarra }
+
 // mesma formula do Desktop: SUM(quantidade * peso_kg) por item, so'
 // pedidos tipo="venda" (nao bonificacao/comodato/transferencia) e nao
 // cancelados, agrupado por categoria de produto
@@ -221,6 +223,8 @@ async function carregarPesoVendido() {
     document.getElementById("valor-total-100g").textContent = formatarKg(total100g);
     document.getElementById("valor-total-barra").textContent = formatarKg(totalBarra);
 
+    ultimoPesoVendido = { linhas, categorias, totalGeral, total100g, totalBarra };
+
     desenharTabela(linhas, categorias);
   } catch (erro) {
     alvoTabela.className = "erro";
@@ -267,22 +271,41 @@ function desenharTabela(linhas, categorias) {
 document.getElementById("botao-atualizar").addEventListener("click", carregarPesoVendido);
 
 document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimoPesoVendido) return;
   const ano = document.getElementById("select-ano").value;
   const mesTexto = document.getElementById("select-mes").selectedOptions[0].textContent;
-  const totalGeral = document.getElementById("valor-total-geral").textContent;
-  const total100g = document.getElementById("valor-total-100g").textContent;
-  const totalBarra = document.getElementById("valor-total-barra").textContent;
-  const tabelaHtml = document.getElementById("conteudo-tabela").innerHTML;
+  const { linhas, categorias, totalGeral, total100g, totalBarra } = ultimoPesoVendido;
+
+  const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
+  const gruposPorCategoria = new Map();
+  for (const linha of linhas) {
+    const chave = linha.categoriaId ?? "sem";
+    if (!gruposPorCategoria.has(chave)) gruposPorCategoria.set(chave, []);
+    gruposPorCategoria.get(chave).push(linha);
+  }
+  for (const lista of gruposPorCategoria.values()) lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const ordemCategorias = [...categorias.map(c => c.id), "sem"].filter(id => gruposPorCategoria.has(id));
+
+  let linhasHtml = "";
+  for (const categoriaId of ordemCategorias) {
+    const nomeCategoria = categoriaId === "sem" ? "Sem categoria" : nomeCategoriaPorId.get(categoriaId);
+    linhasHtml += `<tr><td colspan="2" class="subgrupo">${nomeCategoria}</td></tr>`;
+    for (const linha of gruposPorCategoria.get(categoriaId)) {
+      linhasHtml += `<tr><td>${linha.nome}</td><td class="num">${linha.kg.toFixed(2)} kg</td></tr>`;
+    }
+  }
+  if (!linhasHtml) linhasHtml = `<tr><td colspan="2" class="vazio">Nenhuma venda neste mês.</td></tr>`;
 
   const conteudo = `
-    <table style="margin-bottom:22px">
-      <tr><td>Total geral</td><td class="num">${totalGeral}</td></tr>
-      <tr><td>Total 100g</td><td class="num">${total100g}</td></tr>
-      <tr><td>Total barra</td><td class="num">${totalBarra}</td></tr>
-    </table>
-    ${tabelaHtml}
+    <div class="cartoes">
+      <div class="cartao"><div class="rotulo">Total geral</div><div class="valor">${totalGeral.toFixed(2)} kg</div></div>
+      <div class="cartao"><div class="rotulo">Total 100g</div><div class="valor">${total100g.toFixed(2)} kg</div></div>
+      <div class="cartao"><div class="rotulo">Total barra</div><div class="valor">${totalBarra.toFixed(2)} kg</div></div>
+    </div>
+    <h2>Detalhamento por item</h2>
+    <table><tr><th>Item</th><th class="num">Kg vendidos</th></tr>${linhasHtml}</table>
   `;
-  abrirImpressao(`Peso Vendido — ${mesTexto} de ${ano}`, "Só pedidos do tipo Venda", conteudo);
+  abrirImpressao(`Peso vendido — ${mesTexto} de ${ano}`, "Total de kg vendidos por item no mês.", conteudo);
 });
 
 popularSelectAno();
