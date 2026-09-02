@@ -37,10 +37,34 @@
   header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
   header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
 
-  main { max-width: 1050px; margin: 0 auto; padding: 18px 16px 60px; }
+  main { max-width: 1150px; margin: 0 auto; padding: 18px 16px 60px; }
 
   .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
   .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+
+  .cartoes-linha { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cartao-destaque { flex: 1; min-width: 180px; background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; text-align: center; }
+  .cartao-destaque .rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 21px; font-weight: 700; color: var(--azul); margin-top: 4px; }
+  .cartao-destaque.vencidas .valor { color: var(--vermelho); }
+
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro input, .campo-filtro select { padding: 9px 11px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 13.5px; color: var(--texto); background: #fff; }
+  .campo-filtro input:focus, .campo-filtro select:focus { outline: none; border-color: var(--azul); }
+  .dica-filtro { font-size: 11.5px; color: var(--texto-suave); margin: -4px 0 10px; }
+  .checkbox-filtro { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .botao.azul { background: var(--azul); }
+  .botao.verde { background: var(--verde); }
+  .botao.vermelho { background: #fff; border: 1.5px solid var(--vermelho); color: var(--vermelho); }
+
+  .barra-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 
   .grade-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
   @media (max-width: 720px) { .grade-form { grid-template-columns: 1fr 1fr; } }
@@ -56,39 +80,25 @@
   .lista-busca-suspensa .item-busca:last-child { border-bottom: none; }
   .lista-busca-suspensa .item-busca:hover { background: #F6F9FA; }
 
-  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
-  .botao:active { background: var(--laranja-escuro); }
-  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
-  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
-  .botao.azul { background: var(--azul); }
-
-  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
-  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
-  .campo-filtro input, .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; }
-
-  .cartao-destaque { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 18px; text-align: center; margin-bottom: 14px; }
-  .cartao-destaque .rotulo { font-size: 12px; text-transform: uppercase; color: var(--texto-suave); }
-  .cartao-destaque .valor { font-size: 26px; font-weight: 700; color: var(--azul); margin-top: 4px; }
+  .rotulo-total-filtrado { font-size: 13px; color: var(--texto-suave); margin: 0 0 10px; }
+  .rotulo-total-filtrado b { color: var(--azul); }
 
   .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
-  table { width: 100%; min-width: 820px; border-collapse: collapse; }
+  table { width: 100%; min-width: 900px; border-collapse: collapse; }
   thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 12px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
   thead th.num { text-align: right; }
   tbody td { padding: 9px 12px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
   tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
   tbody tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; }
   tbody tr.linha-vencida { background: var(--vermelho-claro); }
   tbody tr.linha-vencida td { color: var(--vermelho); }
+  tbody tr.linha-selecionada { outline: 2px solid var(--azul); outline-offset: -2px; background: #EAF1F6 !important; }
+  tbody tr.linha-selecionada td { color: var(--texto) !important; }
   .selo-status { font-size: 11px; padding: 3px 9px; border-radius: 100px; font-weight: 700; white-space: nowrap; }
   .selo-status.pago { background: #E4F3E8; color: var(--verde); }
   .selo-status.vencida { background: #FBE7E4; color: var(--vermelho); }
   .selo-status.aberto { background: #EAF1F6; color: var(--azul); }
-  .acoes-linha { display: flex; gap: 6px; flex-wrap: wrap; }
-  .botao-acao { padding: 4px 9px; border-radius: 7px; border: 1.5px solid var(--linha); background: #fff;
-    font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-  .botao-acao.pagar { color: var(--verde); border-color: #B7DFC3; }
-  .botao-acao.excluir { color: var(--vermelho); border-color: #E5B4AC; }
 
   .mensagem { margin-top: 10px; padding: 11px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; display: none; }
   .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
@@ -111,7 +121,13 @@
 <script src="menu.js"></script>
 
 <main>
-  <div class="cartao">
+  <div class="cartoes-linha">
+    <div class="cartao-destaque"><div class="rotulo">Total do mês</div><div class="valor" id="valor-total-mes">—</div></div>
+    <div class="cartao-destaque"><div class="rotulo">Vencendo em 7 dias (filtro)</div><div class="valor" id="valor-vencendo-7-dias">—</div></div>
+    <div class="cartao-destaque vencidas"><div class="rotulo">Vencidas (filtro)</div><div class="valor" id="valor-vencidas">—</div></div>
+  </div>
+
+  <div class="cartao" id="cartao-formulario" style="display:none">
     <h2 id="titulo-formulario">Novo lançamento</h2>
     <div class="grade-form">
       <div class="campo">
@@ -150,13 +166,44 @@
     </div>
     <div style="display:flex; gap:8px">
       <button class="botao" id="botao-salvar-lancamento">Salvar</button>
-      <button class="botao secundario" id="botao-cancelar-edicao" style="display:none">Cancelar edição</button>
+      <button class="botao secundario" id="botao-cancelar-formulario">Cancelar</button>
     </div>
     <div class="mensagem" id="mensagem-formulario"></div>
   </div>
 
   <div class="cartao">
-    <h2>Filtros</h2>
+    <div class="linha-filtros">
+      <div class="campo-filtro" style="min-width:150px">
+        <label>Categoria</label>
+        <select id="filtro-categoria"><option value="">Todas</option></select>
+      </div>
+      <div class="campo-filtro" style="min-width:150px">
+        <label>Subcategoria</label>
+        <select id="filtro-subcategoria"><option value="">Todas</option></select>
+      </div>
+      <div class="campo-filtro" style="width:90px">
+        <label>Ano</label>
+        <select id="filtro-ano"></select>
+      </div>
+      <div class="campo-filtro" style="width:130px">
+        <label>Mês</label>
+        <select id="filtro-mes">
+          <option value="">Todos</option>
+          <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+          <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+          <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+          <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+        </select>
+      </div>
+      <div class="campo-filtro" style="width:70px">
+        <label>Dia</label>
+        <input type="number" id="filtro-dia" min="1" max="31">
+      </div>
+      <div class="campo-filtro" style="min-width:170px">
+        <label>Fornecedor</label>
+        <input type="text" id="filtro-fornecedor" placeholder="Buscar por nome...">
+      </div>
+    </div>
     <div class="linha-filtros">
       <div class="campo-filtro" style="width:120px">
         <label>Vencimento de</label>
@@ -166,28 +213,20 @@
         <label>até</label>
         <input type="text" id="filtro-data-ate" placeholder="DD/MM/AAAA">
       </div>
-      <div class="campo-filtro" style="flex:1; min-width:150px">
-        <label>Categoria</label>
-        <select id="filtro-categoria"><option value="">Todas</option></select>
-      </div>
-      <div class="campo-filtro" style="flex:1; min-width:150px">
-        <label>Status</label>
-        <select id="filtro-status">
-          <option value="">Todos</option>
-          <option value="pendente">Pendente (vencida + em aberto)</option>
-          <option value="vencida">Só vencidas</option>
-          <option value="concluido">Só pagas</option>
-        </select>
-      </div>
+      <label class="checkbox-filtro"><input type="checkbox" id="filtro-historico"> Ver histórico (pagas)</label>
       <button class="botao azul" id="botao-filtrar">Filtrar</button>
       <button class="botao secundario" id="botao-limpar-filtros">Limpar filtros</button>
     </div>
+    <p class="dica-filtro">Preenchendo "Vencimento de" e "até", esse período substitui o filtro de Ano/Mês/Dia acima.</p>
   </div>
 
-  <div class="cartao-destaque">
-    <div class="rotulo">Total no filtro atual</div>
-    <div class="valor" id="valor-total-filtro">—</div>
+  <div class="barra-acoes">
+    <button class="botao secundario" id="botao-novo-lancamento">+ Novo lançamento</button>
+    <button class="botao verde" id="botao-marcar-pago" disabled>Marcar como pago</button>
+    <button class="botao vermelho" id="botao-excluir-selecionado" disabled>Excluir selecionado</button>
   </div>
+
+  <p class="rotulo-total-filtrado" id="rotulo-total-filtrado"></p>
 
   <div class="cartao-secao">
     <div id="conteudo-tabela" class="carregando">Carregando...</div>
@@ -199,6 +238,7 @@
 <script>
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const NOMES_MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 async function chamarSupabase(caminho, opcoes = {}) {
   const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
@@ -224,7 +264,7 @@ function dataBrParaIso(texto) {
   return `${a.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
 }
 function isoParaDataBr(iso) {
-  if (!iso) return "";
+  if (!iso) return "—";
   const [ano, mes, dia] = iso.slice(0, 10).split("-");
   return `${dia}/${mes}/${ano}`;
 }
@@ -232,13 +272,19 @@ function hojeIso() {
   const hoje = new Date();
   return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
 }
+function somarDiasIso(iso, dias) {
+  const data = new Date(iso + "T00:00:00");
+  data.setDate(data.getDate() + dias);
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+}
 
 let categorias = [];
 let subcategoriasPorCategoria = new Map();
 let fornecedores = [];
 let lancamentos = [];
-let lancamentoEmEdicaoId = null; // null = novo lançamento
+let lancamentoEmEdicaoId = null;
 let fornecedorEscolhido = null;
+let idSelecionado = null;
 
 async function carregarListasDeApoio() {
   const [listaCategorias, listaSubcategorias, listaFornecedores] = await Promise.all([
@@ -253,19 +299,33 @@ async function carregarListasDeApoio() {
     if (!subcategoriasPorCategoria.has(s.categoria_id)) subcategoriasPorCategoria.set(s.categoria_id, []);
     subcategoriasPorCategoria.get(s.categoria_id).push(s);
   }
-
   const opcoesCategorias = categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join("");
   document.getElementById("campo-categoria").innerHTML = '<option value="">— Nenhuma —</option>' + opcoesCategorias;
   document.getElementById("filtro-categoria").innerHTML = '<option value="">Todas</option>' + opcoesCategorias;
+
+  const anoAtual = new Date().getFullYear();
+  const selectAno = document.getElementById("filtro-ano");
+  selectAno.innerHTML = '<option value="">Todos</option>' +
+    Array.from({ length: 5 }, (_, i) => anoAtual - i).map(a => `<option value="${a}">${a}</option>`).join("");
+  selectAno.value = anoAtual;
+  document.getElementById("filtro-mes").value = new Date().getMonth() + 1;
 }
 
-function atualizarSelectSubcategoria() {
+function atualizarSelectSubcategoriaForm() {
   const categoriaId = document.getElementById("campo-categoria").value;
   const select = document.getElementById("campo-subcategoria");
   const lista = categoriaId ? (subcategoriasPorCategoria.get(Number(categoriaId)) || []) : [];
   select.innerHTML = '<option value="">— Nenhuma —</option>' + lista.map(s => `<option value="${s.id}">${s.nome}</option>`).join("");
 }
-document.getElementById("campo-categoria").addEventListener("change", atualizarSelectSubcategoria);
+document.getElementById("campo-categoria").addEventListener("change", atualizarSelectSubcategoriaForm);
+
+function atualizarSelectSubcategoriaFiltro() {
+  const categoriaId = document.getElementById("filtro-categoria").value;
+  const select = document.getElementById("filtro-subcategoria");
+  const lista = categoriaId ? (subcategoriasPorCategoria.get(Number(categoriaId)) || []) : [];
+  select.innerHTML = '<option value="">Todas</option>' + lista.map(s => `<option value="${s.id}">${s.nome}</option>`).join("");
+}
+document.getElementById("filtro-categoria").addEventListener("change", atualizarSelectSubcategoriaFiltro);
 
 document.getElementById("campo-busca-fornecedor").addEventListener("input", (e) => {
   const filtro = e.target.value.trim().toLowerCase();
@@ -296,18 +356,24 @@ function limparFormulario() {
   fornecedorEscolhido = null;
   document.getElementById("titulo-formulario").textContent = "Novo lançamento";
   document.getElementById("campo-categoria").value = "";
-  atualizarSelectSubcategoria();
+  atualizarSelectSubcategoriaForm();
   document.getElementById("campo-busca-fornecedor").value = "";
   document.getElementById("campo-descricao").value = "";
   document.getElementById("campo-valor").value = "";
   document.getElementById("campo-vencimento").value = "";
   document.getElementById("campo-banco").value = "";
   document.getElementById("campo-observacao").value = "";
-  document.getElementById("botao-cancelar-edicao").style.display = "none";
   document.getElementById("mensagem-formulario").className = "mensagem";
 }
 
-document.getElementById("botao-cancelar-edicao").addEventListener("click", limparFormulario);
+document.getElementById("botao-novo-lancamento").addEventListener("click", () => {
+  limparFormulario();
+  document.getElementById("cartao-formulario").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+document.getElementById("botao-cancelar-formulario").addEventListener("click", () => {
+  document.getElementById("cartao-formulario").style.display = "none";
+});
 
 document.getElementById("botao-salvar-lancamento").addEventListener("click", async () => {
   const mensagem = document.getElementById("mensagem-formulario");
@@ -342,13 +408,10 @@ document.getElementById("botao-salvar-lancamento").addEventListener("click", asy
   try {
     if (lancamentoEmEdicaoId) {
       await chamarSupabase(`contas_pagar?id=eq.${lancamentoEmEdicaoId}`, { method: "PATCH", body: JSON.stringify(payload) });
-      mensagem.className = "mensagem sucesso";
-      mensagem.textContent = "Lançamento atualizado com sucesso.";
     } else {
       await chamarSupabase("contas_pagar", { method: "POST", body: JSON.stringify(payload) });
-      mensagem.className = "mensagem sucesso";
-      mensagem.textContent = "Lançamento criado com sucesso.";
     }
+    document.getElementById("cartao-formulario").style.display = "none";
     limparFormulario();
     await filtrarLancamentos();
   } catch (erro) {
@@ -360,93 +423,179 @@ document.getElementById("botao-salvar-lancamento").addEventListener("click", asy
   }
 });
 
+// clique simples seleciona (habilita os botoes de acao); duplo clique edita
+function selecionarLinha(id) {
+  idSelecionado = idSelecionado === id ? null : id;
+  desenharTabela();
+  atualizarBotoesAcao();
+}
+
+function atualizarBotoesAcao() {
+  const lancamento = lancamentos.find(l => l.id === idSelecionado);
+  const botaoPagar = document.getElementById("botao-marcar-pago");
+  const botaoExcluir = document.getElementById("botao-excluir-selecionado");
+  botaoExcluir.disabled = !lancamento;
+  if (!lancamento) {
+    botaoPagar.disabled = true;
+    botaoPagar.textContent = "Marcar como pago";
+    return;
+  }
+  botaoPagar.disabled = false;
+  botaoPagar.textContent = lancamento.status === "concluido" ? "Desmarcar pagamento" : "Marcar como pago";
+}
+
+document.getElementById("botao-marcar-pago").addEventListener("click", async () => {
+  const lancamento = lancamentos.find(l => l.id === idSelecionado);
+  if (!lancamento) return;
+  try {
+    if (lancamento.status === "concluido") {
+      await chamarSupabase(`contas_pagar?id=eq.${lancamento.id}`, {
+        method: "PATCH", body: JSON.stringify({ status: "pendente", data_pagamento: null }),
+      });
+    } else {
+      await chamarSupabase(`contas_pagar?id=eq.${lancamento.id}`, {
+        method: "PATCH", body: JSON.stringify({ status: "concluido", data_pagamento: hojeIso() }),
+      });
+    }
+    await filtrarLancamentos();
+  } catch (erro) {
+    alert(`Não consegui atualizar: ${erro.message}`);
+  }
+});
+
+document.getElementById("botao-excluir-selecionado").addEventListener("click", async () => {
+  if (!idSelecionado) return;
+  if (!confirm("Excluir esse lançamento? Não pode ser desfeito.")) return;
+  try {
+    await chamarSupabase(`contas_pagar?id=eq.${idSelecionado}`, { method: "DELETE" });
+    idSelecionado = null;
+    await filtrarLancamentos();
+  } catch (erro) {
+    alert(`Não consegui excluir: ${erro.message}`);
+  }
+});
+
 function editarLancamento(id) {
   const l = lancamentos.find(x => x.id === id);
   if (!l) return;
   lancamentoEmEdicaoId = id;
+  document.getElementById("cartao-formulario").style.display = "block";
   document.getElementById("titulo-formulario").textContent = `Editando lançamento #${id}`;
   document.getElementById("campo-categoria").value = l.categoria_id || "";
-  atualizarSelectSubcategoria();
+  atualizarSelectSubcategoriaForm();
   document.getElementById("campo-subcategoria").value = l.subcategoria_id || "";
   fornecedorEscolhido = l.fornecedor_id ? fornecedores.find(f => f.id === l.fornecedor_id) : null;
   document.getElementById("campo-busca-fornecedor").value = fornecedorEscolhido ? fornecedorEscolhido.nome : "";
   document.getElementById("campo-descricao").value = l.descricao || "";
   document.getElementById("campo-valor").value = l.valor;
-  document.getElementById("campo-vencimento").value = isoParaDataBr(l.data_efetivacao);
+  document.getElementById("campo-vencimento").value = l.data_efetivacao ? isoParaDataBr(l.data_efetivacao) : "";
   document.getElementById("campo-banco").value = l.banco || "";
   document.getElementById("campo-observacao").value = l.observacao || "";
-  document.getElementById("botao-cancelar-edicao").style.display = "inline-block";
   document.getElementById("mensagem-formulario").className = "mensagem";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-async function marcarComoPago(id) {
-  try {
-    await chamarSupabase(`contas_pagar?id=eq.${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "concluido", data_pagamento: hojeIso() }),
-    });
-    await filtrarLancamentos();
-  } catch (erro) {
-    alert(`Não consegui marcar como pago: ${erro.message}`);
+// monta o periodo de vencimento a partir dos filtros: se "De" e "Ate"
+// estiverem os dois preenchidos, eles SUBSTITUEM o filtro de Ano/Mes/Dia
+function calcularPeriodoFiltro() {
+  const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
+  const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
+  if (dataDeIso && dataAteIso) {
+    return { de: dataDeIso, ate: dataAteIso, rotulo: `${document.getElementById("filtro-data-de").value} a ${document.getElementById("filtro-data-ate").value}` };
   }
+  const ano = document.getElementById("filtro-ano").value;
+  const mes = document.getElementById("filtro-mes").value;
+  const dia = document.getElementById("filtro-dia").value;
+  if (!ano) return { de: null, ate: null, rotulo: "todos os períodos" };
+  if (mes && dia) {
+    const iso = `${ano}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
+    return { de: iso, ate: iso, rotulo: `${dia}/${mes}/${ano}` };
+  }
+  if (mes) {
+    const de = `${ano}-${mes.padStart(2, "0")}-01`;
+    const proximoMes = new Date(Number(ano), Number(mes), 1);
+    const ate = `${proximoMes.getFullYear()}-${String(proximoMes.getMonth() + 1).padStart(2, "0")}-01`;
+    return { de, ateExclusivo: ate, rotulo: `${NOMES_MESES[mes - 1]}/${ano}` };
+  }
+  return { de: `${ano}-01-01`, ateExclusivo: `${Number(ano) + 1}-01-01`, rotulo: ano };
 }
 
-async function desmarcarPagamento(id) {
-  try {
-    await chamarSupabase(`contas_pagar?id=eq.${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "pendente", data_pagamento: null }),
-    });
-    await filtrarLancamentos();
-  } catch (erro) {
-    alert(`Não consegui desmarcar: ${erro.message}`);
-  }
-}
+async function carregarCartoes() {
+  const hoje = hojeIso();
+  const daqui7Dias = somarDiasIso(hoje, 7);
+  const categoriaFiltro = document.getElementById("filtro-categoria").value;
+  const subcategoriaFiltro = document.getElementById("filtro-subcategoria").value;
+  const fornecedorTexto = document.getElementById("filtro-fornecedor").value.trim().toLowerCase();
 
-async function excluirLancamento(id) {
-  if (!confirm("Excluir esse lançamento? Não pode ser desfeito.")) return;
-  try {
-    await chamarSupabase(`contas_pagar?id=eq.${id}`, { method: "DELETE" });
-    if (lancamentoEmEdicaoId === id) limparFormulario();
-    await filtrarLancamentos();
-  } catch (erro) {
-    alert(`Não consegui excluir: ${erro.message}`);
+  let filtroBase = "select=id,valor,data_efetivacao,status,fornecedores(nome)&status=eq.pendente";
+  if (categoriaFiltro) filtroBase += `&categoria_id=eq.${categoriaFiltro}`;
+  if (subcategoriaFiltro) filtroBase += `&subcategoria_id=eq.${subcategoriaFiltro}`;
+
+  let [vencendo7, vencidas] = await Promise.all([
+    chamarSupabase(`contas_pagar?${filtroBase}&data_efetivacao=gte.${hoje}&data_efetivacao=lte.${daqui7Dias}`),
+    chamarSupabase(`contas_pagar?${filtroBase}&data_efetivacao=lt.${hoje}`),
+  ]);
+
+  // filtro de fornecedor (texto livre) aplicado aqui, no JS - mesma
+  // logica segura ja usada na tabela principal, sem depender de filtro
+  // em tabela relacionada direto na URL
+  if (fornecedorTexto) {
+    vencendo7 = vencendo7.filter(l => (l.fornecedores?.nome || "").toLowerCase().includes(fornecedorTexto));
+    vencidas = vencidas.filter(l => (l.fornecedores?.nome || "").toLowerCase().includes(fornecedorTexto));
   }
+
+  document.getElementById("valor-vencendo-7-dias").textContent = formatarMoeda(vencendo7.reduce((s, l) => s + Number(l.valor), 0));
+  document.getElementById("valor-vencidas").textContent = formatarMoeda(vencidas.reduce((s, l) => s + Number(l.valor), 0));
+
+  const ano = document.getElementById("filtro-ano").value || new Date().getFullYear();
+  const mes = document.getElementById("filtro-mes").value || (new Date().getMonth() + 1);
+  const deMes = `${ano}-${String(mes).padStart(2, "0")}-01`;
+  const proximoMes = new Date(Number(ano), Number(mes), 1);
+  const ateMesExclusivo = `${proximoMes.getFullYear()}-${String(proximoMes.getMonth() + 1).padStart(2, "0")}-01`;
+  const totalDoMes = await chamarSupabase(
+    `contas_pagar?select=valor&data_efetivacao=gte.${deMes}&data_efetivacao=lt.${ateMesExclusivo}`
+  );
+  document.getElementById("valor-total-mes").textContent = formatarMoeda(totalDoMes.reduce((s, l) => s + Number(l.valor), 0));
 }
 
 async function filtrarLancamentos() {
   const alvo = document.getElementById("conteudo-tabela");
-  document.getElementById("valor-total-filtro").textContent = "—";
   alvo.className = "carregando";
   alvo.textContent = "Carregando...";
+  idSelecionado = null;
+  atualizarBotoesAcao();
 
   try {
-    const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
-    const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
     const categoriaFiltro = document.getElementById("filtro-categoria").value;
-    const statusFiltro = document.getElementById("filtro-status").value;
+    const subcategoriaFiltro = document.getElementById("filtro-subcategoria").value;
+    const fornecedorTexto = document.getElementById("filtro-fornecedor").value.trim();
+    const verHistorico = document.getElementById("filtro-historico").checked;
+    const periodo = calcularPeriodoFiltro();
 
-    let filtro = "select=id,data_efetivacao,fornecedor_id,categoria_id,subcategoria_id,descricao,valor,status,data_pagamento" +
+    let filtro = "select=id,data_efetivacao,data_pagamento,descricao,observacao,valor,status,categoria_id,subcategoria_id,fornecedor_id" +
       ",fornecedores(nome),categorias_despesa(nome),subcategorias_despesa(nome)" +
+      `&status=eq.${verHistorico ? "concluido" : "pendente"}` +
       "&order=data_efetivacao.asc";
-    if (dataDeIso) filtro += `&data_efetivacao=gte.${dataDeIso}`;
-    if (dataAteIso) filtro += `&data_efetivacao=lte.${dataAteIso}`;
+
     if (categoriaFiltro) filtro += `&categoria_id=eq.${categoriaFiltro}`;
-    if (statusFiltro === "concluido") filtro += `&status=eq.concluido`;
-    else if (statusFiltro === "pendente" || statusFiltro === "vencida") filtro += `&status=eq.pendente`;
+    if (subcategoriaFiltro) filtro += `&subcategoria_id=eq.${subcategoriaFiltro}`;
+    if (periodo.de) filtro += `&data_efetivacao=gte.${periodo.de}`;
+    if (periodo.ate) filtro += `&data_efetivacao=lte.${periodo.ate}`;
+    if (periodo.ateExclusivo) filtro += `&data_efetivacao=lt.${periodo.ateExclusivo}`;
 
     let resultado = await chamarSupabase(`contas_pagar?${filtro}`);
 
-    const hoje = hojeIso();
-    if (statusFiltro === "vencida") {
-      resultado = resultado.filter(l => l.data_efetivacao < hoje);
+    if (fornecedorTexto) {
+      const filtroMinusculo = fornecedorTexto.toLowerCase();
+      resultado = resultado.filter(l => (l.fornecedores?.nome || "").toLowerCase().includes(filtroMinusculo));
     }
 
     lancamentos = resultado;
     const total = lancamentos.reduce((s, l) => s + Number(l.valor), 0);
-    document.getElementById("valor-total-filtro").textContent = formatarMoeda(total);
+    document.getElementById("rotulo-total-filtrado").innerHTML =
+      `Total filtrado (${periodo.rotulo}): <b>${formatarMoeda(total)}</b> — ${lancamentos.length} lançamento(s)`;
     desenharTabela();
+    await carregarCartoes();
   } catch (erro) {
     alvo.className = "erro";
     alvo.textContent = `Não consegui carregar: ${erro.message}`;
@@ -462,54 +611,43 @@ function desenharTabela() {
   }
   const hoje = hojeIso();
 
-  let html = `<table><thead><tr><th>Vencimento</th><th>Fornecedor</th><th>Categoria</th><th>Descrição</th>` +
-    `<th class="num">Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody>`;
+  let html = `<table><thead><tr><th>Vencimento</th><th>Data de pagamento</th><th>Categoria</th><th>Subcategoria</th>` +
+    `<th>Descrição</th><th>Observação</th><th>Fornecedor</th><th class="num">Valor (R$)</th><th>Situação</th></tr></thead><tbody>`;
   for (const l of lancamentos) {
     const vencida = l.status === "pendente" && l.data_efetivacao < hoje;
-    const classeLinha = vencida ? "linha-vencida" : "";
+    const classes = [vencida ? "linha-vencida" : "", l.id === idSelecionado ? "linha-selecionada" : ""].filter(Boolean).join(" ");
     let seloHtml;
     if (l.status === "concluido") seloHtml = `<span class="selo-status pago">Paga</span>`;
     else if (vencida) seloHtml = `<span class="selo-status vencida">Vencida</span>`;
-    else seloHtml = `<span class="selo-status aberto">Em aberto</span>`;
+    else seloHtml = `<span class="selo-status aberto">Pendente</span>`;
 
-    const categoriaTexto = [l.categorias_despesa?.nome, l.subcategorias_despesa?.nome].filter(Boolean).join(" / ") || "—";
-
-    let acoesHtml = `<div class="acoes-linha">`;
-    if (l.status === "concluido") {
-      acoesHtml += `<button class="botao-acao" data-acao="desmarcar" data-id="${l.id}">Desmarcar</button>`;
-    } else {
-      acoesHtml += `<button class="botao-acao pagar" data-acao="pagar" data-id="${l.id}">Marcar pago</button>`;
-    }
-    acoesHtml += `<button class="botao-acao" data-acao="editar" data-id="${l.id}">Editar</button>`;
-    acoesHtml += `<button class="botao-acao excluir" data-acao="excluir" data-id="${l.id}">Excluir</button>`;
-    acoesHtml += `</div>`;
-
-    html += `<tr class="${classeLinha}"><td>${isoParaDataBr(l.data_efetivacao)}</td><td>${l.fornecedores?.nome || "—"}</td>` +
-      `<td>${categoriaTexto}</td><td>${l.descricao || "—"}</td><td class="num">${formatarMoeda(l.valor)}</td>` +
-      `<td>${seloHtml}</td><td>${acoesHtml}</td></tr>`;
+    html += `<tr class="${classes}" data-id="${l.id}"><td>${isoParaDataBr(l.data_efetivacao)}</td><td>${isoParaDataBr(l.data_pagamento)}</td>` +
+      `<td>${l.categorias_despesa?.nome || "—"}</td><td>${l.subcategorias_despesa?.nome || "—"}</td>` +
+      `<td>${l.descricao || "—"}</td><td>${l.observacao || "—"}</td><td>${l.fornecedores?.nome || "—"}</td>` +
+      `<td class="num">${formatarMoeda(l.valor)}</td><td>${seloHtml}</td></tr>`;
   }
   html += `</tbody></table>`;
   alvo.className = "";
   alvo.innerHTML = html;
 
-  alvo.querySelectorAll("[data-acao]").forEach(botao => {
-    const id = Number(botao.dataset.id);
-    const acao = botao.dataset.acao;
-    botao.addEventListener("click", () => {
-      if (acao === "pagar") marcarComoPago(id);
-      else if (acao === "desmarcar") desmarcarPagamento(id);
-      else if (acao === "editar") editarLancamento(id);
-      else if (acao === "excluir") excluirLancamento(id);
-    });
+  alvo.querySelectorAll("tbody tr").forEach(tr => {
+    const id = Number(tr.dataset.id);
+    tr.addEventListener("click", () => selecionarLinha(id));
+    tr.addEventListener("dblclick", () => editarLancamento(id));
   });
 }
 
 document.getElementById("botao-filtrar").addEventListener("click", filtrarLancamentos);
 document.getElementById("botao-limpar-filtros").addEventListener("click", () => {
+  document.getElementById("filtro-categoria").value = "";
+  atualizarSelectSubcategoriaFiltro();
+  document.getElementById("filtro-ano").value = new Date().getFullYear();
+  document.getElementById("filtro-mes").value = new Date().getMonth() + 1;
+  document.getElementById("filtro-dia").value = "";
+  document.getElementById("filtro-fornecedor").value = "";
   document.getElementById("filtro-data-de").value = "";
   document.getElementById("filtro-data-ate").value = "";
-  document.getElementById("filtro-categoria").value = "";
-  document.getElementById("filtro-status").value = "";
+  document.getElementById("filtro-historico").checked = false;
   filtrarLancamentos();
 });
 
