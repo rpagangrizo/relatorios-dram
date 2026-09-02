@@ -218,7 +218,7 @@ async function carregarResultados() {
       chamarSupabase("itens?select=id,nome,peso_kg,embalagem,categoria_produto_id,materia_prima,tipo_item,custo_compra"),
       chamarSupabase("itens_compostos?select=item_composto_id,sabor1_item_id,sabor2_item_id"),
       chamarSupabase("config_backoffice?select=*&id=eq.1"),
-      chamarSupabase("clientes?select=id,nome,categoria_id,desconto_percentual"),
+      chamarSupabase("clientes?select=id,nome,categoria_id,desconto_percentual,custo_logistica_por_kg"),
       chamarSupabase("categorias_cliente?select=id,nome"),
       chamarSupabase("cliente_vendedores_padrao?select=cliente_id,vendedor_id"),
       chamarSupabase("regras_comissao?select=vendedor_id,cliente_id,percentual"),
@@ -259,11 +259,13 @@ async function carregarResultados() {
       }
     }
 
-    // custo fixo (por tipo) de uma unica linha de item (ja' em kg)
-    function calcularCustoLinha(itemId, kg) {
+    // custo fixo (por tipo) de uma unica linha de item (ja' em kg). O
+    // custoLogisticaPorKg e' resolvido fora (por pedido/cliente) e passado
+    // aqui - pode ser o valor especifico do cliente ou o padrao da empresa.
+    function calcularCustoLinha(itemId, kg, custoLogisticaPorKg) {
       const item = itensPorId.get(itemId);
       if (!item) return { materiaPrima: 0, producao: 0, embalagem: 0, compra: 0, logistica: 0, total: 0 };
-      const logistica = kg * Number(config.custo_logistica_por_kg || 0);
+      const logistica = kg * custoLogisticaPorKg;
       if (item.tipo_item === "revenda") {
         const compra = kg * Number(item.custo_compra || 0);
         return { materiaPrima: 0, producao: 0, embalagem: 0, compra, logistica, total: compra + logistica };
@@ -299,8 +301,11 @@ async function carregarResultados() {
       }
 
       let custoFixoTotal = 0;
+      // custo de logistica: usa o valor especifico do cliente, se
+      // cadastrado - senao, o padrao da empresa
+      const custoLogisticaPorKgEfetivo = cliente?.custo_logistica_por_kg ?? Number(config.custo_logistica_por_kg || 0);
       for (const linha of itensPorPedido.get(pedido.id) || []) {
-        const c = calcularCustoLinha(linha.itemId, linha.kg);
+        const c = calcularCustoLinha(linha.itemId, linha.kg, custoLogisticaPorKgEfetivo);
         custoFixoTotal += c.total;
         totais.custoMp += c.materiaPrima;
         totais.custoProducao += c.producao;
