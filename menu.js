@@ -62,6 +62,7 @@
         { nome: "Faturamento Mensal", href: "faturamento-mensal.html" },
         { nome: "M\u00e9dias", href: "medias.html" },
         { nome: "Peso Vendido", href: "peso-vendido.html" },
+        { nome: "Resultados", href: "resultados.html" },
         { nome: "Vendas Lan\u00e7adas", href: "vendas-lancadas.html" },
       ],
     },
