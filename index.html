@@ -70,6 +70,11 @@
     display: block;
   }
   .link-app .emoji { font-size: 24px; display: block; margin-bottom: 8px; }
+  .link-app.desabilitado { opacity: 0.5; cursor: default; box-shadow: none; }
+  .link-app .tag-em-breve {
+    display: block; font-size: 9.5px; font-weight: 700; color: var(--texto-suave);
+    text-transform: uppercase; margin-top: 4px; letter-spacing: 0.4px;
+  }
 
   .botao-sair {
     display: block; margin: 20px auto 0; background: none; border: none; color: #C9DCEA;
@@ -107,14 +112,7 @@
         <div class="nome" id="nome-usuario"></div>
         <div class="sub">Conectado ao DRAM Web</div>
       </div>
-      <div class="grade-links">
-        <a class="link-app" href="estoque.html"><span class="emoji">📦</span>Estoque</a>
-        <a class="link-app" href="ajustar-estoque.html"><span class="emoji">✏️</span>Ajustar Estoque</a>
-        <a class="link-app" href="tabelas-preco.html"><span class="emoji">💲</span>Tabelas de Preço</a>
-        <a class="link-app" href="clientes.html"><span class="emoji">👤</span>Clientes</a>
-        <a class="link-app" href="novo-pedido.html"><span class="emoji">🧾</span>Novo Pedido</a>
-        <a class="link-app" href="pedidos.html"><span class="emoji">📋</span>Pedidos</a>
-      </div>
+      <div class="grade-links" id="grade-links"></div>
       <button class="botao-sair" id="botao-sair">Sair</button>
     </div>
   </div>
@@ -125,6 +123,19 @@
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
 const CHAVE_LOCAL = "dram_auth";
+const EMAIL_RAPHAEL = "raphael@arcoirisalimentos.com.br";
+
+// mesmos 5 modulos do menu lateral (menu.js) - cada card leva pra
+// primeira tela daquele modulo. Financeiro/Relatorios ficam
+// desabilitados (cinza, sem link) pra quem nao for o Raphael - mesma
+// regra ja aplicada no menu.js.
+const MODULOS = [
+  { nome: "Vendas", emoji: "🧾", href: "novo-pedido.html", restrito: false },
+  { nome: "Cadastros", emoji: "👤", href: "clientes.html", restrito: false },
+  { nome: "Estoque", emoji: "📦", href: "estoque.html", restrito: false },
+  { nome: "Financeiro", emoji: "💰", href: null, restrito: true },
+  { nome: "Relatórios", emoji: "📊", href: "faturamento.html", restrito: true },
+];
 
 function salvarSessao(dados) {
   localStorage.setItem(CHAVE_LOCAL, JSON.stringify(dados));
@@ -139,10 +150,24 @@ function limparSessao() {
   localStorage.removeItem(CHAVE_LOCAL);
 }
 
+function montarGradeLinks(email) {
+  const souRaphael = email === EMAIL_RAPHAEL;
+  const alvo = document.getElementById("grade-links");
+  alvo.innerHTML = MODULOS.map(m => {
+    const liberado = !m.restrito || souRaphael;
+    if (liberado && m.href) {
+      return `<a class="link-app" href="${m.href}"><span class="emoji">${m.emoji}</span>${m.nome}</a>`;
+    }
+    return `<span class="link-app desabilitado"><span class="emoji">${m.emoji}</span>${m.nome}` +
+      (!liberado ? "" : `<span class="tag-em-breve">em breve</span>`) + `</span>`;
+  }).join("");
+}
+
 function mostrarPainel(sessao) {
   document.getElementById("cartao-login").style.display = "none";
   document.getElementById("painel").style.display = "block";
   document.getElementById("nome-usuario").textContent = sessao.email;
+  montarGradeLinks(sessao.email);
 }
 
 function mostrarLogin() {
