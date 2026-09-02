@@ -183,16 +183,24 @@ async function carregarPesoVendido() {
     const dataDe = new Date(ano, mes - 1, 1);
     const dataAteExclusivo = new Date(ano, mes, 1);
 
-    const [categorias, itensVendidos] = await Promise.all([
+    const [categorias, itensVendidos, itensCompostosBrutos, todosItens] = await Promise.all([
       chamarSupabase("categorias_produto?select=id,nome&order=id"),
       chamarSupabase(
-        "pedido_itens?select=quantidade,itens(nome,peso_kg,embalagem,categoria_produto_id)," +
+        "pedido_itens?select=item_id,quantidade,itens(nome,peso_kg,embalagem,categoria_produto_id)," +
         "pedidos!inner(criado_em,tipo,status)" +
         "&pedidos.tipo=eq.venda" +
         `&pedidos.criado_em=gte.${formatarDataISO(dataDe)}` +
         `&pedidos.criado_em=lt.${formatarDataISO(dataAteExclusivo)}`
       ),
+      chamarSupabase("itens_compostos?select=item_composto_id,sabor1_item_id,sabor2_item_id"),
+      chamarSupabase("itens?select=id,nome,peso_kg,embalagem,categoria_produto_id"),
     ]);
+
+    // caixa mista: liga o item "composto" (o que aparece no pedido) aos
+    // 2 sabores reais que ele representa - usado pra dividir 50/50 na
+    // hora de agrupar, em vez de contar como um item so' estranho
+    const compostosPorItemId = new Map(itensCompostosBrutos.map(c => [c.item_composto_id, c]));
+    const itensPorId = new Map(todosItens.map(i => [i.id, i]));
 
     // filtra cancelado aqui, em JS (nao no filtro do banco) - status pode
     // vir NULL pros pedidos normais, e "neq" na URL excluiria essas
@@ -203,15 +211,31 @@ async function carregarPesoVendido() {
     // que a consulta nao trouxe o item_id separado - nome+embalagem e'
     // suficiente pra desempate aqui, igual o Desktop faz por i.id)
     const porItem = new Map(); // chave "nome|embalagem" -> {nome, embalagem, categoriaId, kg}
-    for (const linha of linhasValidas) {
-      const item = linha.itens;
-      if (!item) continue; // seguranca: item apagado/sem vinculo
+
+    function somarNoAgrupado(item, kg) {
       const chave = `${item.nome}|${item.embalagem}`;
-      const kg = Number(linha.quantidade) * Number(item.peso_kg || 0);
       if (!porItem.has(chave)) {
         porItem.set(chave, { nome: item.nome, embalagem: item.embalagem, categoriaId: item.categoria_produto_id, kg: 0 });
       }
       porItem.get(chave).kg += kg;
+    }
+
+    for (const linha of linhasValidas) {
+      const item = linha.itens;
+      if (!item) continue; // seguranca: item apagado/sem vinculo
+      const kgTotalDaLinha = Number(linha.quantidade) * Number(item.peso_kg || 0);
+
+      const composicao = compostosPorItemId.get(linha.item_id);
+      if (composicao) {
+        // caixa mista: divide os kg meio a meio entre os 2 sabores reais
+        const kgPorSabor = kgTotalDaLinha / 2;
+        for (const saborId of [composicao.sabor1_item_id, composicao.sabor2_item_id]) {
+          const itemSabor = itensPorId.get(saborId);
+          if (itemSabor) somarNoAgrupado(itemSabor, kgPorSabor);
+        }
+      } else {
+        somarNoAgrupado(item, kgTotalDaLinha);
+      }
     }
 
     const linhas = [...porItem.values()];
