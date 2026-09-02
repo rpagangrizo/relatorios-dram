@@ -69,6 +69,7 @@
   .botao-secundario { padding: 11px 16px; border-radius: 9px; border: 1.5px solid var(--azul); background: #fff; color: var(--azul);
     font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; margin-top: 10px; }
   .botao-secundario:active { background: #F0F5F8; }
+  .botao-link { text-decoration: underline; }
 
   .mensagem { margin-top: 12px; padding: 13px 15px; border-radius: 9px; font-size: 14px; font-weight: 600; display: none; }
   .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
@@ -196,6 +197,22 @@
       <select id="campo-tabela-preco"><option value="">— Nenhuma —</option></select>
     </div>
 
+    <div class="linha-dupla">
+      <div class="campo" style="flex:2">
+        <label>Categoria do cliente</label>
+        <select id="campo-categoria-cliente"><option value="">— Nenhuma —</option></select>
+      </div>
+      <div class="campo" style="flex:1">
+        <label>Desconto contratual (%)</label>
+        <input type="number" id="campo-desconto-percentual" min="0" step="0.01" placeholder="0">
+      </div>
+    </div>
+    <div class="linha-dupla" id="linha-nova-categoria-cliente" style="display:none">
+      <input type="text" id="campo-nova-categoria-cliente" placeholder="Nome da nova categoria (ex: Cozinhas, Mercados)" style="flex:1">
+      <button class="botao-secundario" id="botao-confirmar-nova-categoria" style="width:auto; margin-top:0">Criar</button>
+    </div>
+    <button type="button" class="botao-link" id="botao-abrir-nova-categoria" style="background:none; border:none; color:var(--azul); font-weight:700; font-size:12.5px; cursor:pointer; padding:0 0 14px">+ Nova categoria de cliente</button>
+
     <div class="campo">
       <label>Forma de pagamento</label>
       <select id="campo-forma-pagamento">
@@ -281,18 +298,20 @@ async function chamarSupabase(caminho, opcoes = {}) {
 const CAMPOS_CLIENTE =
   "id,nome,razao_social,cnpj_cpf,inscricao_estadual," +
   "endereco_logradouro,endereco_numero,endereco_complemento,endereco_bairro,endereco_cep,endereco_municipio,endereco_uf," +
-  "tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota";
+  "tabela_preco_id,categoria_id,desconto_percentual,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota";
 
 let clientes = [];
 let tabelasPreco = [];
+let categoriasCliente = [];
 let vendedores = [];
 let vendedoresDoClienteAtual = []; // [{id (do vinculo), vendedor_id, nome}]
 let clienteSelecionado = null; // null = cadastrando cliente novo
 
 async function carregarDados() {
-  [clientes, tabelasPreco, vendedores] = await Promise.all([
+  [clientes, tabelasPreco, categoriasCliente, vendedores] = await Promise.all([
     chamarSupabase(`clientes?select=${CAMPOS_CLIENTE}&order=nome`),
     chamarSupabase("tabelas_preco?select=id,nome&order=nome"),
+    chamarSupabase("categorias_cliente?select=id,nome&order=nome"),
     chamarSupabase("vendedores?select=id,nome&order=nome"),
   ]);
   const selectTabela = document.getElementById("campo-tabela-preco");
@@ -302,7 +321,43 @@ async function carregarDados() {
     opcao.textContent = t.nome;
     selectTabela.appendChild(opcao);
   }
+  popularSelectCategoriaCliente();
 }
+
+function popularSelectCategoriaCliente() {
+  const select = document.getElementById("campo-categoria-cliente");
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="">— Nenhuma —</option>' +
+    categoriasCliente.map(c => `<option value="${c.id}">${c.nome}</option>`).join("");
+  select.value = valorAtual;
+}
+
+document.getElementById("botao-abrir-nova-categoria").addEventListener("click", () => {
+  document.getElementById("linha-nova-categoria-cliente").style.display = "flex";
+});
+
+document.getElementById("botao-confirmar-nova-categoria").addEventListener("click", async () => {
+  const campo = document.getElementById("campo-nova-categoria-cliente");
+  const nome = campo.value.trim();
+  if (!nome) return;
+  try {
+    const criadas = await chamarSupabase("categorias_cliente", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ nome }),
+    });
+    categoriasCliente.push(criadas[0]);
+    categoriasCliente.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    popularSelectCategoriaCliente();
+    document.getElementById("campo-categoria-cliente").value = criadas[0].id;
+    campo.value = "";
+    document.getElementById("linha-nova-categoria-cliente").style.display = "none";
+  } catch (erro) {
+    alert(erro.message.includes("duplicate") || erro.message.includes("unique")
+      ? `Já existe uma categoria chamada "${nome}".`
+      : `Não consegui criar: ${erro.message}`);
+  }
+});
 
 function atualizarVisibilidadeDesconto() {
   const ehBoleto = document.getElementById("campo-forma-pagamento").value === "boleto";
@@ -348,6 +403,8 @@ function limparFormulario() {
   document.getElementById("campo-endereco-municipio").value = "";
   document.getElementById("campo-endereco-uf").value = "";
   document.getElementById("campo-tabela-preco").value = "";
+  document.getElementById("campo-categoria-cliente").value = "";
+  document.getElementById("campo-desconto-percentual").value = "";
   document.getElementById("campo-forma-pagamento").value = "";
   document.getElementById("campo-prazo").value = "";
   document.getElementById("campo-parcelas").value = "";
@@ -466,6 +523,8 @@ async function selecionarCliente(id) {
   document.getElementById("campo-endereco-municipio").value = clienteSelecionado.endereco_municipio || "";
   document.getElementById("campo-endereco-uf").value = clienteSelecionado.endereco_uf || "";
   document.getElementById("campo-tabela-preco").value = clienteSelecionado.tabela_preco_id || "";
+  document.getElementById("campo-categoria-cliente").value = clienteSelecionado.categoria_id || "";
+  document.getElementById("campo-desconto-percentual").value = clienteSelecionado.desconto_percentual || "";
   document.getElementById("campo-forma-pagamento").value = clienteSelecionado.forma_pagamento || "";
   document.getElementById("campo-prazo").value = clienteSelecionado.prazo_dias || "";
   document.getElementById("campo-parcelas").value = clienteSelecionado.parcelas || "";
@@ -517,6 +576,8 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
     endereco_municipio: document.getElementById("campo-endereco-municipio").value.trim() || null,
     endereco_uf: document.getElementById("campo-endereco-uf").value.trim().toUpperCase() || null,
     tabela_preco_id: tabelaValor ? Number(tabelaValor) : null,
+    categoria_id: document.getElementById("campo-categoria-cliente").value ? Number(document.getElementById("campo-categoria-cliente").value) : null,
+    desconto_percentual: Number(document.getElementById("campo-desconto-percentual").value) || 0,
     forma_pagamento: formaValor || null,
     prazo_dias: prazoValor ? Number(prazoValor) : null,
     parcelas: parcelasValor ? Number(parcelasValor) : null,
