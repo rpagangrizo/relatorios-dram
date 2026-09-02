@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Contas a Pagar</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B; --vermelho-claro: #FBE7E4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 1050px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+
+  .grade-form { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+  @media (max-width: 720px) { .grade-form { grid-template-columns: 1fr 1fr; } }
+  .campo { display: flex; flex-direction: column; gap: 4px; position: relative; }
+  .campo label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo input, .campo select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo input:focus, .campo select:focus { outline: none; border-color: var(--azul); }
+
+  .lista-busca-suspensa { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; max-height: 180px; overflow-y: auto;
+    margin-top: 4px; border-radius: 9px; border: 1px solid var(--linha); background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.10); display: none; }
+  .lista-busca-suspensa.aberta { display: block; }
+  .lista-busca-suspensa .item-busca { padding: 9px 12px; cursor: pointer; font-size: 13.5px; border-bottom: 1px solid var(--linha); }
+  .lista-busca-suspensa .item-busca:last-child { border-bottom: none; }
+  .lista-busca-suspensa .item-busca:hover { background: #F6F9FA; }
+
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .botao.azul { background: var(--azul); }
+
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro input, .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; }
+
+  .cartao-destaque { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 18px; text-align: center; margin-bottom: 14px; }
+  .cartao-destaque .rotulo { font-size: 12px; text-transform: uppercase; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 26px; font-weight: 700; color: var(--azul); margin-top: 4px; }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; min-width: 820px; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 12px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-vencida { background: var(--vermelho-claro); }
+  tbody tr.linha-vencida td { color: var(--vermelho); }
+  .selo-status { font-size: 11px; padding: 3px 9px; border-radius: 100px; font-weight: 700; white-space: nowrap; }
+  .selo-status.pago { background: #E4F3E8; color: var(--verde); }
+  .selo-status.vencida { background: #FBE7E4; color: var(--vermelho); }
+  .selo-status.aberto { background: #EAF1F6; color: var(--azul); }
+  .acoes-linha { display: flex; gap: 6px; flex-wrap: wrap; }
+  .botao-acao { padding: 4px 9px; border-radius: 7px; border: 1.5px solid var(--linha); background: #fff;
+    font-size: 11.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .botao-acao.pagar { color: var(--verde); border-color: #B7DFC3; }
+  .botao-acao.excluir { color: var(--vermelho); border-color: #E5B4AC; }
+
+  .mensagem { margin-top: 10px; padding: 11px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Contas a Pagar</h1>
+    <p>Lançamento manual de despesas</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao">
+    <h2 id="titulo-formulario">Novo lançamento</h2>
+    <div class="grade-form">
+      <div class="campo">
+        <label>Categoria</label>
+        <select id="campo-categoria"><option value="">— Nenhuma —</option></select>
+      </div>
+      <div class="campo">
+        <label>Subcategoria</label>
+        <select id="campo-subcategoria"><option value="">— Nenhuma —</option></select>
+      </div>
+      <div class="campo">
+        <label>Fornecedor</label>
+        <input type="text" id="campo-busca-fornecedor" placeholder="Buscar fornecedor..." autocomplete="off">
+        <div class="lista-busca-suspensa" id="lista-fornecedor-busca"></div>
+      </div>
+      <div class="campo" style="grid-column: span 2">
+        <label>Descrição</label>
+        <input type="text" id="campo-descricao" placeholder="Ex: Aluguel de setembro">
+      </div>
+      <div class="campo">
+        <label>Valor (R$)</label>
+        <input type="number" id="campo-valor" min="0" step="0.01" placeholder="0,00">
+      </div>
+      <div class="campo">
+        <label>Vencimento</label>
+        <input type="text" id="campo-vencimento" placeholder="DD/MM/AAAA">
+      </div>
+      <div class="campo">
+        <label>Banco (opcional)</label>
+        <input type="text" id="campo-banco" placeholder="Ex: Banco do Brasil">
+      </div>
+      <div class="campo" style="grid-column: span 3">
+        <label>Observação (opcional)</label>
+        <input type="text" id="campo-observacao" placeholder="Detalhes adicionais">
+      </div>
+    </div>
+    <div style="display:flex; gap:8px">
+      <button class="botao" id="botao-salvar-lancamento">Salvar</button>
+      <button class="botao secundario" id="botao-cancelar-edicao" style="display:none">Cancelar edição</button>
+    </div>
+    <div class="mensagem" id="mensagem-formulario"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Filtros</h2>
+    <div class="linha-filtros">
+      <div class="campo-filtro" style="width:120px">
+        <label>Vencimento de</label>
+        <input type="text" id="filtro-data-de" placeholder="DD/MM/AAAA">
+      </div>
+      <div class="campo-filtro" style="width:120px">
+        <label>até</label>
+        <input type="text" id="filtro-data-ate" placeholder="DD/MM/AAAA">
+      </div>
+      <div class="campo-filtro" style="flex:1; min-width:150px">
+        <label>Categoria</label>
+        <select id="filtro-categoria"><option value="">Todas</option></select>
+      </div>
+      <div class="campo-filtro" style="flex:1; min-width:150px">
+        <label>Status</label>
+        <select id="filtro-status">
+          <option value="">Todos</option>
+          <option value="pendente">Pendente (vencida + em aberto)</option>
+          <option value="vencida">Só vencidas</option>
+          <option value="concluido">Só pagas</option>
+        </select>
+      </div>
+      <button class="botao azul" id="botao-filtrar">Filtrar</button>
+      <button class="botao secundario" id="botao-limpar-filtros">Limpar filtros</button>
+    </div>
+  </div>
+
+  <div class="cartao-destaque">
+    <div class="rotulo">Total no filtro atual</div>
+    <div class="valor" id="valor-total-filtro">—</div>
+  </div>
+
+  <div class="cartao-secao">
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(corpoErro || `Erro ${resposta.status}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function dataBrParaIso(texto) {
+  const partes = (texto || "").trim().split("/");
+  if (partes.length !== 3) return null;
+  const [d, m, a] = partes;
+  if (!d || !m || !a) return null;
+  return `${a.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+function isoParaDataBr(iso) {
+  if (!iso) return "";
+  const [ano, mes, dia] = iso.slice(0, 10).split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+function hojeIso() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+}
+
+let categorias = [];
+let subcategoriasPorCategoria = new Map();
+let fornecedores = [];
+let lancamentos = [];
+let lancamentoEmEdicaoId = null; // null = novo lançamento
+let fornecedorEscolhido = null;
+
+async function carregarListasDeApoio() {
+  const [listaCategorias, listaSubcategorias, listaFornecedores] = await Promise.all([
+    chamarSupabase("categorias_despesa?select=id,nome&order=nome"),
+    chamarSupabase("subcategorias_despesa?select=id,nome,categoria_id&order=nome"),
+    chamarSupabase("fornecedores?select=id,nome&order=nome"),
+  ]);
+  categorias = listaCategorias;
+  fornecedores = listaFornecedores;
+  subcategoriasPorCategoria = new Map();
+  for (const s of listaSubcategorias) {
+    if (!subcategoriasPorCategoria.has(s.categoria_id)) subcategoriasPorCategoria.set(s.categoria_id, []);
+    subcategoriasPorCategoria.get(s.categoria_id).push(s);
+  }
+
+  const opcoesCategorias = categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join("");
+  document.getElementById("campo-categoria").innerHTML = '<option value="">— Nenhuma —</option>' + opcoesCategorias;
+  document.getElementById("filtro-categoria").innerHTML = '<option value="">Todas</option>' + opcoesCategorias;
+}
+
+function atualizarSelectSubcategoria() {
+  const categoriaId = document.getElementById("campo-categoria").value;
+  const select = document.getElementById("campo-subcategoria");
+  const lista = categoriaId ? (subcategoriasPorCategoria.get(Number(categoriaId)) || []) : [];
+  select.innerHTML = '<option value="">— Nenhuma —</option>' + lista.map(s => `<option value="${s.id}">${s.nome}</option>`).join("");
+}
+document.getElementById("campo-categoria").addEventListener("change", atualizarSelectSubcategoria);
+
+document.getElementById("campo-busca-fornecedor").addEventListener("input", (e) => {
+  const filtro = e.target.value.trim().toLowerCase();
+  const lista = document.getElementById("lista-fornecedor-busca");
+  fornecedorEscolhido = null;
+  if (!filtro) { lista.classList.remove("aberta"); return; }
+  const filtrados = fornecedores.filter(f => f.nome.toLowerCase().includes(filtro)).slice(0, 20);
+  lista.innerHTML = filtrados.length === 0
+    ? `<div class="item-busca">Nenhum fornecedor encontrado.</div>`
+    : filtrados.map(f => `<div class="item-busca" data-id="${f.id}">${f.nome}</div>`).join("");
+  lista.querySelectorAll(".item-busca[data-id]").forEach(el => {
+    el.addEventListener("click", () => {
+      fornecedorEscolhido = fornecedores.find(f => f.id === Number(el.dataset.id));
+      document.getElementById("campo-busca-fornecedor").value = fornecedorEscolhido.nome;
+      lista.classList.remove("aberta");
+    });
+  });
+  lista.classList.add("aberta");
+});
+document.addEventListener("click", (evento) => {
+  const campo = document.getElementById("campo-busca-fornecedor");
+  const lista = document.getElementById("lista-fornecedor-busca");
+  if (campo && lista && !campo.contains(evento.target) && !lista.contains(evento.target)) lista.classList.remove("aberta");
+});
+
+function limparFormulario() {
+  lancamentoEmEdicaoId = null;
+  fornecedorEscolhido = null;
+  document.getElementById("titulo-formulario").textContent = "Novo lançamento";
+  document.getElementById("campo-categoria").value = "";
+  atualizarSelectSubcategoria();
+  document.getElementById("campo-busca-fornecedor").value = "";
+  document.getElementById("campo-descricao").value = "";
+  document.getElementById("campo-valor").value = "";
+  document.getElementById("campo-vencimento").value = "";
+  document.getElementById("campo-banco").value = "";
+  document.getElementById("campo-observacao").value = "";
+  document.getElementById("botao-cancelar-edicao").style.display = "none";
+  document.getElementById("mensagem-formulario").className = "mensagem";
+}
+
+document.getElementById("botao-cancelar-edicao").addEventListener("click", limparFormulario);
+
+document.getElementById("botao-salvar-lancamento").addEventListener("click", async () => {
+  const mensagem = document.getElementById("mensagem-formulario");
+  const valor = document.getElementById("campo-valor").value;
+  const vencimentoIso = dataBrParaIso(document.getElementById("campo-vencimento").value);
+  if (!valor || Number(valor) <= 0) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = "Informe um valor válido.";
+    return;
+  }
+  if (!vencimentoIso) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = "Informe uma data de vencimento válida (DD/MM/AAAA).";
+    return;
+  }
+
+  const botao = document.getElementById("botao-salvar-lancamento");
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+
+  const payload = {
+    categoria_id: document.getElementById("campo-categoria").value ? Number(document.getElementById("campo-categoria").value) : null,
+    subcategoria_id: document.getElementById("campo-subcategoria").value ? Number(document.getElementById("campo-subcategoria").value) : null,
+    fornecedor_id: fornecedorEscolhido ? fornecedorEscolhido.id : null,
+    descricao: document.getElementById("campo-descricao").value.trim() || null,
+    observacao: document.getElementById("campo-observacao").value.trim() || null,
+    valor: Number(valor),
+    data_efetivacao: vencimentoIso,
+    banco: document.getElementById("campo-banco").value.trim() || null,
+  };
+
+  try {
+    if (lancamentoEmEdicaoId) {
+      await chamarSupabase(`contas_pagar?id=eq.${lancamentoEmEdicaoId}`, { method: "PATCH", body: JSON.stringify(payload) });
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = "Lançamento atualizado com sucesso.";
+    } else {
+      await chamarSupabase("contas_pagar", { method: "POST", body: JSON.stringify(payload) });
+      mensagem.className = "mensagem sucesso";
+      mensagem.textContent = "Lançamento criado com sucesso.";
+    }
+    limparFormulario();
+    await filtrarLancamentos();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Salvar";
+  }
+});
+
+function editarLancamento(id) {
+  const l = lancamentos.find(x => x.id === id);
+  if (!l) return;
+  lancamentoEmEdicaoId = id;
+  document.getElementById("titulo-formulario").textContent = `Editando lançamento #${id}`;
+  document.getElementById("campo-categoria").value = l.categoria_id || "";
+  atualizarSelectSubcategoria();
+  document.getElementById("campo-subcategoria").value = l.subcategoria_id || "";
+  fornecedorEscolhido = l.fornecedor_id ? fornecedores.find(f => f.id === l.fornecedor_id) : null;
+  document.getElementById("campo-busca-fornecedor").value = fornecedorEscolhido ? fornecedorEscolhido.nome : "";
+  document.getElementById("campo-descricao").value = l.descricao || "";
+  document.getElementById("campo-valor").value = l.valor;
+  document.getElementById("campo-vencimento").value = isoParaDataBr(l.data_efetivacao);
+  document.getElementById("campo-banco").value = l.banco || "";
+  document.getElementById("campo-observacao").value = l.observacao || "";
+  document.getElementById("botao-cancelar-edicao").style.display = "inline-block";
+  document.getElementById("mensagem-formulario").className = "mensagem";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function marcarComoPago(id) {
+  try {
+    await chamarSupabase(`contas_pagar?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "concluido", data_pagamento: hojeIso() }),
+    });
+    await filtrarLancamentos();
+  } catch (erro) {
+    alert(`Não consegui marcar como pago: ${erro.message}`);
+  }
+}
+
+async function desmarcarPagamento(id) {
+  try {
+    await chamarSupabase(`contas_pagar?id=eq.${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "pendente", data_pagamento: null }),
+    });
+    await filtrarLancamentos();
+  } catch (erro) {
+    alert(`Não consegui desmarcar: ${erro.message}`);
+  }
+}
+
+async function excluirLancamento(id) {
+  if (!confirm("Excluir esse lançamento? Não pode ser desfeito.")) return;
+  try {
+    await chamarSupabase(`contas_pagar?id=eq.${id}`, { method: "DELETE" });
+    if (lancamentoEmEdicaoId === id) limparFormulario();
+    await filtrarLancamentos();
+  } catch (erro) {
+    alert(`Não consegui excluir: ${erro.message}`);
+  }
+}
+
+async function filtrarLancamentos() {
+  const alvo = document.getElementById("conteudo-tabela");
+  document.getElementById("valor-total-filtro").textContent = "—";
+  alvo.className = "carregando";
+  alvo.textContent = "Carregando...";
+
+  try {
+    const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
+    const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
+    const categoriaFiltro = document.getElementById("filtro-categoria").value;
+    const statusFiltro = document.getElementById("filtro-status").value;
+
+    let filtro = "select=id,data_efetivacao,fornecedor_id,categoria_id,subcategoria_id,descricao,valor,status,data_pagamento" +
+      ",fornecedores(nome),categorias_despesa(nome),subcategorias_despesa(nome)" +
+      "&order=data_efetivacao.asc";
+    if (dataDeIso) filtro += `&data_efetivacao=gte.${dataDeIso}`;
+    if (dataAteIso) filtro += `&data_efetivacao=lte.${dataAteIso}`;
+    if (categoriaFiltro) filtro += `&categoria_id=eq.${categoriaFiltro}`;
+    if (statusFiltro === "concluido") filtro += `&status=eq.concluido`;
+    else if (statusFiltro === "pendente" || statusFiltro === "vencida") filtro += `&status=eq.pendente`;
+
+    let resultado = await chamarSupabase(`contas_pagar?${filtro}`);
+
+    const hoje = hojeIso();
+    if (statusFiltro === "vencida") {
+      resultado = resultado.filter(l => l.data_efetivacao < hoje);
+    }
+
+    lancamentos = resultado;
+    const total = lancamentos.reduce((s, l) => s + Number(l.valor), 0);
+    document.getElementById("valor-total-filtro").textContent = formatarMoeda(total);
+    desenharTabela();
+  } catch (erro) {
+    alvo.className = "erro";
+    alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela() {
+  const alvo = document.getElementById("conteudo-tabela");
+  if (lancamentos.length === 0) {
+    alvo.className = "vazio";
+    alvo.textContent = "Nenhum lançamento encontrado com esses filtros.";
+    return;
+  }
+  const hoje = hojeIso();
+
+  let html = `<table><thead><tr><th>Vencimento</th><th>Fornecedor</th><th>Categoria</th><th>Descrição</th>` +
+    `<th class="num">Valor</th><th>Status</th><th>Ações</th></tr></thead><tbody>`;
+  for (const l of lancamentos) {
+    const vencida = l.status === "pendente" && l.data_efetivacao < hoje;
+    const classeLinha = vencida ? "linha-vencida" : "";
+    let seloHtml;
+    if (l.status === "concluido") seloHtml = `<span class="selo-status pago">Paga</span>`;
+    else if (vencida) seloHtml = `<span class="selo-status vencida">Vencida</span>`;
+    else seloHtml = `<span class="selo-status aberto">Em aberto</span>`;
+
+    const categoriaTexto = [l.categorias_despesa?.nome, l.subcategorias_despesa?.nome].filter(Boolean).join(" / ") || "—";
+
+    let acoesHtml = `<div class="acoes-linha">`;
+    if (l.status === "concluido") {
+      acoesHtml += `<button class="botao-acao" data-acao="desmarcar" data-id="${l.id}">Desmarcar</button>`;
+    } else {
+      acoesHtml += `<button class="botao-acao pagar" data-acao="pagar" data-id="${l.id}">Marcar pago</button>`;
+    }
+    acoesHtml += `<button class="botao-acao" data-acao="editar" data-id="${l.id}">Editar</button>`;
+    acoesHtml += `<button class="botao-acao excluir" data-acao="excluir" data-id="${l.id}">Excluir</button>`;
+    acoesHtml += `</div>`;
+
+    html += `<tr class="${classeLinha}"><td>${isoParaDataBr(l.data_efetivacao)}</td><td>${l.fornecedores?.nome || "—"}</td>` +
+      `<td>${categoriaTexto}</td><td>${l.descricao || "—"}</td><td class="num">${formatarMoeda(l.valor)}</td>` +
+      `<td>${seloHtml}</td><td>${acoesHtml}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.className = "";
+  alvo.innerHTML = html;
+
+  alvo.querySelectorAll("[data-acao]").forEach(botao => {
+    const id = Number(botao.dataset.id);
+    const acao = botao.dataset.acao;
+    botao.addEventListener("click", () => {
+      if (acao === "pagar") marcarComoPago(id);
+      else if (acao === "desmarcar") desmarcarPagamento(id);
+      else if (acao === "editar") editarLancamento(id);
+      else if (acao === "excluir") excluirLancamento(id);
+    });
+  });
+}
+
+document.getElementById("botao-filtrar").addEventListener("click", filtrarLancamentos);
+document.getElementById("botao-limpar-filtros").addEventListener("click", () => {
+  document.getElementById("filtro-data-de").value = "";
+  document.getElementById("filtro-data-ate").value = "";
+  document.getElementById("filtro-categoria").value = "";
+  document.getElementById("filtro-status").value = "";
+  filtrarLancamentos();
+});
+
+async function iniciar() {
+  await carregarListasDeApoio();
+  await filtrarLancamentos();
+}
+iniciar();
+</script>
+</body>
+</html>
