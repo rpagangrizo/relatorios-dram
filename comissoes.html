@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Comissões</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 780px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo-filtro select:focus { outline: none; border-color: var(--azul); }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+
+  .cartao-destaque { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 22px; text-align: center; margin-bottom: 14px; }
+  .cartao-destaque .rotulo { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 28px; font-weight: 700; color: var(--azul); margin-top: 4px; }
+  .cartao-destaque .subtitulo { font-size: 12.5px; color: var(--texto-suave); margin-top: 4px; }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; min-width: 620px; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-total td { background: #FCEEE3; font-weight: 700; }
+  .selo-bonus { font-size: 11px; padding: 2px 8px; border-radius: 100px; font-weight: 700; background: #FFF3E0; color: #92600C; }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Comissões</h1>
+    <p>Por vendedor padrão do cliente — sem frete na base de cálculo</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+<script src="imprimir.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro">
+        <label>Ano</label>
+        <select id="select-ano"></select>
+      </div>
+      <div class="campo-filtro">
+        <label>Mês</label>
+        <select id="select-mes">
+          <option value="1">Janeiro</option>
+          <option value="2">Fevereiro</option>
+          <option value="3">Março</option>
+          <option value="4">Abril</option>
+          <option value="5">Maio</option>
+          <option value="6">Junho</option>
+          <option value="7">Julho</option>
+          <option value="8">Agosto</option>
+          <option value="9">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
+      </div>
+      <button class="botao" id="botao-atualizar">Atualizar</button>
+      <button class="botao secundario" id="botao-gerar-pdf">Gerar PDF</button>
+    </div>
+  </div>
+
+  <div class="cartao-destaque">
+    <div class="rotulo">Total de comissões geradas no mês</div>
+    <div class="valor" id="valor-total-mes">—</div>
+    <div class="subtitulo" id="subtitulo-bonus"></div>
+  </div>
+
+  <div class="cartao-secao">
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+// regra de bonus: hoje so' vale pro Abnoan (acordo especial, combinado
+// direto com ele) - a cada R$100.000 em receita gerada NUM MESMO MES,
+// ganha R$1.000 de bonus. Repete a cada faixa completa (ex: R$250.000
+// no mes = 2 bonus = R$2.000). Mesma regra do Desktop.
+const NOME_VENDEDOR_BONUS = "abnoan";
+const BONUS_LIMIAR = 100000;
+const BONUS_VALOR = 1000;
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+  });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function formatarDataISO(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+function popularSelectAno() {
+  const anoAtual = new Date().getFullYear();
+  const select = document.getElementById("select-ano");
+  for (let ano = anoAtual; ano >= anoAtual - 3; ano--) {
+    const opcao = document.createElement("option");
+    opcao.value = ano;
+    opcao.textContent = ano;
+    select.appendChild(opcao);
+  }
+}
+function selecionarMesAtual() {
+  const hoje = new Date();
+  document.getElementById("select-ano").value = hoje.getFullYear();
+  document.getElementById("select-mes").value = hoje.getMonth() + 1;
+}
+
+let ultimoResultado = null; // pra reusar no PDF
+
+// receita/comissao usam o vendedor padrao do CLIENTE (nao existe vinculo
+// por pedido no Web) - cada vendedor padrao daquele cliente recebe o
+// VALOR CHEIO do pedido (sem dividir entre eles), aplicando sua propria
+// % (regra especifica se existir, senao a % padrao geral). Frete NAO
+// entra na base de comissao (diferente do Faturamento). So' pedidos
+// tipo="venda", nao cancelados.
+async function carregarComissoes() {
+  const ano = Number(document.getElementById("select-ano").value);
+  const mes = Number(document.getElementById("select-mes").value);
+  const mesTexto = document.getElementById("select-mes").selectedOptions[0].textContent;
+  const alvo = document.getElementById("conteudo-tabela");
+  document.getElementById("valor-total-mes").textContent = "—";
+  document.getElementById("subtitulo-bonus").textContent = "";
+  alvo.className = "carregando";
+  alvo.textContent = "Carregando...";
+
+  try {
+    const dataDe = new Date(ano, mes - 1, 1);
+    const dataAteExclusivo = new Date(ano, mes, 1);
+
+    const [pedidos, vinculos, regras, configArr, listaVendedores] = await Promise.all([
+      chamarSupabase(
+        `pedidos?select=id,cliente_id,criado_em,status,total,valor_frete&tipo=eq.venda` +
+        `&criado_em=gte.${formatarDataISO(dataDe)}&criado_em=lt.${formatarDataISO(dataAteExclusivo)}`
+      ),
+      chamarSupabase("cliente_vendedores_padrao?select=cliente_id,vendedor_id"),
+      chamarSupabase("regras_comissao?select=vendedor_id,cliente_id,percentual"),
+      chamarSupabase("config_comissao?select=percentual_padrao&id=eq.1"),
+      chamarSupabase("vendedores?select=id,nome&order=nome"),
+    ]);
+
+    const percentualPadrao = Number(configArr[0]?.percentual_padrao ?? 0);
+
+    const pedidosValidos = pedidos.filter(p => p.status !== "cancelado");
+
+    const vendedoresPorCliente = new Map(); // cliente_id -> [vendedor_id, ...]
+    for (const v of vinculos) {
+      if (!vendedoresPorCliente.has(v.cliente_id)) vendedoresPorCliente.set(v.cliente_id, []);
+      vendedoresPorCliente.get(v.cliente_id).push(v.vendedor_id);
+    }
+    const regraPorPar = new Map(); // "vendedorId-clienteId" -> percentual especifico
+    for (const r of regras) regraPorPar.set(`${r.vendedor_id}-${r.cliente_id}`, Number(r.percentual));
+
+    const acumulado = new Map(); // vendedor_id -> {receita, comissao}
+    for (const v of listaVendedores) acumulado.set(v.id, { receita: 0, comissao: 0 });
+
+    for (const pedido of pedidosValidos) {
+      const base = Number(pedido.total) - Number(pedido.valor_frete || 0);
+      const vendedoresDoCliente = vendedoresPorCliente.get(pedido.cliente_id) || [];
+      for (const vendedorId of vendedoresDoCliente) {
+        if (!acumulado.has(vendedorId)) acumulado.set(vendedorId, { receita: 0, comissao: 0 });
+        const percentual = regraPorPar.has(`${vendedorId}-${pedido.cliente_id}`)
+          ? regraPorPar.get(`${vendedorId}-${pedido.cliente_id}`)
+          : percentualPadrao;
+        const acc = acumulado.get(vendedorId);
+        acc.receita += base;
+        acc.comissao += base * (percentual / 100);
+      }
+    }
+
+    const nomePorVendedorId = new Map(listaVendedores.map(v => [v.id, v.nome]));
+    const linhas = [...acumulado.entries()]
+      .map(([vendedorId, dados]) => {
+        const nome = nomePorVendedorId.get(vendedorId) || "—";
+        const ehBonus = nome.trim().toLowerCase() === NOME_VENDEDOR_BONUS;
+        const bonus = ehBonus ? Math.floor(dados.receita / BONUS_LIMIAR) * BONUS_VALOR : 0;
+        return {
+          vendedorId, nome,
+          receita: Math.round(dados.receita * 100) / 100,
+          comissao: Math.round(dados.comissao * 100) / 100,
+          bonus,
+          total: Math.round((dados.comissao + bonus) * 100) / 100,
+        };
+      })
+      .filter(l => l.receita > 0 || l.comissao > 0) // esconde vendedor sem nenhuma venda no mes
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+    const totalGeral = linhas.reduce((s, l) => s + l.total, 0);
+    const totalBonus = linhas.reduce((s, l) => s + l.bonus, 0);
+
+    document.getElementById("valor-total-mes").textContent = formatarMoeda(totalGeral);
+    document.getElementById("subtitulo-bonus").textContent = totalBonus > 0
+      ? `Inclui ${formatarMoeda(totalBonus)} de bônus (Abnoan)` : "";
+
+    ultimoResultado = { ano, mes, mesTexto, linhas, totalGeral };
+    desenharTabela(linhas);
+  } catch (erro) {
+    alvo.className = "erro";
+    alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela(linhas) {
+  const alvo = document.getElementById("conteudo-tabela");
+  if (linhas.length === 0) {
+    alvo.className = "vazio";
+    alvo.textContent = "Nenhuma comissão gerada nesse mês.";
+    return;
+  }
+  let html = `<table><thead><tr><th>Vendedor</th><th class="num">Receita gerada</th>` +
+    `<th class="num">Comissão</th><th class="num">Bônus</th><th class="num">Total</th></tr></thead><tbody>`;
+  for (const l of linhas) {
+    html += `<tr><td>${l.nome}</td><td class="num">${formatarMoeda(l.receita)}</td>` +
+      `<td class="num">${formatarMoeda(l.comissao)}</td>` +
+      `<td class="num">${l.bonus > 0 ? `<span class="selo-bonus">${formatarMoeda(l.bonus)}</span>` : "—"}</td>` +
+      `<td class="num">${formatarMoeda(l.total)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.className = "";
+  alvo.innerHTML = html;
+}
+
+document.getElementById("botao-atualizar").addEventListener("click", carregarComissoes);
+
+// PDF: mesmo padrao do gerar_html_comissoes do Desktop - so' 2 colunas
+// numericas (Receita gerada / Comissao), o bonus ja vem SOMADO dentro da
+// Comissao, sem coluna separada nem indicacao de que e' bonus
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimoResultado || ultimoResultado.linhas.length === 0) {
+    alert("Nenhum resultado pra imprimir ainda.");
+    return;
+  }
+  const { ano, mesTexto, linhas, totalGeral } = ultimoResultado;
+  let linhasHtml = linhas.map(l =>
+    `<tr><td>${l.nome}</td><td class="num">${formatarMoeda(l.receita)}</td><td class="num">${formatarMoeda(l.total)}</td></tr>`
+  ).join("");
+  const conteudo = `
+    <h2>Resumo</h2>
+    <table><tr><th>Vendedor</th><th class="num">Receita gerada</th><th class="num">Comissão</th></tr>${linhasHtml}</table>
+  `;
+  abrirImpressao(`Comissões por vendedor — ${mesTexto} de ${ano}`, `Total de comissões geradas no mês: ${formatarMoeda(totalGeral)}`, conteudo);
+});
+
+popularSelectAno();
+selecionarMesAtual();
+carregarComissoes();
+</script>
+</body>
+</html>
