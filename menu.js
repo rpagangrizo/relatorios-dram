@@ -56,6 +56,7 @@
     {
       chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true,
       itens: [
+        { nome: "Backoffice", href: "backoffice.html" },
         { nome: "Comiss\u00f5es", href: "comissoes.html" },
         { nome: "Faturamento", href: "faturamento.html" },
         { nome: "Faturamento Mensal", href: "faturamento-mensal.html" },
