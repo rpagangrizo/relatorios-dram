@@ -214,6 +214,11 @@
     <button type="button" class="botao-link" id="botao-abrir-nova-categoria" style="background:none; border:none; color:var(--azul); font-weight:700; font-size:12.5px; cursor:pointer; padding:0 0 14px">+ Nova categoria de cliente</button>
 
     <div class="campo">
+      <label>Custo de logística específico (R$/kg)</label>
+      <input type="number" id="campo-custo-logistica" min="0" step="0.01" placeholder="Deixe em branco pra usar o padrão da empresa">
+    </div>
+
+    <div class="campo">
       <label>Forma de pagamento</label>
       <select id="campo-forma-pagamento">
         <option value="">— Não definida —</option>
@@ -298,7 +303,7 @@ async function chamarSupabase(caminho, opcoes = {}) {
 const CAMPOS_CLIENTE =
   "id,nome,razao_social,cnpj_cpf,inscricao_estadual," +
   "endereco_logradouro,endereco_numero,endereco_complemento,endereco_bairro,endereco_cep,endereco_municipio,endereco_uf," +
-  "tabela_preco_id,categoria_id,desconto_percentual,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota";
+  "tabela_preco_id,categoria_id,desconto_percentual,custo_logistica_por_kg,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota";
 
 let clientes = [];
 let tabelasPreco = [];
@@ -405,6 +410,7 @@ function limparFormulario() {
   document.getElementById("campo-tabela-preco").value = "";
   document.getElementById("campo-categoria-cliente").value = "";
   document.getElementById("campo-desconto-percentual").value = "";
+  document.getElementById("campo-custo-logistica").value = "";
   document.getElementById("campo-forma-pagamento").value = "";
   document.getElementById("campo-prazo").value = "";
   document.getElementById("campo-parcelas").value = "";
@@ -525,6 +531,7 @@ async function selecionarCliente(id) {
   document.getElementById("campo-tabela-preco").value = clienteSelecionado.tabela_preco_id || "";
   document.getElementById("campo-categoria-cliente").value = clienteSelecionado.categoria_id || "";
   document.getElementById("campo-desconto-percentual").value = clienteSelecionado.desconto_percentual || "";
+  document.getElementById("campo-custo-logistica").value = clienteSelecionado.custo_logistica_por_kg ?? "";
   document.getElementById("campo-forma-pagamento").value = clienteSelecionado.forma_pagamento || "";
   document.getElementById("campo-prazo").value = clienteSelecionado.prazo_dias || "";
   document.getElementById("campo-parcelas").value = clienteSelecionado.parcelas || "";
@@ -578,6 +585,8 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
     tabela_preco_id: tabelaValor ? Number(tabelaValor) : null,
     categoria_id: document.getElementById("campo-categoria-cliente").value ? Number(document.getElementById("campo-categoria-cliente").value) : null,
     desconto_percentual: Number(document.getElementById("campo-desconto-percentual").value) || 0,
+    custo_logistica_por_kg: document.getElementById("campo-custo-logistica").value === ""
+      ? null : Number(document.getElementById("campo-custo-logistica").value),
     forma_pagamento: formaValor || null,
     prazo_dias: prazoValor ? Number(prazoValor) : null,
     parcelas: parcelasValor ? Number(parcelasValor) : null,
