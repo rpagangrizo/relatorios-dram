@@ -82,6 +82,15 @@
 
   .vazio, .carregando { padding: 20px; text-align: center; color: var(--texto-suave); font-size: 14px; }
   .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+
+  .linha-flex { display: flex; gap: 10px; flex-wrap: wrap; }
+  .lista-busca-suspensa { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; max-height: 180px; overflow-y: auto;
+    margin-top: 4px; border-radius: 9px; border: 1px solid var(--linha); background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.10); display: none; }
+  .lista-busca-suspensa.aberta { display: block; }
+  .lista-busca-suspensa .item-busca { padding: 9px 12px; cursor: pointer; font-size: 13.5px; border-bottom: 1px solid var(--linha); }
+  .lista-busca-suspensa .item-busca:last-child { border-bottom: none; }
+  .lista-busca-suspensa .item-busca:hover { background: #F6F9FA; }
+  .botao-remover-caixa { background: none; border: none; color: var(--vermelho); font-size: 16px; cursor: pointer; padding: 0 4px; }
 </style>
 </head>
 <body>
@@ -141,6 +150,41 @@
       <button class="botao" id="botao-salvar-itens" disabled>Salvar alterações</button>
     </div>
     <div class="mensagem" id="mensagem-itens"></div>
+  </div>
+
+  <div class="cartao" id="cartao-caixas-mistas">
+    <h2>Caixas mistas (2 sabores numa mesma caixa)</h2>
+    <p style="color:var(--texto-suave); font-size:12.5px; margin:0 0 12px">
+      Quando um pedido usa um desses itens, os relatórios (Peso Vendido, Médias, Vendas Lançadas) dividem
+      automaticamente 5,1kg pra cada sabor — esse item composto nunca aparece neles, só os 2 sabores reais.
+    </p>
+    <div class="linha-flex">
+      <div class="campo" style="flex:1; position:relative">
+        <label>Item composto (o que aparece na nota)</label>
+        <input type="text" id="campo-busca-composto" placeholder="Buscar item..." autocomplete="off">
+        <div class="lista-busca-suspensa" id="lista-composto-busca"></div>
+      </div>
+    </div>
+    <div class="linha-flex" style="margin-top:10px">
+      <div class="campo" style="flex:1; position:relative">
+        <label>Sabor 1</label>
+        <input type="text" id="campo-busca-sabor1" placeholder="Buscar item..." autocomplete="off">
+        <div class="lista-busca-suspensa" id="lista-sabor1-busca"></div>
+      </div>
+      <div class="campo" style="flex:1; position:relative">
+        <label>Sabor 2</label>
+        <input type="text" id="campo-busca-sabor2" placeholder="Buscar item..." autocomplete="off">
+        <div class="lista-busca-suspensa" id="lista-sabor2-busca"></div>
+      </div>
+    </div>
+    <button class="botao" id="botao-salvar-caixa-mista" style="margin-top:10px" disabled>Salvar caixa mista</button>
+    <div class="mensagem" id="mensagem-caixa-mista"></div>
+
+    <table id="tabela-caixas-mistas" style="margin-top:16px; display:none">
+      <thead><tr><th>Caixa mista</th><th>Sabor 1</th><th>Sabor 2</th><th></th></tr></thead>
+      <tbody id="corpo-caixas-mistas"></tbody>
+    </table>
+    <div id="vazio-caixas-mistas" class="vazio" style="display:none">Nenhuma caixa mista cadastrada ainda.</div>
   </div>
 
   <p class="rodape">Powered by DRAM</p>
@@ -341,8 +385,129 @@ document.getElementById("botao-salvar-itens").addEventListener("click", async ()
   }
 });
 
+// --- caixas mistas ---
+let caixasMistas = []; // [{id, item_composto_id, sabor1_item_id, sabor2_item_id, nome_composto, nome_sabor1, nome_sabor2}]
+let composicaoEmEdicao = { composto: null, sabor1: null, sabor2: null };
+
+function configurarBuscaSimples(idCampo, idLista, aoEscolher) {
+  const campo = document.getElementById(idCampo);
+  const lista = document.getElementById(idLista);
+  campo.addEventListener("input", () => {
+    const filtro = campo.value.trim().toLowerCase();
+    if (!filtro) { lista.classList.remove("aberta"); return; }
+    const filtrados = itensCatalogo.filter(i => i.nome.toLowerCase().includes(filtro)).slice(0, 20);
+    lista.innerHTML = filtrados.length === 0
+      ? `<div class="item-busca">Nenhum item encontrado.</div>`
+      : filtrados.map(i => `<div class="item-busca" data-id="${i.id}">${i.nome}</div>`).join("");
+    lista.querySelectorAll(".item-busca[data-id]").forEach(el => {
+      el.addEventListener("click", () => {
+        const item = itensCatalogo.find(i => i.id === Number(el.dataset.id));
+        campo.value = item.nome;
+        lista.classList.remove("aberta");
+        aoEscolher(item);
+      });
+    });
+    lista.classList.add("aberta");
+  });
+  document.addEventListener("click", (evento) => {
+    if (!campo.contains(evento.target) && !lista.contains(evento.target)) lista.classList.remove("aberta");
+  });
+}
+
+function atualizarBotaoSalvarCaixaMista() {
+  const { composto, sabor1, sabor2 } = composicaoEmEdicao;
+  document.getElementById("botao-salvar-caixa-mista").disabled = !(composto && sabor1 && sabor2);
+}
+
+configurarBuscaSimples("campo-busca-composto", "lista-composto-busca", (item) => {
+  composicaoEmEdicao.composto = item;
+  atualizarBotaoSalvarCaixaMista();
+});
+configurarBuscaSimples("campo-busca-sabor1", "lista-sabor1-busca", (item) => {
+  composicaoEmEdicao.sabor1 = item;
+  atualizarBotaoSalvarCaixaMista();
+});
+configurarBuscaSimples("campo-busca-sabor2", "lista-sabor2-busca", (item) => {
+  composicaoEmEdicao.sabor2 = item;
+  atualizarBotaoSalvarCaixaMista();
+});
+
+async function carregarCaixasMistas() {
+  const linhas = await chamarSupabase("itens_compostos?select=id,item_composto_id,sabor1_item_id,sabor2_item_id");
+  const nomePorId = new Map(itensCatalogo.map(i => [i.id, i.nome]));
+  caixasMistas = linhas.map(l => ({
+    ...l,
+    nome_composto: nomePorId.get(l.item_composto_id) || "—",
+    nome_sabor1: nomePorId.get(l.sabor1_item_id) || "—",
+    nome_sabor2: nomePorId.get(l.sabor2_item_id) || "—",
+  }));
+  desenharCaixasMistas();
+}
+
+function desenharCaixasMistas() {
+  const tabela = document.getElementById("tabela-caixas-mistas");
+  const vazio = document.getElementById("vazio-caixas-mistas");
+  const corpo = document.getElementById("corpo-caixas-mistas");
+  if (caixasMistas.length === 0) {
+    tabela.style.display = "none";
+    vazio.style.display = "block";
+    return;
+  }
+  tabela.style.display = "table";
+  vazio.style.display = "none";
+  corpo.innerHTML = caixasMistas.map(c =>
+    `<tr><td>${c.nome_composto}</td><td>${c.nome_sabor1}</td><td>${c.nome_sabor2}</td>` +
+    `<td><button class="botao-remover-caixa" data-id="${c.id}" title="Remover">✕</button></td></tr>`
+  ).join("");
+  corpo.querySelectorAll(".botao-remover-caixa").forEach(botao => {
+    botao.addEventListener("click", () => removerCaixaMista(Number(botao.dataset.id)));
+  });
+}
+
+document.getElementById("botao-salvar-caixa-mista").addEventListener("click", async () => {
+  const botao = document.getElementById("botao-salvar-caixa-mista");
+  const mensagem = document.getElementById("mensagem-caixa-mista");
+  const { composto, sabor1, sabor2 } = composicaoEmEdicao;
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+  try {
+    await chamarSupabase("itens_compostos?on_conflict=item_composto_id", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates" },
+      body: JSON.stringify({
+        item_composto_id: composto.id,
+        sabor1_item_id: sabor1.id,
+        sabor2_item_id: sabor2.id,
+      }),
+    });
+    document.getElementById("campo-busca-composto").value = "";
+    document.getElementById("campo-busca-sabor1").value = "";
+    document.getElementById("campo-busca-sabor2").value = "";
+    composicaoEmEdicao = { composto: null, sabor1: null, sabor2: null };
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = "Caixa mista salva com sucesso.";
+    await carregarCaixasMistas();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.textContent = "Salvar caixa mista";
+    atualizarBotaoSalvarCaixaMista();
+  }
+});
+
+async function removerCaixaMista(id) {
+  if (!confirm("Remover essa caixa mista? Os relatórios voltam a contar esse item como um produto único.")) return;
+  try {
+    await chamarSupabase(`itens_compostos?id=eq.${id}`, { method: "DELETE" });
+    await carregarCaixasMistas();
+  } catch (erro) {
+    alert(`Não consegui remover: ${erro.message}`);
+  }
+}
+
 carregarParametros();
-carregarItens();
+carregarItens().then(carregarCaixasMistas);
 </script>
 </body>
 </html>
