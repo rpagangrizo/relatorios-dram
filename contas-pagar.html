@@ -526,10 +526,18 @@ async function carregarCartoes() {
   const categoriaFiltro = document.getElementById("filtro-categoria").value;
   const subcategoriaFiltro = document.getElementById("filtro-subcategoria").value;
   const fornecedorTexto = document.getElementById("filtro-fornecedor").value.trim().toLowerCase();
+  const periodo = calcularPeriodoFiltro();
 
+  // "Vencendo em 7 dias" e "Vencidas" respeitam o MESMO filtro de
+  // periodo (Ano/Mes/Dia ou De/Ate) que a tabela esta usando - nao sao
+  // um calculo solto e independente. So' "Total do mes" e' de verdade
+  // independente (por isso nao tem "(filtro)" no nome).
   let filtroBase = "select=id,valor,data_efetivacao,status,fornecedores(nome)&status=eq.pendente";
   if (categoriaFiltro) filtroBase += `&categoria_id=eq.${categoriaFiltro}`;
   if (subcategoriaFiltro) filtroBase += `&subcategoria_id=eq.${subcategoriaFiltro}`;
+  if (periodo.de) filtroBase += `&data_efetivacao=gte.${periodo.de}`;
+  if (periodo.ate) filtroBase += `&data_efetivacao=lte.${periodo.ate}`;
+  if (periodo.ateExclusivo) filtroBase += `&data_efetivacao=lt.${periodo.ateExclusivo}`;
 
   let [vencendo7, vencidas] = await Promise.all([
     chamarSupabase(`contas_pagar?${filtroBase}&data_efetivacao=gte.${hoje}&data_efetivacao=lte.${daqui7Dias}`),
