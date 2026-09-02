@@ -236,14 +236,32 @@ async function filtrarVendas() {
     const dataDeIso = dataBrParaIso(document.getElementById("campo-data-de").value);
     const dataAteIso = dataBrParaIso(document.getElementById("campo-data-ate").value);
 
+    // caixa mista: liga o item "composto" (o que aparece no pedido) aos
+    // 2 sabores reais que ele representa
+    const itensCompostosBrutos = await chamarSupabase("itens_compostos?select=item_composto_id,sabor1_item_id,sabor2_item_id");
+    const compostosPorItemId = new Map(itensCompostosBrutos.map(c => [c.item_composto_id, c]));
+
     let filtro = "select=quantidade,preco_unitario,item_id," +
       "pedidos!inner(id,criado_em,status,tipo,cliente_id,clientes(nome))," +
       "itens" + (categoriaId ? "!inner" : "") + "(nome,grupo_sabor,peso_kg,categoria_produto_id)" +
       "&pedidos.tipo=eq.venda";
 
     if (clienteSelecionado) filtro += `&pedidos.cliente_id=eq.${clienteSelecionado.id}`;
-    if (produtoSelecionado) filtro += `&item_id=eq.${produtoSelecionado.id}`;
-    else if (categoriaId) filtro += `&itens.categoria_produto_id=eq.${categoriaId}`;
+    if (produtoSelecionado) {
+      // se o produto filtrado for sabor de alguma caixa mista, inclui
+      // tambem o(s) item(ns) composto(s) correspondente(s) na busca -
+      // senao essas vendas ficariam escondidas do filtro (elas existem
+      // no banco com o id do item COMPOSTO, nao do sabor)
+      const idsComCompostosRelacionados = [produtoSelecionado.id];
+      for (const c of itensCompostosBrutos) {
+        if (c.sabor1_item_id === produtoSelecionado.id || c.sabor2_item_id === produtoSelecionado.id) {
+          idsComCompostosRelacionados.push(c.item_composto_id);
+        }
+      }
+      filtro += `&item_id=in.(${idsComCompostosRelacionados.join(",")})`;
+    } else if (categoriaId) {
+      filtro += `&itens.categoria_produto_id=eq.${categoriaId}`;
+    }
     if (dataDeIso) filtro += `&pedidos.criado_em=gte.${dataDeIso}`;
     if (dataAteIso) {
       const proximoDia = new Date(dataAteIso + "T00:00:00");
@@ -251,27 +269,53 @@ async function filtrarVendas() {
       filtro += `&pedidos.criado_em=lt.${formatarDataISO(proximoDia)}`;
     }
 
-    const itensVendidos = await chamarSupabase(`pedido_itens?${filtro}`);
+    const [itensVendidos, todosItens] = await Promise.all([
+      chamarSupabase(`pedido_itens?${filtro}`),
+      chamarSupabase("itens?select=id,nome,grupo_sabor,peso_kg,categoria_produto_id"),
+    ]);
+    const itensPorId = new Map(todosItens.map(i => [i.id, i]));
 
     // filtra cancelado aqui, em JS (nao no filtro do banco) - status pode
     // vir NULL pros pedidos normais, e "neq" na URL excluiria essas
     // linhas tambem
     const linhasValidas = itensVendidos.filter(li => li.pedidos.status !== "cancelado");
 
-    const linhas = linhasValidas.map(li => {
+    const linhas = [];
+    for (const li of linhasValidas) {
       const item = li.itens;
-      const kg = Number(li.quantidade) * Number(item?.peso_kg || 0);
-      const valor = Number(li.quantidade) * Number(li.preco_unitario);
-      return {
-        pedidoId: li.pedidos.id,
-        data: li.pedidos.criado_em,
-        cliente: li.pedidos.clientes?.nome || "—",
-        item: item ? (item.grupo_sabor || item.nome) : "—",
-        quantidade: Number(li.quantidade),
-        kg,
-        valor,
-      };
-    }).sort((a, b) => a.data.localeCompare(b.data) || a.pedidoId - b.pedidoId);
+      if (!item) continue; // seguranca: item apagado/sem vinculo
+      const kgTotal = Number(li.quantidade) * Number(item.peso_kg || 0);
+      const valorTotal = Number(li.quantidade) * Number(li.preco_unitario);
+      const base = { pedidoId: li.pedidos.id, data: li.pedidos.criado_em, cliente: li.pedidos.clientes?.nome || "—" };
+
+      const composicao = compostosPorItemId.get(li.item_id);
+      if (composicao) {
+        // caixa mista: vira 2 linhas, metade pra cada sabor real - se um
+        // produto especifico estiver filtrado, mostra so' a metade dele
+        // (a outra metade e' de outro sabor, fora do que foi pedido)
+        for (const saborId of [composicao.sabor1_item_id, composicao.sabor2_item_id]) {
+          if (produtoSelecionado && saborId !== produtoSelecionado.id) continue;
+          const itemSabor = itensPorId.get(saborId);
+          if (!itemSabor) continue;
+          linhas.push({
+            ...base,
+            item: itemSabor.grupo_sabor || itemSabor.nome,
+            quantidade: Number(li.quantidade) / 2,
+            kg: kgTotal / 2,
+            valor: valorTotal / 2,
+          });
+        }
+      } else {
+        linhas.push({
+          ...base,
+          item: item.grupo_sabor || item.nome,
+          quantidade: Number(li.quantidade),
+          kg: kgTotal,
+          valor: valorTotal,
+        });
+      }
+    }
+    linhas.sort((a, b) => a.data.localeCompare(b.data) || a.pedidoId - b.pedidoId);
 
     const totalKg = linhas.reduce((s, l) => s + l.kg, 0);
     const totalValor = linhas.reduce((s, l) => s + l.valor, 0);
