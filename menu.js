@@ -56,6 +56,7 @@
       chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: true, restrito: true,
       itens: [
         { nome: "Categorias e Fornecedores", href: "categorias-fornecedores.html" },
+        { nome: "Contas a Pagar", href: "contas-pagar.html" },
       ],
     },
     {
