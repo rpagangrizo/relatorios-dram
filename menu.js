@@ -42,6 +42,7 @@
       itens: [
         { nome: "Clientes", href: "clientes.html" },
         { nome: "Tabelas de Pre\u00e7o", href: "tabelas-preco.html" },
+        { nome: "Vendedores", href: "vendedores.html" },
       ],
     },
     {
