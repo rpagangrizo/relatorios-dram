@@ -52,7 +52,12 @@
         { nome: "Estoque", href: "estoque.html" },
       ],
     },
-    { chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: false, restrito: true, itens: [] },
+    {
+      chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: true, restrito: true,
+      itens: [
+        { nome: "Categorias e Fornecedores", href: "categorias-fornecedores.html" },
+      ],
+    },
     {
       chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true,
       itens: [
