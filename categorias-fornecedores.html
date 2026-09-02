@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Categorias e Fornecedores</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+
+  .linha-flex { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .campo { display: flex; flex-direction: column; gap: 4px; }
+  .campo label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo input { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); }
+  .campo input:focus { outline: none; border-color: var(--azul); }
+
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .botao.perigo { background: #fff; border: 1.5px solid var(--vermelho); color: var(--vermelho); }
+
+  .lista-itens { border-radius: 9px; border: 1px solid var(--linha); overflow: hidden; }
+  .item-lista { padding: 12px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14.5px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center; }
+  .item-lista:last-child { border-bottom: none; }
+  .item-lista:hover { background: #F6F9FA; }
+  .item-lista.ativo { background: #EAF1F6; color: var(--azul); }
+  .item-lista .contador { font-size: 12px; color: var(--texto-suave); font-weight: 400; }
+  .item-lista .cnpj { font-size: 12px; color: var(--texto-suave); font-weight: 400; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 7px 8px; border-bottom: 1px solid var(--linha); }
+  tbody td { padding: 9px 8px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody tr:last-child td { border-bottom: none; }
+  .botao-remover { background: none; border: none; color: var(--vermelho); font-size: 16px; cursor: pointer; padding: 0 4px; }
+
+  .mensagem { margin-top: 10px; padding: 11px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .vazio { padding: 16px; text-align: center; color: var(--texto-suave); font-size: 13.5px; }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Categorias e Fornecedores</h1>
+    <p>Base do módulo Financeiro</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao">
+    <h2>Categorias de despesa</h2>
+    <div class="linha-flex" style="margin-bottom:12px">
+      <div class="campo" style="flex:1">
+        <label>Nova categoria</label>
+        <input type="text" id="campo-nova-categoria" placeholder="Ex: Fornecedores, Impostos, Folha">
+      </div>
+      <button class="botao secundario" id="botao-adicionar-categoria">+ Adicionar</button>
+    </div>
+    <div class="lista-itens" id="lista-categorias"></div>
+    <div class="mensagem" id="mensagem-categoria"></div>
+  </div>
+
+  <div class="cartao" id="cartao-subcategorias" style="display:none">
+    <h2 id="titulo-subcategorias">Subcategorias</h2>
+    <button class="botao perigo" id="botao-excluir-categoria" style="margin-bottom:14px">Excluir essa categoria</button>
+
+    <div class="linha-flex" style="margin-bottom:10px">
+      <div class="campo" style="flex:1">
+        <label>Nova subcategoria</label>
+        <input type="text" id="campo-nova-subcategoria" placeholder="Ex: Matéria-prima, Embalagem">
+      </div>
+      <button class="botao secundario" id="botao-adicionar-subcategoria">+ Adicionar</button>
+    </div>
+
+    <table id="tabela-subcategorias" style="display:none">
+      <thead><tr><th>Subcategoria</th><th></th></tr></thead>
+      <tbody id="corpo-subcategorias"></tbody>
+    </table>
+    <div id="vazio-subcategorias" class="vazio" style="display:none">Nenhuma subcategoria cadastrada ainda.</div>
+    <div class="mensagem" id="mensagem-subcategoria"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Fornecedores</h2>
+    <div class="linha-flex" style="margin-bottom:12px">
+      <div class="campo" style="flex:1">
+        <label>Nome</label>
+        <input type="text" id="campo-novo-fornecedor-nome" placeholder="Nome do fornecedor">
+      </div>
+      <div class="campo" style="flex:1">
+        <label>CNPJ/CPF (opcional)</label>
+        <input type="text" id="campo-novo-fornecedor-cnpj" placeholder="00.000.000/0000-00">
+      </div>
+      <button class="botao secundario" id="botao-adicionar-fornecedor">+ Adicionar</button>
+    </div>
+    <div class="lista-itens" id="lista-fornecedores"></div>
+    <div class="mensagem" id="mensagem-fornecedor"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(corpoErro || `Erro ${resposta.status}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+// --- categorias e subcategorias de despesa ---
+let categorias = [];
+let subcategoriasPorCategoria = new Map(); // categoria_id -> [{id, nome}]
+let categoriaSelecionada = null;
+
+async function carregarCategorias() {
+  const [listaCategorias, listaSubcategorias] = await Promise.all([
+    chamarSupabase("categorias_despesa?select=id,nome&order=nome"),
+    chamarSupabase("subcategorias_despesa?select=id,nome,categoria_id&order=nome"),
+  ]);
+  categorias = listaCategorias;
+  subcategoriasPorCategoria = new Map();
+  for (const s of listaSubcategorias) {
+    if (!subcategoriasPorCategoria.has(s.categoria_id)) subcategoriasPorCategoria.set(s.categoria_id, []);
+    subcategoriasPorCategoria.get(s.categoria_id).push(s);
+  }
+  desenharListaCategorias();
+}
+
+function desenharListaCategorias() {
+  const alvo = document.getElementById("lista-categorias");
+  if (categorias.length === 0) {
+    alvo.innerHTML = `<div class="vazio">Nenhuma categoria cadastrada ainda.</div>`;
+    return;
+  }
+  alvo.innerHTML = categorias.map(c => {
+    const qtd = (subcategoriasPorCategoria.get(c.id) || []).length;
+    const ativo = categoriaSelecionada?.id === c.id;
+    return `<div class="item-lista ${ativo ? 'ativo' : ''}" data-id="${c.id}">
+      <span>${c.nome}</span>
+      <span class="contador">${qtd > 0 ? `${qtd} subcategoria(s)` : 'sem subcategoria'}</span>
+    </div>`;
+  }).join("");
+  alvo.querySelectorAll(".item-lista").forEach(el => {
+    el.addEventListener("click", () => selecionarCategoria(Number(el.dataset.id)));
+  });
+}
+
+function selecionarCategoria(id) {
+  categoriaSelecionada = categorias.find(c => c.id === id);
+  desenharListaCategorias();
+  document.getElementById("cartao-subcategorias").style.display = "block";
+  document.getElementById("titulo-subcategorias").textContent = `Subcategorias — ${categoriaSelecionada.nome}`;
+  document.getElementById("campo-nova-subcategoria").value = "";
+  desenharTabelaSubcategorias();
+}
+
+function desenharTabelaSubcategorias() {
+  const lista = subcategoriasPorCategoria.get(categoriaSelecionada.id) || [];
+  const tabela = document.getElementById("tabela-subcategorias");
+  const vazio = document.getElementById("vazio-subcategorias");
+  const corpo = document.getElementById("corpo-subcategorias");
+  if (lista.length === 0) {
+    tabela.style.display = "none";
+    vazio.style.display = "block";
+    return;
+  }
+  tabela.style.display = "table";
+  vazio.style.display = "none";
+  corpo.innerHTML = lista.map(s =>
+    `<tr><td>${s.nome}</td><td><button class="botao-remover" data-id="${s.id}" title="Remover">✕</button></td></tr>`
+  ).join("");
+  corpo.querySelectorAll(".botao-remover").forEach(btn => {
+    btn.addEventListener("click", () => removerSubcategoria(Number(btn.dataset.id)));
+  });
+}
+
+document.getElementById("botao-adicionar-categoria").addEventListener("click", async () => {
+  const campo = document.getElementById("campo-nova-categoria");
+  const mensagem = document.getElementById("mensagem-categoria");
+  const nome = campo.value.trim();
+  if (!nome) return;
+  try {
+    const criadas = await chamarSupabase("categorias_despesa", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ nome }),
+    });
+    categorias.push(criadas[0]);
+    categorias.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    campo.value = "";
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `"${nome}" cadastrada com sucesso.`;
+    desenharListaCategorias();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = erro.message.includes("duplicate") || erro.message.includes("unique")
+      ? `Já existe uma categoria chamada "${nome}".` : `Não consegui cadastrar: ${erro.message}`;
+  }
+});
+
+document.getElementById("botao-excluir-categoria").addEventListener("click", async () => {
+  if (!categoriaSelecionada) return;
+  if (!confirm(`Excluir "${categoriaSelecionada.nome}"? Isso também remove as subcategorias dela. Não pode ser desfeito.`)) return;
+  try {
+    await chamarSupabase(`categorias_despesa?id=eq.${categoriaSelecionada.id}`, { method: "DELETE" });
+    categorias = categorias.filter(c => c.id !== categoriaSelecionada.id);
+    subcategoriasPorCategoria.delete(categoriaSelecionada.id);
+    categoriaSelecionada = null;
+    document.getElementById("cartao-subcategorias").style.display = "none";
+    desenharListaCategorias();
+  } catch (erro) {
+    alert(`Não consegui excluir: ${erro.message}`);
+  }
+});
+
+document.getElementById("botao-adicionar-subcategoria").addEventListener("click", async () => {
+  const campo = document.getElementById("campo-nova-subcategoria");
+  const mensagem = document.getElementById("mensagem-subcategoria");
+  const nome = campo.value.trim();
+  if (!nome || !categoriaSelecionada) return;
+  try {
+    const criadas = await chamarSupabase("subcategorias_despesa", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ nome, categoria_id: categoriaSelecionada.id }),
+    });
+    if (!subcategoriasPorCategoria.has(categoriaSelecionada.id)) subcategoriasPorCategoria.set(categoriaSelecionada.id, []);
+    subcategoriasPorCategoria.get(categoriaSelecionada.id).push(criadas[0]);
+    subcategoriasPorCategoria.get(categoriaSelecionada.id).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    campo.value = "";
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = "Subcategoria adicionada.";
+    desenharTabelaSubcategorias();
+    desenharListaCategorias();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = erro.message.includes("duplicate") || erro.message.includes("unique")
+      ? "Essa categoria já tem uma subcategoria com esse nome." : `Não consegui adicionar: ${erro.message}`;
+  }
+});
+
+async function removerSubcategoria(id) {
+  try {
+    await chamarSupabase(`subcategorias_despesa?id=eq.${id}`, { method: "DELETE" });
+    const lista = subcategoriasPorCategoria.get(categoriaSelecionada.id) || [];
+    subcategoriasPorCategoria.set(categoriaSelecionada.id, lista.filter(s => s.id !== id));
+    desenharTabelaSubcategorias();
+    desenharListaCategorias();
+  } catch (erro) {
+    alert(`Não consegui remover: ${erro.message}`);
+  }
+}
+
+// --- fornecedores ---
+let fornecedores = [];
+
+async function carregarFornecedores() {
+  fornecedores = await chamarSupabase("fornecedores?select=id,nome,cnpj_cpf&order=nome");
+  desenharListaFornecedores();
+}
+
+function desenharListaFornecedores() {
+  const alvo = document.getElementById("lista-fornecedores");
+  if (fornecedores.length === 0) {
+    alvo.innerHTML = `<div class="vazio">Nenhum fornecedor cadastrado ainda.</div>`;
+    return;
+  }
+  alvo.innerHTML = fornecedores.map(f => `<div class="item-lista">
+      <span>${f.nome}</span>
+      <span style="display:flex; align-items:center; gap:10px">
+        <span class="cnpj">${f.cnpj_cpf || "—"}</span>
+        <button class="botao-remover" data-id="${f.id}" title="Remover">✕</button>
+      </span>
+    </div>`).join("");
+  alvo.querySelectorAll(".botao-remover").forEach(btn => {
+    btn.addEventListener("click", (evento) => { evento.stopPropagation(); removerFornecedor(Number(btn.dataset.id)); });
+  });
+}
+
+document.getElementById("botao-adicionar-fornecedor").addEventListener("click", async () => {
+  const campoNome = document.getElementById("campo-novo-fornecedor-nome");
+  const campoCnpj = document.getElementById("campo-novo-fornecedor-cnpj");
+  const mensagem = document.getElementById("mensagem-fornecedor");
+  const nome = campoNome.value.trim();
+  if (!nome) return;
+  try {
+    const criados = await chamarSupabase("fornecedores", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ nome, cnpj_cpf: campoCnpj.value.trim() || null }),
+    });
+    fornecedores.push(criados[0]);
+    fornecedores.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    campoNome.value = "";
+    campoCnpj.value = "";
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `"${nome}" cadastrado com sucesso.`;
+    desenharListaFornecedores();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = erro.message.includes("duplicate") || erro.message.includes("unique")
+      ? `Já existe um fornecedor chamado "${nome}".` : `Não consegui cadastrar: ${erro.message}`;
+  }
+});
+
+async function removerFornecedor(id) {
+  if (!confirm("Remover esse fornecedor? Não pode ser desfeito.")) return;
+  try {
+    await chamarSupabase(`fornecedores?id=eq.${id}`, { method: "DELETE" });
+    fornecedores = fornecedores.filter(f => f.id !== id);
+    desenharListaFornecedores();
+  } catch (erro) {
+    alert(`Não consegui remover: ${erro.message}`);
+  }
+}
+
+carregarCategorias();
+carregarFornecedores();
+</script>
+</body>
+</html>
