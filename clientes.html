@@ -77,6 +77,18 @@
   .status-cadastro { font-weight: 700; color: var(--azul); font-size: 13px; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.4px; }
   .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
 
+  .lista-busca-suspensa { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; max-height: 180px; overflow-y: auto;
+    margin-top: 4px; border-radius: 9px; border: 1px solid var(--linha); background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.10); display: none; }
+  .lista-busca-suspensa.aberta { display: block; }
+  .lista-busca-suspensa .item-busca { padding: 9px 12px; cursor: pointer; font-size: 13.5px; border-bottom: 1px solid var(--linha); }
+  .lista-busca-suspensa .item-busca:last-child { border-bottom: none; }
+  .lista-busca-suspensa .item-busca:hover { background: #F6F9FA; }
+
+  .chips-vendedores { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip-vendedor { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 100px;
+    background: var(--fundo); border: 1px solid var(--linha); font-size: 13px; font-weight: 600; }
+  .chip-vendedor button { background: none; border: none; color: var(--vermelho); cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
+
   nav.nav-dram {
     background: #123551;
     display: flex;
@@ -223,6 +235,16 @@
       </p>
     </div>
 
+    <h2 class="subtitulo">Vendedor(es) padrão</h2>
+    <div class="campo" style="position:relative">
+      <input type="text" id="campo-busca-vendedor" placeholder="Buscar vendedor pra adicionar..." autocomplete="off">
+      <div class="lista-busca-suspensa" id="lista-vendedores-busca"></div>
+    </div>
+    <div class="chips-vendedores" id="chips-vendedores"></div>
+    <p id="aviso-salvar-primeiro" style="color:var(--texto-suave); font-size:12.5px; margin:8px 0 0; display:none">
+      Salve o cadastro do cliente primeiro pra poder atribuir vendedores.
+    </p>
+
     <h2 class="subtitulo">Nota fiscal</h2>
     <div class="campo">
       <label>Observação padrão da nota</label>
@@ -263,12 +285,15 @@ const CAMPOS_CLIENTE =
 
 let clientes = [];
 let tabelasPreco = [];
+let vendedores = [];
+let vendedoresDoClienteAtual = []; // [{id (do vinculo), vendedor_id, nome}]
 let clienteSelecionado = null; // null = cadastrando cliente novo
 
 async function carregarDados() {
-  [clientes, tabelasPreco] = await Promise.all([
+  [clientes, tabelasPreco, vendedores] = await Promise.all([
     chamarSupabase(`clientes?select=${CAMPOS_CLIENTE}&order=nome`),
     chamarSupabase("tabelas_preco?select=id,nome&order=nome"),
+    chamarSupabase("vendedores?select=id,nome&order=nome"),
   ]);
   const selectTabela = document.getElementById("campo-tabela-preco");
   for (const t of tabelasPreco) {
@@ -331,9 +356,82 @@ function limparFormulario() {
   document.getElementById("campo-observacao-padrao-nota").value = "";
 }
 
+function desenharChipsVendedores() {
+  const alvo = document.getElementById("chips-vendedores");
+  alvo.innerHTML = vendedoresDoClienteAtual.map(v =>
+    `<span class="chip-vendedor">${v.nome}<button data-vinculo-id="${v.id}" title="Remover">✕</button></span>`
+  ).join("");
+  alvo.querySelectorAll("button").forEach(botao => {
+    botao.addEventListener("click", () => removerVendedorDoCliente(Number(botao.dataset.vinculoId)));
+  });
+}
+
+function atualizarVisibilidadeSecaoVendedores() {
+  const temClienteSalvo = clienteSelecionado !== null;
+  document.getElementById("aviso-salvar-primeiro").style.display = temClienteSalvo ? "none" : "block";
+  document.getElementById("campo-busca-vendedor").disabled = !temClienteSalvo;
+}
+
+async function carregarVendedoresDoCliente(clienteId) {
+  const vinculos = await chamarSupabase(`cliente_vendedores_padrao?select=id,vendedor_id,vendedores(nome)&cliente_id=eq.${clienteId}`);
+  vendedoresDoClienteAtual = vinculos.map(v => ({ id: v.id, vendedor_id: v.vendedor_id, nome: v.vendedores?.nome || "—" }));
+  desenharChipsVendedores();
+}
+
+document.getElementById("campo-busca-vendedor").addEventListener("input", (e) => {
+  const filtro = e.target.value.trim().toLowerCase();
+  const lista = document.getElementById("lista-vendedores-busca");
+  if (!filtro) { lista.classList.remove("aberta"); return; }
+  const idsJaAdicionados = new Set(vendedoresDoClienteAtual.map(v => v.vendedor_id));
+  const filtrados = vendedores.filter(v => v.nome.toLowerCase().includes(filtro) && !idsJaAdicionados.has(v.id));
+  lista.innerHTML = filtrados.length === 0
+    ? `<div class="item-busca">Nenhum vendedor encontrado.</div>`
+    : filtrados.map(v => `<div class="item-busca" data-id="${v.id}">${v.nome}</div>`).join("");
+  lista.querySelectorAll(".item-busca[data-id]").forEach(el => {
+    el.addEventListener("click", () => adicionarVendedorAoCliente(Number(el.dataset.id)));
+  });
+  lista.classList.add("aberta");
+});
+document.addEventListener("click", (evento) => {
+  const campo = document.getElementById("campo-busca-vendedor");
+  const lista = document.getElementById("lista-vendedores-busca");
+  if (campo && lista && !campo.contains(evento.target) && !lista.contains(evento.target)) {
+    lista.classList.remove("aberta");
+  }
+});
+
+async function adicionarVendedorAoCliente(vendedorId) {
+  if (!clienteSelecionado) return; // seguranca: nao deveria acontecer (campo fica desabilitado)
+  const vendedor = vendedores.find(v => v.id === vendedorId);
+  document.getElementById("campo-busca-vendedor").value = "";
+  document.getElementById("lista-vendedores-busca").classList.remove("aberta");
+  try {
+    const criados = await chamarSupabase("cliente_vendedores_padrao", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ cliente_id: clienteSelecionado.id, vendedor_id: vendedorId }),
+    });
+    vendedoresDoClienteAtual.push({ id: criados[0].id, vendedor_id: vendedorId, nome: vendedor.nome });
+    desenharChipsVendedores();
+  } catch (erro) {
+    alert(`Não consegui adicionar: ${erro.message}`);
+  }
+}
+
+async function removerVendedorDoCliente(vinculoId) {
+  try {
+    await chamarSupabase(`cliente_vendedores_padrao?id=eq.${vinculoId}`, { method: "DELETE" });
+    vendedoresDoClienteAtual = vendedoresDoClienteAtual.filter(v => v.id !== vinculoId);
+    desenharChipsVendedores();
+  } catch (erro) {
+    alert(`Não consegui remover: ${erro.message}`);
+  }
+}
+
 function abrirFormulario() {
   atualizarVisibilidadeDesconto();
   atualizarVisibilidadeValorDesconto();
+  atualizarVisibilidadeSecaoVendedores();
   document.getElementById("mensagem").className = "mensagem";
   document.getElementById("cartao-edicao").style.display = "block";
 }
@@ -343,12 +441,14 @@ document.getElementById("botao-novo-cliente").addEventListener("click", () => {
   document.getElementById("campo-busca-cliente").value = "";
   document.getElementById("lista-clientes").style.display = "none";
   limparFormulario();
+  vendedoresDoClienteAtual = [];
+  desenharChipsVendedores();
   document.getElementById("status-cadastro").textContent = "Novo cliente";
   abrirFormulario();
   document.getElementById("campo-nome").focus();
 });
 
-function selecionarCliente(id) {
+async function selecionarCliente(id) {
   clienteSelecionado = clientes.find(c => c.id === id);
   document.getElementById("campo-busca-cliente").value = "";
   document.getElementById("lista-clientes").style.display = "none";
@@ -373,7 +473,10 @@ function selecionarCliente(id) {
   document.getElementById("campo-desconto-valor").value = clienteSelecionado.desconto_boleto_valor || "";
   document.getElementById("campo-observacao-padrao-nota").value = clienteSelecionado.observacao_padrao_nota || "";
 
+  vendedoresDoClienteAtual = [];
+  desenharChipsVendedores();
   abrirFormulario();
+  await carregarVendedoresDoCliente(clienteSelecionado.id);
 }
 
 document.getElementById("botao-salvar").addEventListener("click", async () => {
@@ -446,6 +549,7 @@ document.getElementById("botao-salvar").addEventListener("click", async () => {
       clientes.sort((a, b) => a.nome.localeCompare(b.nome));
       clienteSelecionado = novoCliente;
       document.getElementById("status-cadastro").textContent = `Editando: ${novoCliente.nome}`;
+      atualizarVisibilidadeSecaoVendedores();
       mensagem.className = "mensagem sucesso";
       mensagem.textContent = "Cliente cadastrado com sucesso!";
     }
