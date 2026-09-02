@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Vendedores</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+
+  .linha-flex { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .campo { display: flex; flex-direction: column; gap: 4px; }
+  .campo label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo input, .campo select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo input:focus, .campo select:focus { outline: none; border-color: var(--azul); }
+
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .botao.perigo { background: #fff; border: 1.5px solid var(--vermelho); color: var(--vermelho); }
+
+  .lista-vendedores { border-radius: 9px; border: 1px solid var(--linha); overflow: hidden; }
+  .item-vendedor { padding: 12px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14.5px; font-weight: 600;
+    display: flex; justify-content: space-between; align-items: center; }
+  .item-vendedor:last-child { border-bottom: none; }
+  .item-vendedor:hover { background: #F6F9FA; }
+  .item-vendedor.ativo { background: #EAF1F6; color: var(--azul); }
+  .item-vendedor .contador-regras { font-size: 12px; color: var(--texto-suave); font-weight: 400; }
+
+  .lista-busca { max-height: 180px; overflow-y: auto; margin-top: 6px; border-radius: 9px; border: 1px solid var(--linha); display: none; }
+  .lista-busca.aberta { display: block; }
+  .item-busca { padding: 9px 12px; cursor: pointer; font-size: 13.5px; border-bottom: 1px solid var(--linha); }
+  .item-busca:last-child { border-bottom: none; }
+  .item-busca:hover { background: #F6F9FA; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 7px 8px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: right; width: 100px; }
+  tbody td { padding: 9px 8px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; }
+  tbody tr:last-child td { border-bottom: none; }
+  .botao-remover-regra { background: none; border: none; color: var(--vermelho); font-size: 16px; cursor: pointer; padding: 0 4px; }
+
+  .mensagem { margin-top: 10px; padding: 11px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .vazio { padding: 16px; text-align: center; color: var(--texto-suave); font-size: 13.5px; }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Vendedores</h1>
+    <p>Cadastro e comissões</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao">
+    <h2>Comissão padrão geral</h2>
+    <p style="color:var(--texto-suave); font-size:13px; margin:0 0 10px">Usada sempre que não houver uma regra específica pro vendedor+cliente.</p>
+    <div class="linha-flex">
+      <div class="campo">
+        <label>% padrão</label>
+        <input type="number" id="campo-percentual-padrao" min="0" step="0.01" style="width:100px">
+      </div>
+      <button class="botao" id="botao-salvar-padrao">Salvar padrão</button>
+    </div>
+    <div class="mensagem" id="mensagem-padrao"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Vendedores</h2>
+    <div class="linha-flex" style="margin-bottom:12px">
+      <div class="campo" style="flex:1">
+        <label>Nome do novo vendedor</label>
+        <input type="text" id="campo-novo-vendedor" placeholder="Ex: Carlos">
+      </div>
+      <button class="botao secundario" id="botao-adicionar-vendedor">+ Adicionar</button>
+    </div>
+    <div class="lista-vendedores" id="lista-vendedores"></div>
+    <div class="mensagem" id="mensagem-vendedor"></div>
+  </div>
+
+  <div class="cartao" id="cartao-regras" style="display:none">
+    <h2 id="titulo-regras">Regras específicas</h2>
+    <button class="botao perigo" id="botao-excluir-vendedor" style="margin-bottom:14px">Excluir esse vendedor</button>
+
+    <div class="campo" style="position:relative">
+      <label>Adicionar exceção pra um cliente específico</label>
+      <input type="text" id="campo-busca-cliente" placeholder="Buscar cliente..." autocomplete="off">
+      <div class="lista-busca" id="lista-clientes-busca"></div>
+    </div>
+    <div class="linha-flex" style="margin-top:8px">
+      <div class="campo">
+        <label>% pra esse cliente</label>
+        <input type="number" id="campo-percentual-regra" min="0" step="0.01" style="width:100px">
+      </div>
+      <button class="botao secundario" id="botao-adicionar-regra" disabled>+ Adicionar regra</button>
+    </div>
+
+    <table id="tabela-regras" style="display:none">
+      <thead><tr><th>Cliente</th><th class="num">%</th><th></th></tr></thead>
+      <tbody id="corpo-regras"></tbody>
+    </table>
+    <div id="vazio-regras" class="vazio" style="display:none">Nenhuma regra específica — usa a % padrão geral.</div>
+    <div class="mensagem" id="mensagem-regras"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(corpoErro || `Erro ${resposta.status}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+let vendedores = [];
+let clientes = [];
+let regrasPorVendedor = new Map(); // vendedor_id -> [{id, cliente_id, percentual, nome_cliente}]
+let vendedorSelecionado = null;
+let clienteEscolhidoParaRegra = null;
+
+function formatarPercentual(valor) {
+  return Number(valor).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function carregarTudo() {
+  const [config, listaVendedores, listaClientes, listaRegras] = await Promise.all([
+    chamarSupabase("config_comissao?select=percentual_padrao&id=eq.1"),
+    chamarSupabase("vendedores?select=id,nome&order=nome"),
+    chamarSupabase("clientes?select=id,nome&order=nome"),
+    chamarSupabase("regras_comissao?select=id,vendedor_id,cliente_id,percentual,clientes(nome)"),
+  ]);
+
+  document.getElementById("campo-percentual-padrao").value = config[0]?.percentual_padrao ?? 0;
+
+  vendedores = listaVendedores;
+  clientes = listaClientes;
+
+  regrasPorVendedor = new Map();
+  for (const r of listaRegras) {
+    if (!regrasPorVendedor.has(r.vendedor_id)) regrasPorVendedor.set(r.vendedor_id, []);
+    regrasPorVendedor.get(r.vendedor_id).push({
+      id: r.id, cliente_id: r.cliente_id, percentual: r.percentual,
+      nome_cliente: r.clientes?.nome || "—",
+    });
+  }
+
+  desenharListaVendedores();
+}
+
+function desenharListaVendedores() {
+  const alvo = document.getElementById("lista-vendedores");
+  if (vendedores.length === 0) {
+    alvo.innerHTML = `<div class="vazio">Nenhum vendedor cadastrado ainda.</div>`;
+    return;
+  }
+  alvo.innerHTML = vendedores.map(v => {
+    const qtdRegras = (regrasPorVendedor.get(v.id) || []).length;
+    const ativo = vendedorSelecionado?.id === v.id;
+    return `<div class="item-vendedor ${ativo ? 'ativo' : ''}" data-id="${v.id}">
+      <span>${v.nome}</span>
+      <span class="contador-regras">${qtdRegras > 0 ? `${qtdRegras} regra(s) específica(s)` : 'sem exceção'}</span>
+    </div>`;
+  }).join("");
+  alvo.querySelectorAll(".item-vendedor").forEach(el => {
+    el.addEventListener("click", () => selecionarVendedor(Number(el.dataset.id)));
+  });
+}
+
+function selecionarVendedor(id) {
+  vendedorSelecionado = vendedores.find(v => v.id === id);
+  desenharListaVendedores();
+  document.getElementById("cartao-regras").style.display = "block";
+  document.getElementById("titulo-regras").textContent = `Regras específicas — ${vendedorSelecionado.nome}`;
+  document.getElementById("campo-busca-cliente").value = "";
+  document.getElementById("campo-percentual-regra").value = "";
+  clienteEscolhidoParaRegra = null;
+  document.getElementById("botao-adicionar-regra").disabled = true;
+  desenharTabelaRegras();
+}
+
+function desenharTabelaRegras() {
+  const regras = regrasPorVendedor.get(vendedorSelecionado.id) || [];
+  const tabela = document.getElementById("tabela-regras");
+  const vazio = document.getElementById("vazio-regras");
+  const corpo = document.getElementById("corpo-regras");
+
+  if (regras.length === 0) {
+    tabela.style.display = "none";
+    vazio.style.display = "block";
+    return;
+  }
+  tabela.style.display = "table";
+  vazio.style.display = "none";
+
+  corpo.innerHTML = regras.map(r =>
+    `<tr><td>${r.nome_cliente}</td><td class="num">${formatarPercentual(r.percentual)}%</td>
+      <td><button class="botao-remover-regra" data-id="${r.id}" title="Remover essa regra">✕</button></td></tr>`
+  ).join("");
+  corpo.querySelectorAll(".botao-remover-regra").forEach(btn => {
+    btn.addEventListener("click", () => removerRegra(Number(btn.dataset.id)));
+  });
+}
+
+// --- comissão padrão geral ---
+document.getElementById("botao-salvar-padrao").addEventListener("click", async () => {
+  const botao = document.getElementById("botao-salvar-padrao");
+  const mensagem = document.getElementById("mensagem-padrao");
+  const valor = document.getElementById("campo-percentual-padrao").value;
+  if (valor === "" || isNaN(Number(valor))) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = "Informe um valor válido.";
+    return;
+  }
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+  try {
+    await chamarSupabase("config_comissao?id=eq.1", {
+      method: "PATCH",
+      body: JSON.stringify({ percentual_padrao: Number(valor) }),
+    });
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = "Comissão padrão salva com sucesso.";
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.disabled = false;
+    botao.textContent = "Salvar padrão";
+  }
+});
+
+// --- adicionar vendedor ---
+document.getElementById("botao-adicionar-vendedor").addEventListener("click", async () => {
+  const campo = document.getElementById("campo-novo-vendedor");
+  const mensagem = document.getElementById("mensagem-vendedor");
+  const nome = campo.value.trim();
+  if (!nome) return;
+
+  try {
+    const criados = await chamarSupabase("vendedores", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({ nome }),
+    });
+    vendedores.push(criados[0]);
+    vendedores.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    campo.value = "";
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `"${nome}" cadastrado com sucesso.`;
+    desenharListaVendedores();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = erro.message.includes("duplicate") || erro.message.includes("unique")
+      ? `Já existe um vendedor chamado "${nome}".`
+      : `Não consegui cadastrar: ${erro.message}`;
+  }
+});
+
+// --- excluir vendedor selecionado ---
+document.getElementById("botao-excluir-vendedor").addEventListener("click", async () => {
+  if (!vendedorSelecionado) return;
+  if (!confirm(`Excluir "${vendedorSelecionado.nome}"? Isso também remove as regras específicas dele. Não pode ser desfeito.`)) return;
+
+  try {
+    await chamarSupabase(`vendedores?id=eq.${vendedorSelecionado.id}`, { method: "DELETE" });
+    vendedores = vendedores.filter(v => v.id !== vendedorSelecionado.id);
+    regrasPorVendedor.delete(vendedorSelecionado.id);
+    vendedorSelecionado = null;
+    document.getElementById("cartao-regras").style.display = "none";
+    desenharListaVendedores();
+  } catch (erro) {
+    alert(`Não consegui excluir: ${erro.message}`);
+  }
+});
+
+// --- busca de cliente pra regra específica ---
+document.getElementById("campo-busca-cliente").addEventListener("input", (e) => {
+  const filtro = e.target.value.trim().toLowerCase();
+  const lista = document.getElementById("lista-clientes-busca");
+  clienteEscolhidoParaRegra = null;
+  document.getElementById("botao-adicionar-regra").disabled = true;
+  if (!filtro) { lista.classList.remove("aberta"); return; }
+  const filtrados = clientes.filter(c => c.nome.toLowerCase().includes(filtro)).slice(0, 20);
+  lista.innerHTML = filtrados.length === 0
+    ? `<div class="item-busca">Nenhum cliente encontrado.</div>`
+    : filtrados.map(c => `<div class="item-busca" data-id="${c.id}">${c.nome}</div>`).join("");
+  lista.querySelectorAll(".item-busca[data-id]").forEach(el => {
+    el.addEventListener("click", () => {
+      clienteEscolhidoParaRegra = clientes.find(c => c.id === Number(el.dataset.id));
+      document.getElementById("campo-busca-cliente").value = clienteEscolhidoParaRegra.nome;
+      lista.classList.remove("aberta");
+      document.getElementById("botao-adicionar-regra").disabled = false;
+    });
+  });
+  lista.classList.add("aberta");
+});
+document.addEventListener("click", (evento) => {
+  const campo = document.getElementById("campo-busca-cliente");
+  const lista = document.getElementById("lista-clientes-busca");
+  if (campo && lista && !campo.contains(evento.target) && !lista.contains(evento.target)) {
+    lista.classList.remove("aberta");
+  }
+});
+
+// --- adicionar regra específica ---
+document.getElementById("botao-adicionar-regra").addEventListener("click", async () => {
+  const mensagem = document.getElementById("mensagem-regras");
+  const percentualTexto = document.getElementById("campo-percentual-regra").value;
+  if (!clienteEscolhidoParaRegra || percentualTexto === "" || isNaN(Number(percentualTexto))) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = "Escolha um cliente e informe a %.";
+    return;
+  }
+  try {
+    const criadas = await chamarSupabase("regras_comissao", {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify({
+        vendedor_id: vendedorSelecionado.id,
+        cliente_id: clienteEscolhidoParaRegra.id,
+        percentual: Number(percentualTexto),
+      }),
+    });
+    if (!regrasPorVendedor.has(vendedorSelecionado.id)) regrasPorVendedor.set(vendedorSelecionado.id, []);
+    regrasPorVendedor.get(vendedorSelecionado.id).push({
+      id: criadas[0].id, cliente_id: clienteEscolhidoParaRegra.id,
+      percentual: Number(percentualTexto), nome_cliente: clienteEscolhidoParaRegra.nome,
+    });
+    document.getElementById("campo-busca-cliente").value = "";
+    document.getElementById("campo-percentual-regra").value = "";
+    clienteEscolhidoParaRegra = null;
+    document.getElementById("botao-adicionar-regra").disabled = true;
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = "Regra adicionada.";
+    desenharTabelaRegras();
+    desenharListaVendedores();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = erro.message.includes("duplicate") || erro.message.includes("unique")
+      ? "Esse vendedor já tem uma regra específica pra esse cliente."
+      : `Não consegui adicionar: ${erro.message}`;
+  }
+});
+
+async function removerRegra(regraId) {
+  try {
+    await chamarSupabase(`regras_comissao?id=eq.${regraId}`, { method: "DELETE" });
+    const lista = regrasPorVendedor.get(vendedorSelecionado.id) || [];
+    regrasPorVendedor.set(vendedorSelecionado.id, lista.filter(r => r.id !== regraId));
+    desenharTabelaRegras();
+    desenharListaVendedores();
+  } catch (erro) {
+    alert(`Não consegui remover: ${erro.message}`);
+  }
+}
+
+carregarTudo();
+</script>
+</body>
+</html>
