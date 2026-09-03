@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - DRE</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+  main { max-width: 720px; margin: 0 auto; padding: 18px 16px 60px; }
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; background: #fff; }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .cartao-destaque { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 20px; text-align: center; margin-bottom: 14px; }
+  .cartao-destaque .rotulo { font-size: 12px; text-transform: uppercase; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 28px; font-weight: 700; margin-top: 4px; }
+  .cartao-destaque .valor.positivo { color: var(--verde); }
+  .cartao-destaque .valor.negativo { color: var(--vermelho); }
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 14px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-total td { background: #FCEEE3; font-weight: 700; }
+  .valor-negativo { color: var(--vermelho); }
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos"><h1>DRE</h1><p>Receita líquida − Despesas pagas = Resultado</p></div>
+</header>
+<script src="menu.js"></script>
+<script src="imprimir.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro"><label>Ano</label><select id="select-ano"></select></div>
+      <button class="botao" id="botao-atualizar">Atualizar</button>
+      <button class="botao secundario" id="botao-gerar-pdf">Gerar PDF</button>
+    </div>
+  </div>
+
+  <div class="cartao-destaque"><div class="rotulo">Resultado acumulado do ano</div><div class="valor" id="valor-resultado-ano">—</div></div>
+
+  <div class="cartao-secao">
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const NOMES_MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+function formatarMoeda(v) { return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+function formatarDataISO(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function popularSelectAno() {
+  const anoAtual = new Date().getFullYear();
+  const select = document.getElementById("select-ano");
+  for (let a = anoAtual; a >= anoAtual - 3; a--) { const o = document.createElement("option"); o.value = a; o.textContent = a; select.appendChild(o); }
+  select.value = anoAtual;
+}
+
+let ultimoResultado = null;
+
+// Receita liquida = faturamento (pedido.total - frete, so' tipo=venda,
+// nao cancelado) MENOS o desconto contratual de cada cliente. Despesas =
+// soma do que foi PAGO no mes (data de pagamento). Resultado = receita
+// liquida - despesas. Formula confirmada com o Desktop.
+async function carregarDRE() {
+  const ano = Number(document.getElementById("select-ano").value);
+  const alvo = document.getElementById("conteudo-tabela");
+  document.getElementById("valor-resultado-ano").textContent = "—";
+  alvo.className = "carregando"; alvo.textContent = "Carregando...";
+
+  try {
+    const deAno = formatarDataISO(new Date(ano, 0, 1));
+    const ateAnoExclusivo = formatarDataISO(new Date(ano + 1, 0, 1));
+
+    const [pedidos, despesasPagas, clientesBrutos] = await Promise.all([
+      chamarSupabase(`pedidos?select=cliente_id,criado_em,status,total,valor_frete&tipo=eq.venda&criado_em=gte.${deAno}&criado_em=lt.${ateAnoExclusivo}`),
+      chamarSupabase(`contas_pagar?select=valor,data_pagamento&status=eq.concluido&data_pagamento=gte.${deAno}&data_pagamento=lt.${ateAnoExclusivo}`),
+      chamarSupabase("clientes?select=id,desconto_percentual"),
+    ]);
+
+    const descontoPorCliente = new Map(clientesBrutos.map(c => [c.id, Number(c.desconto_percentual || 0)]));
+
+    const receitaLiquidaPorMes = new Array(12).fill(0);
+    for (const p of pedidos) {
+      if (p.status === "cancelado") continue;
+      const mesIndice = Number(p.criado_em.slice(5, 7)) - 1;
+      const receitaBruta = Number(p.total) - Number(p.valor_frete || 0);
+      const desconto = receitaBruta * (descontoPorCliente.get(p.cliente_id) || 0) / 100;
+      receitaLiquidaPorMes[mesIndice] += receitaBruta - desconto;
+    }
+
+    const despesaPorMes = new Array(12).fill(0);
+    for (const d of despesasPagas) {
+      const mesIndice = Number(d.data_pagamento.slice(5, 7)) - 1;
+      despesaPorMes[mesIndice] += Number(d.valor);
+    }
+
+    const linhas = [];
+    for (let i = 0; i < 12; i++) {
+      linhas.push({ mes: i, receita: receitaLiquidaPorMes[i], despesa: despesaPorMes[i], resultado: receitaLiquidaPorMes[i] - despesaPorMes[i] });
+    }
+    const resultadoAno = linhas.reduce((s, l) => s + l.resultado, 0);
+
+    document.getElementById("valor-resultado-ano").textContent = formatarMoeda(resultadoAno);
+    document.getElementById("valor-resultado-ano").className = "valor " + (resultadoAno >= 0 ? "positivo" : "negativo");
+
+    ultimoResultado = { ano, linhas, resultadoAno };
+    desenharTabela(linhas, resultadoAno);
+  } catch (erro) {
+    alvo.className = "erro"; alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela(linhas, resultadoAno) {
+  const alvo = document.getElementById("conteudo-tabela");
+  let html = `<table><thead><tr><th>Mês</th><th class="num">Receita líquida</th><th class="num">Despesas</th><th class="num">Resultado</th></tr></thead><tbody>`;
+  for (const l of linhas) {
+    const classeResultado = l.resultado < 0 ? "valor-negativo" : "";
+    html += `<tr><td>${NOMES_MESES_ABREV[l.mes]}</td><td class="num">${formatarMoeda(l.receita)}</td>` +
+      `<td class="num">${formatarMoeda(l.despesa)}</td><td class="num ${classeResultado}">${formatarMoeda(l.resultado)}</td></tr>`;
+  }
+  const classeResultadoAno = resultadoAno < 0 ? "valor-negativo" : "";
+  html += `<tr class="linha-total"><td>Total do ano</td><td class="num">${formatarMoeda(linhas.reduce((s,l)=>s+l.receita,0))}</td>` +
+    `<td class="num">${formatarMoeda(linhas.reduce((s,l)=>s+l.despesa,0))}</td><td class="num ${classeResultadoAno}">${formatarMoeda(resultadoAno)}</td></tr>`;
+  html += `</tbody></table>`;
+  alvo.className = ""; alvo.innerHTML = html;
+}
+
+document.getElementById("botao-atualizar").addEventListener("click", carregarDRE);
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimoResultado) return;
+  const { ano, linhas, resultadoAno } = ultimoResultado;
+  let linhasHtml = "";
+  for (const l of linhas) {
+    linhasHtml += `<tr><td>${NOMES_MESES_ABREV[l.mes]}</td><td class="num">${formatarMoeda(l.receita)}</td>` +
+      `<td class="num">${formatarMoeda(l.despesa)}</td><td class="num">${formatarMoeda(l.resultado)}</td></tr>`;
+  }
+  const conteudo = `<table><tr><th>Mês</th><th class="num">Receita líquida</th><th class="num">Despesas</th><th class="num">Resultado</th></tr>${linhasHtml}` +
+    `<tr class="linha-total"><td>Total do ano</td><td class="num">${formatarMoeda(linhas.reduce((s,l)=>s+l.receita,0))}</td>` +
+    `<td class="num">${formatarMoeda(linhas.reduce((s,l)=>s+l.despesa,0))}</td><td class="num">${formatarMoeda(resultadoAno)}</td></tr></table>`;
+  abrirImpressao(`DRE — ${ano}`, "Receita líquida (faturamento − desconto contratual) − Despesas pagas.", conteudo);
+});
+
+popularSelectAno();
+carregarDRE();
+</script>
+</body>
+</html>
