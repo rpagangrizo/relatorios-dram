@@ -58,6 +58,11 @@
         { nome: "Categorias e Fornecedores", href: "categorias-fornecedores.html" },
         { nome: "Contas a Pagar", href: "contas-pagar.html" },
         { nome: "Contas a Receber", href: "contas-receber.html" },
+        { nome: "Despesa Mensal", href: "despesa-mensal.html" },
+        { nome: "Despesa por Fornecedor", href: "despesa-por-fornecedor.html" },
+        { nome: "DRE", href: "dre.html" },
+        { nome: "Extrato Geral", href: "extrato-geral.html" },
+        { nome: "Gastos por Categoria", href: "gastos-por-categoria.html" },
       ],
     },
     {
