@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Extrato Geral</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+  main { max-width: 900px; margin: 0 auto; padding: 18px 16px 60px; }
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro input { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .cartao-destaque { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 18px; text-align: center; margin-bottom: 14px; }
+  .cartao-destaque .rotulo { font-size: 12px; text-transform: uppercase; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 24px; font-weight: 700; color: var(--azul); margin-top: 4px; }
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; min-width: 700px; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; }
+  tbody tr:last-child td { border-bottom: none; }
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos"><h1>Extrato Geral</h1><p>Todas as despesas pagas no período — contas em aberto não aparecem aqui</p></div>
+</header>
+<script src="menu.js"></script>
+<script src="imprimir.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro"><label>Pagamento de</label><input type="text" id="filtro-data-de" placeholder="DD/MM/AAAA"></div>
+      <div class="campo-filtro"><label>até</label><input type="text" id="filtro-data-ate" placeholder="DD/MM/AAAA"></div>
+      <button class="botao" id="botao-filtrar">Filtrar</button>
+      <button class="botao secundario" id="botao-gerar-pdf">Gerar PDF</button>
+    </div>
+  </div>
+
+  <div class="cartao-destaque"><div class="rotulo">Total pago no período</div><div class="valor" id="valor-total">—</div></div>
+
+  <div class="cartao-secao">
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+function formatarMoeda(v) { return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+function dataBrParaIso(t) {
+  const p = (t || "").trim().split("/");
+  if (p.length !== 3) return null;
+  const [d, m, a] = p;
+  if (!d || !m || !a) return null;
+  return `${a.padStart(4,"0")}-${m.padStart(2,"0")}-${d.padStart(2,"0")}`;
+}
+function isoParaDataBr(iso) {
+  if (!iso) return "—";
+  const [a, m, d] = iso.slice(0, 10).split("-");
+  return `${d}/${m}/${a}`;
+}
+function primeiroDiaDoMesAtual() {
+  const hoje = new Date();
+  return `${String(1).padStart(2,"0")}/${String(hoje.getMonth()+1).padStart(2,"0")}/${hoje.getFullYear()}`;
+}
+function hojeBr() {
+  const hoje = new Date();
+  return `${String(hoje.getDate()).padStart(2,"0")}/${String(hoje.getMonth()+1).padStart(2,"0")}/${hoje.getFullYear()}`;
+}
+
+let ultimoResultado = null;
+
+async function filtrar() {
+  const alvo = document.getElementById("conteudo-tabela");
+  document.getElementById("valor-total").textContent = "—";
+  alvo.className = "carregando"; alvo.textContent = "Carregando...";
+
+  try {
+    const deIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
+    const ateIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
+
+    let filtro = "select=data_pagamento,valor,descricao,categorias_despesa(nome),fornecedores(nome)" +
+      "&status=eq.concluido&order=data_pagamento.asc";
+    if (deIso) filtro += `&data_pagamento=gte.${deIso}`;
+    if (ateIso) filtro += `&data_pagamento=lte.${ateIso}`;
+
+    const linhas = await chamarSupabase(`contas_pagar?${filtro}`);
+    const total = linhas.reduce((s, l) => s + Number(l.valor), 0);
+    document.getElementById("valor-total").textContent = formatarMoeda(total);
+
+    ultimoResultado = { deTexto: document.getElementById("filtro-data-de").value || "início", ateTexto: document.getElementById("filtro-data-ate").value || "hoje", linhas, total };
+    desenharTabela(linhas);
+  } catch (erro) {
+    alvo.className = "erro"; alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela(linhas) {
+  const alvo = document.getElementById("conteudo-tabela");
+  if (linhas.length === 0) { alvo.className = "vazio"; alvo.textContent = "Nenhuma despesa paga nesse período."; return; }
+  let html = `<table><thead><tr><th>Data pagamento</th><th>Categoria</th><th>Fornecedor</th><th>Descrição</th><th class="num">Valor</th></tr></thead><tbody>`;
+  for (const l of linhas) {
+    html += `<tr><td>${isoParaDataBr(l.data_pagamento)}</td><td>${l.categorias_despesa?.nome || "—"}</td>` +
+      `<td>${l.fornecedores?.nome || "—"}</td><td>${l.descricao || "—"}</td><td class="num">${formatarMoeda(l.valor)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.className = ""; alvo.innerHTML = html;
+}
+
+document.getElementById("botao-filtrar").addEventListener("click", filtrar);
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimoResultado) return;
+  const { deTexto, ateTexto, linhas, total } = ultimoResultado;
+  let linhasHtml = linhas.map(l =>
+    `<tr><td>${isoParaDataBr(l.data_pagamento)}</td><td>${l.categorias_despesa?.nome || "—"}</td>` +
+    `<td>${l.fornecedores?.nome || "—"}</td><td>${l.descricao || "—"}</td><td class="num">${formatarMoeda(l.valor)}</td></tr>`
+  ).join("");
+  const conteudo = `<table><tr><th>Data pagamento</th><th>Categoria</th><th>Fornecedor</th><th>Descrição</th><th class="num">Valor</th></tr>${linhasHtml}</table>` +
+    `<p style="text-align:right; font-weight:700; margin-top:10px">Total: ${formatarMoeda(total)}</p>`;
+  abrirImpressao(`Extrato Geral — ${deTexto} a ${ateTexto}`, "Todas as despesas pagas no período.", conteudo);
+});
+
+document.getElementById("filtro-data-de").value = primeiroDiaDoMesAtual();
+document.getElementById("filtro-data-ate").value = hojeBr();
+filtrar();
+</script>
+</body>
+</html>
