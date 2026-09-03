@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Produtos</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 900px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .cartao h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--texto-suave); margin: 0 0 10px; }
+  .cartao p.explicacao { font-size: 12.5px; color: var(--texto-suave); margin: -6px 0 12px; }
+
+  .grade-form { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+  @media (max-width: 720px) { .grade-form { grid-template-columns: 1fr 1fr; } }
+  .campo { display: flex; flex-direction: column; gap: 4px; }
+  .campo label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo input, .campo select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; color: var(--texto); background: #fff; }
+  .campo input:focus, .campo select:focus { outline: none; border-color: var(--azul); }
+
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .botao.azul { background: var(--azul); }
+  .botao.perigo { background: #fff; border: 1.5px solid var(--vermelho); color: var(--vermelho); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 10px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  tbody td { padding: 9px 10px; border-bottom: 1px solid var(--linha); font-size: 13.5px; cursor: pointer; }
+  tbody tr:hover { background: #F6F9FA; }
+  tbody tr.ativo { background: #EAF1F6; }
+  tbody tr:last-child td { border-bottom: none; }
+  .barra-busca { margin-bottom: 10px; }
+  .barra-busca input { width: 100%; padding: 12px 14px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14.5px; }
+
+  .barra-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+
+  .grade-fiscal { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .grade-fiscal { grid-template-columns: 1fr; } }
+
+  .mensagem { margin-top: 10px; padding: 11px 14px; border-radius: 9px; font-size: 13.5px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .vazio, .carregando { padding: 20px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Produtos</h1>
+    <p>Cadastro de itens e dados fiscais (NF-e)</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao">
+    <h2 id="titulo-formulario">Novo item / editar item selecionado</h2>
+    <div class="grade-form">
+      <div class="campo">
+        <label>Nome do item</label>
+        <input type="text" id="campo-nome">
+      </div>
+      <div class="campo">
+        <label>Unidade de venda</label>
+        <select id="campo-unidade">
+          <option value="kg">kg</option>
+          <option value="caixa">caixa</option>
+        </select>
+      </div>
+      <div class="campo">
+        <label>Peso por unidade (kg)</label>
+        <input type="number" id="campo-peso" step="0.01" value="1">
+      </div>
+      <div class="campo">
+        <label>Embalagem</label>
+        <select id="campo-embalagem">
+          <option value="barra">barra</option>
+          <option value="100g">100g</option>
+        </select>
+      </div>
+    </div>
+    <div class="grade-form" style="grid-template-columns: 1fr auto">
+      <div class="campo">
+        <label>Categoria de produto</label>
+        <select id="campo-categoria"><option value="">— Nenhuma —</option></select>
+      </div>
+      <div class="campo" style="justify-content:flex-end">
+        <button class="botao secundario" id="botao-nova-categoria" style="white-space:nowrap">+ Nova categoria</button>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px">
+      <button class="botao" id="botao-salvar-item">Salvar item</button>
+      <button class="botao secundario" id="botao-cancelar-edicao">Cancelar edição</button>
+    </div>
+    <div class="mensagem" id="mensagem-item"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Itens cadastrados</h2>
+    <div class="barra-busca"><input type="text" id="campo-busca" placeholder="Buscar item..."></div>
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+    <div class="barra-acoes">
+      <button class="botao secundario" id="botao-editar" disabled>Editar selecionado</button>
+      <button class="botao perigo" id="botao-excluir" disabled>Excluir selecionado</button>
+      <button class="botao azul" id="botao-dados-fiscais" disabled>Dados fiscais (NF-e)</button>
+    </div>
+  </div>
+
+  <div class="cartao" id="cartao-fiscal" style="display:none">
+    <h2 id="titulo-fiscal">Dados fiscais (NF-e)</h2>
+    <p class="explicacao">Preencha só o que for usar — campo vazio fica sem valor. Códigos (NCM, CST, CFOP) mantêm
+      qualquer zero à esquerda; alíquotas aceitam vírgula ou ponto (ex: 18 ou 6,5).</p>
+    <div class="grade-fiscal" id="grade-campos-fiscais"></div>
+    <div class="barra-acoes">
+      <button class="botao" id="botao-salvar-fiscal">Salvar (só este item)</button>
+      <button class="botao secundario" id="botao-aplicar-categoria" style="display:none">Aplicar a todos da categoria</button>
+      <button class="botao secundario" id="botao-cancelar-fiscal">Cancelar</button>
+    </div>
+    <div class="mensagem" id="mensagem-fiscal"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+// mesmos 20 campos fiscais do Desktop, na mesma ordem - [coluna, rotulo, tipo]
+// tipo "texto" grava como esta' (codigos tem zero a esquerda que nao pode
+// virar numero) e "percentual" converte pra numero (aceita virgula ou ponto)
+const CAMPOS_FISCAIS = [
+  ["ncm", "NCM", "texto"],
+  ["cest", "CEST", "texto"],
+  ["cfop_dentro_sp", "CFOP — venda dentro de SP", "texto"],
+  ["cfop_fora_sp", "CFOP — venda fora de SP", "texto"],
+  ["cst_icms", "CST de ICMS", "texto"],
+  ["aliquota_icms_sp", "Alíquota de ICMS (SP) %", "percentual"],
+  ["aliquota_icms_fora_sp", "Alíquota de ICMS (fora de SP) %", "percentual"],
+  ["reducao_base_calculo_icms", "Redução de base de cálculo %", "percentual"],
+  ["substituicao_tributaria", "Substituição tributária (sim/não)", "texto"],
+  ["cst_pis", "CST de PIS", "texto"],
+  ["aliquota_pis", "Alíquota de PIS %", "percentual"],
+  ["cst_cofins", "CST de COFINS", "texto"],
+  ["aliquota_cofins", "Alíquota de COFINS %", "percentual"],
+  ["codigo_beneficio_fiscal", "Código de benefício fiscal", "texto"],
+  ["cst_ibs_cbs", "CST de IBS/CBS", "texto"],
+  ["aliquota_ibs", "Alíquota de IBS %", "percentual"],
+  ["aliquota_cbs", "Alíquota de CBS %", "percentual"],
+  ["aliquota_icms_integral", "ICMS: alíquota cheia (antes do diferimento) %", "percentual"],
+  ["percentual_diferimento_icms", "ICMS: % diferido (só se CST=51)", "percentual"],
+  ["classificacao_tributaria_ibs_cbs", "IBS/CBS: Classificação Tributária (cClassTrib)", "texto"],
+];
+const COLUNAS_FISCAIS_SQL = CAMPOS_FISCAIS.map(c => c[0]).join(",");
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(corpoErro || `Erro ${resposta.status}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+let itens = [];
+let categorias = [];
+let itemSelecionadoId = null;
+let itemEmEdicaoId = null; // null = cadastrando item novo
+
+async function carregarDados() {
+  [itens, categorias] = await Promise.all([
+    chamarSupabase(`itens?select=id,nome,unidade,peso_kg,embalagem,categoria_produto_id,${COLUNAS_FISCAIS_SQL}&order=nome`),
+    chamarSupabase("categorias_produto?select=id,nome&order=id"),
+  ]);
+  popularSelectCategoria();
+  desenharTabela(document.getElementById("campo-busca").value);
+}
+
+function popularSelectCategoria() {
+  const select = document.getElementById("campo-categoria");
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="">— Nenhuma —</option>' + categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join("");
+  select.value = valorAtual;
+}
+
+document.getElementById("botao-nova-categoria").addEventListener("click", async () => {
+  const nome = prompt("Nome da nova categoria (ex: Bebidas em pó):");
+  if (!nome || !nome.trim()) return;
+  try {
+    const criadas = await chamarSupabase("categorias_produto", {
+      method: "POST", headers: { "Prefer": "return=representation" }, body: JSON.stringify({ nome: nome.trim() }),
+    });
+    categorias.push(criadas[0]);
+    categorias.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    popularSelectCategoria();
+    document.getElementById("campo-categoria").value = criadas[0].id;
+  } catch (erro) {
+    alert(erro.message.includes("duplicate") || erro.message.includes("unique") ? `Já existe uma categoria chamada "${nome}".` : `Não consegui criar: ${erro.message}`);
+  }
+});
+
+// sugere peso 10kg ao trocar pra "caixa" (mesma regra do Desktop) - so'
+// quando o peso ainda esta' no valor padrao "1", pra nao sobrescrever
+// algo que a pessoa ja tenha digitado
+document.getElementById("campo-unidade").addEventListener("change", (e) => {
+  if (e.target.value === "caixa" && document.getElementById("campo-peso").value === "1") {
+    document.getElementById("campo-peso").value = "10";
+  }
+});
+
+function desenharTabela(filtro) {
+  const alvo = document.getElementById("conteudo-tabela");
+  const nomeCategoriaPorId = new Map(categorias.map(c => [c.id, c.nome]));
+  const itensFiltrados = itens.filter(i => i.nome.toLowerCase().includes((filtro || "").toLowerCase()));
+  if (itensFiltrados.length === 0) {
+    alvo.className = "vazio"; alvo.textContent = "Nenhum item encontrado."; return;
+  }
+  let html = `<table><thead><tr><th>Item</th><th>Unidade</th><th>Peso (kg)</th><th>Embalagem</th><th>Categoria</th></tr></thead><tbody>`;
+  for (const item of itensFiltrados) {
+    const ativo = item.id === itemSelecionadoId ? "ativo" : "";
+    html += `<tr class="${ativo}" data-id="${item.id}"><td>${item.nome}</td><td>${item.unidade}</td>` +
+      `<td>${item.peso_kg}</td><td>${item.embalagem}</td><td>${nomeCategoriaPorId.get(item.categoria_produto_id) || "—"}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.className = ""; alvo.innerHTML = html;
+  alvo.querySelectorAll("tbody tr").forEach(tr => {
+    tr.addEventListener("click", () => selecionarItem(Number(tr.dataset.id)));
+  });
+}
+
+function selecionarItem(id) {
+  itemSelecionadoId = itemSelecionadoId === id ? null : id;
+  desenharTabela(document.getElementById("campo-busca").value);
+  const temSelecao = itemSelecionadoId !== null;
+  document.getElementById("botao-editar").disabled = !temSelecao;
+  document.getElementById("botao-excluir").disabled = !temSelecao;
+  document.getElementById("botao-dados-fiscais").disabled = !temSelecao;
+}
+
+document.getElementById("campo-busca").addEventListener("input", (e) => desenharTabela(e.target.value));
+
+function limparFormulario() {
+  itemEmEdicaoId = null;
+  document.getElementById("titulo-formulario").textContent = "Novo item / editar item selecionado";
+  document.getElementById("campo-nome").value = "";
+  document.getElementById("campo-unidade").value = "kg";
+  document.getElementById("campo-peso").value = "1";
+  document.getElementById("campo-embalagem").value = "barra";
+  document.getElementById("campo-categoria").value = "";
+  document.getElementById("botao-salvar-item").textContent = "Salvar item";
+  document.getElementById("mensagem-item").className = "mensagem";
+}
+document.getElementById("botao-cancelar-edicao").addEventListener("click", limparFormulario);
+
+document.getElementById("botao-editar").addEventListener("click", () => {
+  const item = itens.find(i => i.id === itemSelecionadoId);
+  if (!item) return;
+  itemEmEdicaoId = item.id;
+  document.getElementById("titulo-formulario").textContent = `Editando: ${item.nome}`;
+  document.getElementById("campo-nome").value = item.nome;
+  document.getElementById("campo-unidade").value = item.unidade;
+  document.getElementById("campo-peso").value = item.peso_kg;
+  document.getElementById("campo-embalagem").value = item.embalagem;
+  document.getElementById("campo-categoria").value = item.categoria_produto_id || "";
+  document.getElementById("botao-salvar-item").textContent = "Salvar alteração";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+document.getElementById("botao-salvar-item").addEventListener("click", async () => {
+  const mensagem = document.getElementById("mensagem-item");
+  const nome = document.getElementById("campo-nome").value.trim();
+  const peso = parseFloat(document.getElementById("campo-peso").value.replace(",", "."));
+  if (!nome) { mensagem.className = "mensagem erro"; mensagem.textContent = "Informe o nome do item."; return; }
+  if (isNaN(peso)) { mensagem.className = "mensagem erro"; mensagem.textContent = "O peso precisa ser um número."; return; }
+
+  const payload = {
+    nome, unidade: document.getElementById("campo-unidade").value, peso_kg: peso,
+    embalagem: document.getElementById("campo-embalagem").value,
+    categoria_produto_id: document.getElementById("campo-categoria").value ? Number(document.getElementById("campo-categoria").value) : null,
+  };
+
+  const botao = document.getElementById("botao-salvar-item");
+  botao.disabled = true; botao.textContent = "Salvando...";
+  try {
+    if (itemEmEdicaoId) {
+      await chamarSupabase(`itens?id=eq.${itemEmEdicaoId}`, { method: "PATCH", body: JSON.stringify(payload) });
+    } else {
+      await chamarSupabase("itens", { method: "POST", body: JSON.stringify({ ...payload, materia_prima: 0 }) });
+    }
+    limparFormulario();
+    await carregarDados();
+    mensagem.className = "mensagem sucesso"; mensagem.textContent = "Salvo com sucesso!";
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = erro.message.includes("duplicate") || erro.message.includes("unique") ? `Já existe um item chamado "${nome}".` : `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.disabled = false; botao.textContent = itemEmEdicaoId ? "Salvar alteração" : "Salvar item";
+  }
+});
+
+document.getElementById("botao-excluir").addEventListener("click", async () => {
+  const item = itens.find(i => i.id === itemSelecionadoId);
+  if (!item) return;
+  if (!confirm(`Excluir o item "${item.nome}"?\n\nNão é possível se ele já tiver sido usado em algum pedido.`)) return;
+  try {
+    await chamarSupabase(`itens?id=eq.${item.id}`, { method: "DELETE" });
+    itemSelecionadoId = null;
+    document.getElementById("cartao-fiscal").style.display = "none";
+    await carregarDados();
+  } catch (erro) {
+    alert(erro.message.includes("23503") || erro.message.toLowerCase().includes("foreign key")
+      ? `"${item.nome}" já foi usado em algum pedido e não pode ser excluído.`
+      : `Não consegui excluir: ${erro.message}`);
+  }
+});
+
+// --- dados fiscais ---
+function montarGradeCamposFiscais() {
+  const alvo = document.getElementById("grade-campos-fiscais");
+  alvo.innerHTML = CAMPOS_FISCAIS.map(([chave, rotulo]) =>
+    `<div class="campo"><label>${rotulo}</label><input type="text" id="fiscal-${chave}"></div>`
+  ).join("");
+}
+montarGradeCamposFiscais();
+
+document.getElementById("botao-dados-fiscais").addEventListener("click", () => {
+  const item = itens.find(i => i.id === itemSelecionadoId);
+  if (!item) return;
+  document.getElementById("titulo-fiscal").textContent = `Dados fiscais (NF-e) — ${item.nome}`;
+  for (const [chave, , tipo] of CAMPOS_FISCAIS) {
+    const valor = item[chave];
+    const campo = document.getElementById(`fiscal-${chave}`);
+    campo.value = valor === null || valor === undefined ? "" : (tipo === "percentual" ? String(valor).replace(".", ",") : String(valor));
+  }
+  const nomeCategoria = categorias.find(c => c.id === item.categoria_produto_id)?.nome;
+  const botaoCategoria = document.getElementById("botao-aplicar-categoria");
+  if (nomeCategoria) {
+    botaoCategoria.style.display = "inline-block";
+    botaoCategoria.textContent = `Aplicar a todos de "${nomeCategoria}"`;
+  } else {
+    botaoCategoria.style.display = "none";
+  }
+  document.getElementById("mensagem-fiscal").className = "mensagem";
+  document.getElementById("cartao-fiscal").style.display = "block";
+  document.getElementById("cartao-fiscal").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+document.getElementById("botao-cancelar-fiscal").addEventListener("click", () => {
+  document.getElementById("cartao-fiscal").style.display = "none";
+});
+
+// le os 20 campos da tela - campo vazio vira NULL; percentual aceita
+// virgula ou ponto; devolve null (em vez do objeto) se algum percentual
+// for invalido, pra quem chamou parar e avisar o usuario
+function lerValoresFiscais(mensagemElemento) {
+  const valores = {};
+  for (const [chave, rotulo, tipo] of CAMPOS_FISCAIS) {
+    const texto = document.getElementById(`fiscal-${chave}`).value.trim();
+    if (!texto) { valores[chave] = null; continue; }
+    if (tipo === "percentual") {
+      const numero = parseFloat(texto.replace(",", "."));
+      if (isNaN(numero)) {
+        mensagemElemento.className = "mensagem erro";
+        mensagemElemento.textContent = `"${rotulo}" precisa ser um número (ex: 18 ou 6,5).`;
+        return null;
+      }
+      valores[chave] = numero;
+    } else {
+      valores[chave] = texto;
+    }
+  }
+  return valores;
+}
+
+document.getElementById("botao-salvar-fiscal").addEventListener("click", async () => {
+  const mensagem = document.getElementById("mensagem-fiscal");
+  const valores = lerValoresFiscais(mensagem);
+  if (!valores) return;
+  const botao = document.getElementById("botao-salvar-fiscal");
+  botao.disabled = true; botao.textContent = "Salvando...";
+  try {
+    await chamarSupabase(`itens?id=eq.${itemSelecionadoId}`, { method: "PATCH", body: JSON.stringify(valores) });
+    await carregarDados();
+    mensagem.className = "mensagem sucesso"; mensagem.textContent = "Dados fiscais salvos com sucesso.";
+  } catch (erro) {
+    mensagem.className = "mensagem erro"; mensagem.textContent = `Não consegui salvar: ${erro.message}`;
+  } finally {
+    botao.disabled = false; botao.textContent = "Salvar (só este item)";
+  }
+});
+
+document.getElementById("botao-aplicar-categoria").addEventListener("click", async () => {
+  const item = itens.find(i => i.id === itemSelecionadoId);
+  const nomeCategoria = categorias.find(c => c.id === item?.categoria_produto_id)?.nome;
+  if (!item || !nomeCategoria) return;
+  if (!confirm(`Isso vai SOBRESCREVER os dados fiscais de TODOS os itens da categoria "${nomeCategoria}" com os valores preenchidos aqui. Continuar?`)) return;
+
+  const mensagem = document.getElementById("mensagem-fiscal");
+  const valores = lerValoresFiscais(mensagem);
+  if (!valores) return;
+  const botao = document.getElementById("botao-aplicar-categoria");
+  botao.disabled = true; botao.textContent = "Aplicando...";
+  try {
+    await chamarSupabase(`itens?categoria_produto_id=eq.${item.categoria_produto_id}`, { method: "PATCH", body: JSON.stringify(valores) });
+    await carregarDados();
+    mensagem.className = "mensagem sucesso"; mensagem.textContent = `Dados fiscais aplicados a todos os itens de "${nomeCategoria}".`;
+  } catch (erro) {
+    mensagem.className = "mensagem erro"; mensagem.textContent = `Não consegui aplicar: ${erro.message}`;
+  } finally {
+    botao.disabled = false; botao.textContent = `Aplicar a todos de "${nomeCategoria}"`;
+  }
+});
+
+carregarDados();
+</script>
+</body>
+</html>
