@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Gastos por Categoria</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+  main { max-width: 780px; margin: 0 auto; padding: 18px 16px 60px; }
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; background: #fff; }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .cartoes-linha { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cartao-destaque { flex: 1; min-width: 150px; background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; text-align: center; }
+  .cartao-destaque .rotulo { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 19px; font-weight: 700; color: var(--azul); margin-top: 4px; }
+  .cartao-destaque .subrotulo { font-size: 10px; color: var(--texto-suave); margin-top: 2px; }
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; }
+  .cartao-secao h2 { font-size: 12px; text-transform: uppercase; color: var(--texto-suave); margin: 0; padding: 14px 16px 4px; }
+  .cartao-secao p.explicacao { font-size: 12px; color: var(--texto-suave); margin: 0; padding: 0 16px 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 16px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 10px 16px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-total td { background: #FCEEE3; font-weight: 700; }
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos"><h1>Gastos por Categoria</h1><p>Cartões por vencimento, tabela pelo que foi realmente pago</p></div>
+</header>
+<script src="menu.js"></script>
+<script src="imprimir.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro"><label>Ano</label><select id="select-ano"></select></div>
+      <div class="campo-filtro"><label>Mês</label>
+        <select id="select-mes">
+          <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+          <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+          <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+          <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+        </select>
+      </div>
+      <button class="botao" id="botao-atualizar">Atualizar</button>
+      <button class="botao secundario" id="botao-gerar-pdf">Gerar PDF</button>
+    </div>
+  </div>
+
+  <div class="cartoes-linha">
+    <div class="cartao-destaque"><div class="rotulo">Total do mês</div><div class="valor" id="valor-total">—</div><div class="subrotulo">por vencimento</div></div>
+    <div class="cartao-destaque"><div class="rotulo">Já pago</div><div class="valor" id="valor-ja-pago">—</div><div class="subrotulo">por vencimento</div></div>
+    <div class="cartao-destaque"><div class="rotulo">Em aberto</div><div class="valor" id="valor-em-aberto">—</div><div class="subrotulo">por vencimento</div></div>
+  </div>
+
+  <div class="cartao-secao">
+    <h2>Pago por categoria</h2>
+    <p class="explicacao">Só despesas já pagas, agrupadas pela data em que foram pagas de verdade (não pelo vencimento).</p>
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+function formatarMoeda(v) { return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+function formatarDataISO(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function popularSelectAno() {
+  const anoAtual = new Date().getFullYear();
+  const select = document.getElementById("select-ano");
+  for (let a = anoAtual; a >= anoAtual - 3; a--) { const o = document.createElement("option"); o.value = a; o.textContent = a; select.appendChild(o); }
+}
+function selecionarMesAtual() {
+  const hoje = new Date();
+  document.getElementById("select-ano").value = hoje.getFullYear();
+  document.getElementById("select-mes").value = hoje.getMonth() + 1;
+}
+
+let ultimoResultado = null;
+
+async function carregarRelatorio() {
+  const ano = Number(document.getElementById("select-ano").value);
+  const mes = Number(document.getElementById("select-mes").value);
+  const mesTexto = document.getElementById("select-mes").selectedOptions[0].textContent;
+  const alvo = document.getElementById("conteudo-tabela");
+  ["total", "ja-pago", "em-aberto"].forEach(id => document.getElementById(`valor-${id}`).textContent = "—");
+  alvo.className = "carregando"; alvo.textContent = "Carregando...";
+
+  try {
+    const dataDe = new Date(ano, mes - 1, 1);
+    const dataAteExclusivo = new Date(ano, mes, 1);
+    const deIso = formatarDataISO(dataDe), ateIso = formatarDataISO(dataAteExclusivo);
+
+    // cartoes: TODAS as despesas com VENCIMENTO nesse mes (pago ou nao)
+    const porVencimento = await chamarSupabase(
+      `contas_pagar?select=valor,status&data_efetivacao=gte.${deIso}&data_efetivacao=lt.${ateIso}`
+    );
+    const total = porVencimento.reduce((s, l) => s + Number(l.valor), 0);
+    const jaPago = porVencimento.filter(l => l.status === "concluido").reduce((s, l) => s + Number(l.valor), 0);
+    const emAberto = porVencimento.filter(l => l.status === "pendente").reduce((s, l) => s + Number(l.valor), 0);
+    document.getElementById("valor-total").textContent = formatarMoeda(total);
+    document.getElementById("valor-ja-pago").textContent = formatarMoeda(jaPago);
+    document.getElementById("valor-em-aberto").textContent = formatarMoeda(emAberto);
+
+    // tabela: so' PAGAS, agrupadas por categoria, usando DATA DE PAGAMENTO
+    const pagas = await chamarSupabase(
+      `contas_pagar?select=valor,categorias_despesa(nome)&status=eq.concluido` +
+      `&data_pagamento=gte.${deIso}&data_pagamento=lt.${ateIso}`
+    );
+    const porCategoria = new Map();
+    for (const l of pagas) {
+      const nome = l.categorias_despesa?.nome || "Sem categoria";
+      porCategoria.set(nome, (porCategoria.get(nome) || 0) + Number(l.valor));
+    }
+    const linhas = [...porCategoria.entries()].map(([nome, valor]) => ({ nome, valor })).sort((a, b) => b.valor - a.valor);
+    const totalPago = linhas.reduce((s, l) => s + l.valor, 0);
+
+    ultimoResultado = { ano, mes, mesTexto, linhas, totalPago };
+    desenharTabela(linhas, totalPago);
+  } catch (erro) {
+    alvo.className = "erro"; alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela(linhas, totalPago) {
+  const alvo = document.getElementById("conteudo-tabela");
+  if (linhas.length === 0) { alvo.className = "vazio"; alvo.textContent = "Nenhuma despesa paga nesse mês."; return; }
+  let html = `<table><thead><tr><th>Categoria</th><th class="num">Valor pago</th></tr></thead><tbody>`;
+  for (const l of linhas) html += `<tr><td>${l.nome}</td><td class="num">${formatarMoeda(l.valor)}</td></tr>`;
+  html += `<tr class="linha-total"><td>Total</td><td class="num">${formatarMoeda(totalPago)}</td></tr>`;
+  html += `</tbody></table>`;
+  alvo.className = ""; alvo.innerHTML = html;
+}
+
+document.getElementById("botao-atualizar").addEventListener("click", carregarRelatorio);
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimoResultado) return;
+  const { mesTexto, ano, linhas, totalPago } = ultimoResultado;
+  let linhasHtml = linhas.map(l => `<tr><td>${l.nome}</td><td class="num">${formatarMoeda(l.valor)}</td></tr>`).join("");
+  const conteudo = `<table><tr><th>Categoria</th><th class="num">Valor pago</th></tr>${linhasHtml}<tr class="linha-total"><td>Total</td><td class="num">${formatarMoeda(totalPago)}</td></tr></table>`;
+  abrirImpressao(`Gastos por Categoria — ${mesTexto} de ${ano}`, "Só despesas pagas, agrupadas pela data de pagamento.", conteudo);
+});
+
+popularSelectAno();
+selecionarMesAtual();
+carregarRelatorio();
+</script>
+</body>
+</html>
