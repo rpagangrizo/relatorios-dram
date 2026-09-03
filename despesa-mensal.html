@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Despesa Mensal</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+  main { max-width: 620px; margin: 0 auto; padding: 18px 16px 60px; }
+  .cartao-filtros { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro select { padding: 10px 12px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 14px; background: #fff; }
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--azul); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 16px; border-bottom: 1px solid var(--linha); }
+  thead th.num { text-align: right; }
+  tbody td { padding: 10px 16px; border-bottom: 1px solid var(--linha); font-size: 14px; }
+  tbody td.num { text-align: right; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.linha-total td { background: #FCEEE3; font-weight: 700; }
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos"><h1>Despesa Mensal</h1><p>Só despesas pagas, mês a mês, pela data de pagamento</p></div>
+</header>
+<script src="menu.js"></script>
+<script src="imprimir.js"></script>
+
+<main>
+  <div class="cartao-filtros">
+    <div class="linha-filtros">
+      <div class="campo-filtro"><label>Ano</label><select id="select-ano"></select></div>
+      <button class="botao" id="botao-atualizar">Atualizar</button>
+      <button class="botao secundario" id="botao-gerar-pdf">Gerar PDF</button>
+    </div>
+  </div>
+
+  <div class="cartao-secao">
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const NOMES_MESES_ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+function formatarMoeda(v) { return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+function formatarDataISO(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function popularSelectAno() {
+  const anoAtual = new Date().getFullYear();
+  const select = document.getElementById("select-ano");
+  for (let a = anoAtual; a >= anoAtual - 3; a--) { const o = document.createElement("option"); o.value = a; o.textContent = a; select.appendChild(o); }
+  select.value = anoAtual;
+}
+
+let ultimoResultado = null;
+
+async function carregarRelatorio() {
+  const ano = Number(document.getElementById("select-ano").value);
+  const alvo = document.getElementById("conteudo-tabela");
+  alvo.className = "carregando"; alvo.textContent = "Carregando...";
+
+  try {
+    const deIso = formatarDataISO(new Date(ano, 0, 1));
+    const ateIso = formatarDataISO(new Date(ano + 1, 0, 1));
+
+    const pagas = await chamarSupabase(
+      `contas_pagar?select=valor,data_pagamento&status=eq.concluido&data_pagamento=gte.${deIso}&data_pagamento=lt.${ateIso}`
+    );
+
+    const totalPorMes = new Array(12).fill(0);
+    for (const l of pagas) {
+      const mesIndice = Number(l.data_pagamento.slice(5, 7)) - 1;
+      totalPorMes[mesIndice] += Number(l.valor);
+    }
+    const totalAno = totalPorMes.reduce((s, v) => s + v, 0);
+
+    ultimoResultado = { ano, totalPorMes, totalAno };
+    desenharTabela(totalPorMes, totalAno);
+  } catch (erro) {
+    alvo.className = "erro"; alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela(totalPorMes, totalAno) {
+  const alvo = document.getElementById("conteudo-tabela");
+  let html = `<table><thead><tr><th>Mês</th><th class="num">Despesa paga</th></tr></thead><tbody>`;
+  for (let i = 0; i < 12; i++) html += `<tr><td>${NOMES_MESES_ABREV[i]}</td><td class="num">${formatarMoeda(totalPorMes[i])}</td></tr>`;
+  html += `<tr class="linha-total"><td>Total do ano</td><td class="num">${formatarMoeda(totalAno)}</td></tr>`;
+  html += `</tbody></table>`;
+  alvo.className = ""; alvo.innerHTML = html;
+}
+
+document.getElementById("botao-atualizar").addEventListener("click", carregarRelatorio);
+document.getElementById("botao-gerar-pdf").addEventListener("click", () => {
+  if (!ultimoResultado) return;
+  const { ano, totalPorMes, totalAno } = ultimoResultado;
+  let linhasHtml = "";
+  for (let i = 0; i < 12; i++) linhasHtml += `<tr><td>${NOMES_MESES_ABREV[i]}</td><td class="num">${formatarMoeda(totalPorMes[i])}</td></tr>`;
+  const conteudo = `<table><tr><th>Mês</th><th class="num">Despesa paga</th></tr>${linhasHtml}<tr class="linha-total"><td>Total do ano</td><td class="num">${formatarMoeda(totalAno)}</td></tr></table>`;
+  abrirImpressao(`Despesa Mensal — ${ano}`, "Só despesas pagas, pela data de pagamento.", conteudo);
+});
+
+popularSelectAno();
+carregarRelatorio();
+</script>
+</body>
+</html>
