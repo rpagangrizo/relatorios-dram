@@ -57,6 +57,7 @@
       itens: [
         { nome: "Categorias e Fornecedores", href: "categorias-fornecedores.html" },
         { nome: "Contas a Pagar", href: "contas-pagar.html" },
+        { nome: "Contas a Receber", href: "contas-receber.html" },
       ],
     },
     {
