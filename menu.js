@@ -41,6 +41,7 @@
       chave: "cadastros", nome: "Cadastros", emoji: "\ud83d\udc64", ativo: true,
       itens: [
         { nome: "Clientes", href: "clientes.html" },
+        { nome: "Produtos", href: "produtos.html" },
         { nome: "Tabelas de Pre\u00e7o", href: "tabelas-preco.html" },
         { nome: "Vendedores", href: "vendedores.html" },
       ],
