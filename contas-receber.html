@@ -291,14 +291,25 @@ async function carregarCartoes() {
   const daqui7Dias = somarDiasIso(hoje, 7);
   const clienteId = clienteEscolhido?.id;
 
-  let filtroBase = "select=id,valor,data_vencimento,status,pedidos!inner(cliente_id)&status=eq.aberto";
+  // "!inner" e' necessario pro filtro de cliente (pedidos.cliente_id)
+  // funcionar de verdade - sem isso, o PostgREST nao usa o filtro do
+  // relacionamento pra restringir as linhas devolvidas
+  let filtroBase = "select=id,valor,data_vencimento,status,pedidos!inner(cliente_id,status)&status=eq.aberto";
   if (clienteId) filtroBase += `&pedidos.cliente_id=eq.${clienteId}`;
 
-  const [todasAbertas, recebendo7, vencidas] = await Promise.all([
+  let [todasAbertas, recebendo7, vencidas] = await Promise.all([
     chamarSupabase(`pedido_parcelas?${filtroBase}`),
     chamarSupabase(`pedido_parcelas?${filtroBase}&data_vencimento=gte.${hoje}&data_vencimento=lte.${daqui7Dias}`),
     chamarSupabase(`pedido_parcelas?${filtroBase}&data_vencimento=lt.${hoje}`),
   ]);
+
+  // ignora parcela de pedido cancelado - filtrado aqui, em JS (nao no
+  // banco), porque "status=neq.cancelado" excluiria tambem os pedidos
+  // normais (status vem NULL neles, e NULL != valor da' NULL em SQL,
+  // nao "verdadeiro" - mesma pegadinha que ja vimos em outros relatorios)
+  todasAbertas = todasAbertas.filter(p => p.pedidos?.status !== "cancelado");
+  recebendo7 = recebendo7.filter(p => p.pedidos?.status !== "cancelado");
+  vencidas = vencidas.filter(p => p.pedidos?.status !== "cancelado");
 
   document.getElementById("valor-a-receber").textContent = formatarMoeda(todasAbertas.reduce((s, p) => s + Number(p.valor), 0));
   document.getElementById("valor-recebendo-7-dias").textContent = formatarMoeda(recebendo7.reduce((s, p) => s + Number(p.valor), 0));
@@ -320,7 +331,7 @@ async function filtrarParcelas() {
     const verHistorico = document.getElementById("filtro-historico").checked;
 
     let filtro = "select=id,data_vencimento,data_pagamento,valor,valor_recebido,status,numero_parcela,pedido_id," +
-      "pedidos(id,cliente_id,clientes(nome,dias_pagamento_fixos))" +
+      "pedidos!inner(id,cliente_id,status,clientes(nome,dias_pagamento_fixos))" +
       `&status=eq.${verHistorico ? "pago" : "aberto"}` +
       "&order=data_vencimento.asc";
     if (dataDeIso) filtro += `&data_vencimento=gte.${dataDeIso}`;
@@ -329,7 +340,10 @@ async function filtrarParcelas() {
     if (clienteEscolhido) filtro += `&pedidos.cliente_id=eq.${clienteEscolhido.id}`;
 
     let resultado = await chamarSupabase(`pedido_parcelas?${filtro}`);
-    resultado = resultado.filter(p => p.pedidos); // seguranca: descarta orfaos sem pedido
+    // ignora parcela de pedido cancelado - mesmo motivo do JS explicado
+    // em carregarCartoes (NULL != 'cancelado' também excluiria os
+    // pedidos normais se filtrado direto na URL)
+    resultado = resultado.filter(p => p.pedidos && p.pedidos.status !== "cancelado");
 
     // Nº NF: busca separada nas notas fiscais autorizadas, casando por
     // pedido_id - filtrado no JS (nao da' pra filtrar direto na URL
