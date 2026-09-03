@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Contas a Receber</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  // cadeado: exige login antes de mostrar a pagina. Sem sessao valida
+  // (ou expirada), manda direto pra tela de login, antes de qualquer
+  // conteudo aparecer.
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) {
+        window.location.href = "index.html";
+      }
+    } catch (erro) {
+      window.location.href = "index.html";
+    }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --laranja: #D9662F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870; --linha: #DCE3E7;
+    --verde: #2F8F4E; --vermelho: #C0392B; --vermelho-claro: #FBE7E4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+
+  main { max-width: 1150px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; margin-bottom: 14px; }
+
+  .cartoes-linha { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .cartao-destaque { flex: 1; min-width: 180px; background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); padding: 16px; text-align: center; }
+  .cartao-destaque .rotulo { font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--texto-suave); }
+  .cartao-destaque .valor { font-size: 21px; font-weight: 700; color: var(--azul); margin-top: 4px; }
+  .cartao-destaque.vencidas .valor { color: var(--vermelho); }
+
+  .linha-filtros { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
+  .campo-filtro { display: flex; flex-direction: column; gap: 4px; position: relative; }
+  .campo-filtro label { font-size: 11px; text-transform: uppercase; color: var(--texto-suave); letter-spacing: 0.4px; }
+  .campo-filtro input, .campo-filtro select { padding: 9px 11px; border-radius: 9px; border: 1.5px solid var(--linha); font-size: 13.5px; color: var(--texto); background: #fff; }
+  .campo-filtro input:focus, .campo-filtro select:focus { outline: none; border-color: var(--azul); }
+  .checkbox-filtro { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+
+  .lista-busca-suspensa { position: absolute; top: 100%; left: 0; right: 0; z-index: 5; max-height: 180px; overflow-y: auto;
+    margin-top: 4px; border-radius: 9px; border: 1px solid var(--linha); background: #fff; box-shadow: 0 4px 14px rgba(0,0,0,0.10); display: none; }
+  .lista-busca-suspensa.aberta { display: block; }
+  .lista-busca-suspensa .item-busca { padding: 9px 12px; cursor: pointer; font-size: 13.5px; border-bottom: 1px solid var(--linha); }
+  .lista-busca-suspensa .item-busca:last-child { border-bottom: none; }
+  .lista-busca-suspensa .item-busca:hover { background: #F6F9FA; }
+
+  .botao { padding: 10px 16px; border-radius: 9px; border: none; background: var(--laranja); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+  .botao.secundario { background: #fff; border: 1.5px solid var(--azul); color: var(--azul); }
+  .botao.azul { background: var(--azul); }
+  .botao.verde { background: var(--verde); }
+
+  .barra-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .rotulo-total-filtrado { font-size: 13px; color: var(--texto-suave); margin: 0 0 10px; }
+  .rotulo-total-filtrado b { color: var(--azul); }
+
+  .cartao-secao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
+  table { width: 100%; min-width: 950px; border-collapse: collapse; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave); padding: 8px 12px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--linha); font-size: 13.5px; }
+  tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; }
+  tbody tr.linha-vencida { background: var(--vermelho-claro); }
+  tbody tr.linha-vencida td { color: var(--vermelho); }
+  tbody tr.linha-selecionada { outline: 2px solid var(--azul); outline-offset: -2px; background: #EAF1F6 !important; }
+  tbody tr.linha-selecionada td { color: var(--texto) !important; }
+  .selo-status { font-size: 11px; padding: 3px 9px; border-radius: 100px; font-weight: 700; white-space: nowrap; }
+  .selo-status.pago { background: #E4F3E8; color: var(--verde); }
+  .selo-status.vencida { background: #FBE7E4; color: var(--vermelho); }
+  .selo-status.aberto { background: #EAF1F6; color: var(--azul); }
+
+  .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
+  .erro { color: var(--vermelho); }
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos">
+    <h1>Contas a Receber</h1>
+    <p>Parcelas dos pedidos</p>
+  </div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartoes-linha">
+    <div class="cartao-destaque"><div class="rotulo">A receber (filtro)</div><div class="valor" id="valor-a-receber">—</div></div>
+    <div class="cartao-destaque"><div class="rotulo">Recebendo em 7 dias (filtro)</div><div class="valor" id="valor-recebendo-7-dias">—</div></div>
+    <div class="cartao-destaque vencidas"><div class="rotulo">Vencidas (filtro)</div><div class="valor" id="valor-vencidas">—</div></div>
+  </div>
+
+  <div class="cartao">
+    <div class="linha-filtros">
+      <div class="campo-filtro" style="width:120px">
+        <label>Venc. de</label>
+        <input type="text" id="filtro-data-de" placeholder="DD/MM/AAAA">
+      </div>
+      <div class="campo-filtro" style="width:120px">
+        <label>até</label>
+        <input type="text" id="filtro-data-ate" placeholder="DD/MM/AAAA">
+      </div>
+      <div class="campo-filtro" style="min-width:180px">
+        <label>Cliente</label>
+        <input type="text" id="filtro-busca-cliente" placeholder="Buscar cliente..." autocomplete="off">
+        <div class="lista-busca-suspensa" id="lista-cliente-busca"></div>
+      </div>
+      <div class="campo-filtro" style="width:110px">
+        <label>Nº NF</label>
+        <input type="text" id="filtro-numero-nf" placeholder="Ex: 17380">
+      </div>
+      <div class="campo-filtro" style="width:120px">
+        <label>Valor</label>
+        <input type="number" id="filtro-valor" step="0.01" placeholder="0,00">
+      </div>
+      <label class="checkbox-filtro"><input type="checkbox" id="filtro-historico"> Ver histórico (recebidas)</label>
+      <button class="botao azul" id="botao-filtrar">Filtrar</button>
+      <button class="botao secundario" id="botao-limpar-filtros">Limpar filtro</button>
+    </div>
+  </div>
+
+  <div class="barra-acoes">
+    <button class="botao verde" id="botao-marcar-pago" disabled>Marcar como pago</button>
+  </div>
+
+  <p class="rotulo-total-filtrado" id="rotulo-total-filtrado"></p>
+
+  <div class="cartao-secao">
+    <div id="conteudo-tabela" class="carregando">Carregando...</div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) {
+    const corpoErro = await resposta.text();
+    throw new Error(corpoErro || `Erro ${resposta.status}`);
+  }
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+function dataBrParaIso(texto) {
+  const partes = (texto || "").trim().split("/");
+  if (partes.length !== 3) return null;
+  const [d, m, a] = partes;
+  if (!d || !m || !a) return null;
+  return `${a.padStart(4, "0")}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+}
+function isoParaDataBr(iso) {
+  if (!iso) return "—";
+  const [ano, mes, dia] = iso.slice(0, 10).split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+function hojeIso() {
+  const hoje = new Date();
+  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+}
+function somarDiasIso(iso, dias) {
+  const data = new Date(iso + "T00:00:00");
+  data.setDate(data.getDate() + dias);
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+}
+
+// calcula a data REAL de recebimento pra clientes com dia fixo (ex:
+// SAPORE = "1,16") - rola pra frente ate' o proximo dia fixo, a partir
+// do vencimento oficial da parcela. Clientes sem dia fixo (a imensa
+// maioria) usam o proprio vencimento, sem ajuste nenhum.
+function calcularDataPrevista(vencimentoIso, diasFixosTexto) {
+  if (!diasFixosTexto) return vencimentoIso;
+  const dias = diasFixosTexto.split(",").map(d => parseInt(d.trim(), 10)).filter(d => d >= 1 && d <= 31).sort((a, b) => a - b);
+  if (dias.length === 0) return vencimentoIso;
+
+  const data = new Date(vencimentoIso + "T00:00:00");
+  const diaVencimento = data.getDate();
+  const proximoDiaMesmoMes = dias.find(d => d >= diaVencimento);
+  if (proximoDiaMesmoMes) {
+    const resultado = new Date(data.getFullYear(), data.getMonth(), proximoDiaMesmoMes);
+    return `${resultado.getFullYear()}-${String(resultado.getMonth() + 1).padStart(2, "0")}-${String(resultado.getDate()).padStart(2, "0")}`;
+  }
+  // nenhum dia fixo >= vencimento nesse mes - vai pro primeiro dia fixo do MES SEGUINTE
+  const resultado = new Date(data.getFullYear(), data.getMonth() + 1, dias[0]);
+  return `${resultado.getFullYear()}-${String(resultado.getMonth() + 1).padStart(2, "0")}-${String(resultado.getDate()).padStart(2, "0")}`;
+}
+
+let clientes = [];
+let clienteEscolhido = null;
+let parcelas = [];
+let idSelecionado = null;
+
+async function carregarClientes() {
+  clientes = await chamarSupabase("clientes?select=id,nome,dias_pagamento_fixos&order=nome");
+}
+
+document.getElementById("filtro-busca-cliente").addEventListener("input", (e) => {
+  const filtro = e.target.value.trim().toLowerCase();
+  const lista = document.getElementById("lista-cliente-busca");
+  clienteEscolhido = null;
+  if (!filtro) { lista.classList.remove("aberta"); return; }
+  const filtrados = clientes.filter(c => c.nome.toLowerCase().includes(filtro)).slice(0, 20);
+  lista.innerHTML = filtrados.length === 0
+    ? `<div class="item-busca">Nenhum cliente encontrado.</div>`
+    : filtrados.map(c => `<div class="item-busca" data-id="${c.id}">${c.nome}</div>`).join("");
+  lista.querySelectorAll(".item-busca[data-id]").forEach(el => {
+    el.addEventListener("click", () => {
+      clienteEscolhido = clientes.find(c => c.id === Number(el.dataset.id));
+      document.getElementById("filtro-busca-cliente").value = clienteEscolhido.nome;
+      lista.classList.remove("aberta");
+    });
+  });
+  lista.classList.add("aberta");
+});
+document.addEventListener("click", (evento) => {
+  const campo = document.getElementById("filtro-busca-cliente");
+  const lista = document.getElementById("lista-cliente-busca");
+  if (campo && lista && !campo.contains(evento.target) && !lista.contains(evento.target)) lista.classList.remove("aberta");
+});
+
+function selecionarLinha(id) {
+  idSelecionado = idSelecionado === id ? null : id;
+  desenharTabela();
+  atualizarBotaoAcao();
+}
+
+function atualizarBotaoAcao() {
+  const parcela = parcelas.find(p => p.id === idSelecionado);
+  const botao = document.getElementById("botao-marcar-pago");
+  if (!parcela) {
+    botao.disabled = true;
+    botao.textContent = "Marcar como pago";
+    return;
+  }
+  botao.disabled = false;
+  botao.textContent = parcela.status === "pago" ? "Desmarcar pagamento" : "Marcar como pago";
+}
+
+document.getElementById("botao-marcar-pago").addEventListener("click", async () => {
+  const parcela = parcelas.find(p => p.id === idSelecionado);
+  if (!parcela) return;
+  try {
+    if (parcela.status === "pago") {
+      await chamarSupabase(`pedido_parcelas?id=eq.${parcela.id}`, {
+        method: "PATCH", body: JSON.stringify({ status: "aberto", data_pagamento: null, valor_recebido: null }),
+      });
+    } else {
+      await chamarSupabase(`pedido_parcelas?id=eq.${parcela.id}`, {
+        method: "PATCH", body: JSON.stringify({ status: "pago", data_pagamento: hojeIso(), valor_recebido: parcela.valor }),
+      });
+    }
+    await filtrarParcelas();
+  } catch (erro) {
+    alert(`Não consegui atualizar: ${erro.message}`);
+  }
+});
+
+async function carregarCartoes() {
+  const hoje = hojeIso();
+  const daqui7Dias = somarDiasIso(hoje, 7);
+  const clienteId = clienteEscolhido?.id;
+
+  let filtroBase = "select=id,valor,data_vencimento,status,pedidos!inner(cliente_id)&status=eq.aberto";
+  if (clienteId) filtroBase += `&pedidos.cliente_id=eq.${clienteId}`;
+
+  const [todasAbertas, recebendo7, vencidas] = await Promise.all([
+    chamarSupabase(`pedido_parcelas?${filtroBase}`),
+    chamarSupabase(`pedido_parcelas?${filtroBase}&data_vencimento=gte.${hoje}&data_vencimento=lte.${daqui7Dias}`),
+    chamarSupabase(`pedido_parcelas?${filtroBase}&data_vencimento=lt.${hoje}`),
+  ]);
+
+  document.getElementById("valor-a-receber").textContent = formatarMoeda(todasAbertas.reduce((s, p) => s + Number(p.valor), 0));
+  document.getElementById("valor-recebendo-7-dias").textContent = formatarMoeda(recebendo7.reduce((s, p) => s + Number(p.valor), 0));
+  document.getElementById("valor-vencidas").textContent = formatarMoeda(vencidas.reduce((s, p) => s + Number(p.valor), 0));
+}
+
+async function filtrarParcelas() {
+  const alvo = document.getElementById("conteudo-tabela");
+  alvo.className = "carregando";
+  alvo.textContent = "Carregando...";
+  idSelecionado = null;
+  atualizarBotaoAcao();
+
+  try {
+    const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
+    const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
+    const numeroNf = document.getElementById("filtro-numero-nf").value.trim();
+    const valorFiltro = document.getElementById("filtro-valor").value;
+    const verHistorico = document.getElementById("filtro-historico").checked;
+
+    let filtro = "select=id,data_vencimento,data_pagamento,valor,valor_recebido,status,numero_parcela,pedido_id," +
+      "pedidos(id,cliente_id,clientes(nome,dias_pagamento_fixos))" +
+      `&status=eq.${verHistorico ? "pago" : "aberto"}` +
+      "&order=data_vencimento.asc";
+    if (dataDeIso) filtro += `&data_vencimento=gte.${dataDeIso}`;
+    if (dataAteIso) filtro += `&data_vencimento=lte.${dataAteIso}`;
+    if (valorFiltro) filtro += `&valor=eq.${Number(valorFiltro)}`;
+    if (clienteEscolhido) filtro += `&pedidos.cliente_id=eq.${clienteEscolhido.id}`;
+
+    let resultado = await chamarSupabase(`pedido_parcelas?${filtro}`);
+    resultado = resultado.filter(p => p.pedidos); // seguranca: descarta orfaos sem pedido
+
+    // Nº NF: busca separada nas notas fiscais autorizadas, casando por
+    // pedido_id - filtrado no JS (nao da' pra filtrar direto na URL
+    // porque o numero fica dentro de resposta_bruta, um jsonb)
+    const pedidoIds = [...new Set(resultado.map(p => p.pedido_id))];
+    let notaPorPedido = new Map();
+    if (pedidoIds.length > 0) {
+      const notas = await chamarSupabase(
+        `notas_fiscais?select=pedido_id,resposta_bruta&pedido_id=in.(${pedidoIds.join(",")})&status=eq.autorizado`
+      );
+      for (const n of notas) {
+        if (!notaPorPedido.has(n.pedido_id)) notaPorPedido.set(n.pedido_id, n.resposta_bruta?.numero || null);
+      }
+    }
+
+    if (numeroNf) {
+      resultado = resultado.filter(p => String(notaPorPedido.get(p.pedido_id) || "").includes(numeroNf));
+    }
+
+    parcelas = resultado.map(p => ({ ...p, numeroNota: notaPorPedido.get(p.pedido_id) || null }));
+
+    const total = parcelas.reduce((s, p) => s + Number(p.valor), 0);
+    document.getElementById("rotulo-total-filtrado").innerHTML =
+      `Total filtrado: <b>${formatarMoeda(total)}</b> — ${parcelas.length} parcela(s)`;
+    desenharTabela();
+    await carregarCartoes();
+  } catch (erro) {
+    alvo.className = "erro";
+    alvo.textContent = `Não consegui carregar: ${erro.message}`;
+  }
+}
+
+function desenharTabela() {
+  const alvo = document.getElementById("conteudo-tabela");
+  if (parcelas.length === 0) {
+    alvo.className = "vazio";
+    alvo.textContent = "Nenhuma parcela encontrada com esses filtros.";
+    return;
+  }
+  const hoje = hojeIso();
+
+  let html = `<table><thead><tr><th>Cliente</th><th>Nº da nota</th><th>Parcela</th><th>Vencimento</th>` +
+    `<th>Recebe em (dia fixo)</th><th class="num">Valor (R$)</th><th class="num">Recebido (R$)</th>` +
+    `<th>Situação</th><th>Data do pagamento</th></tr></thead><tbody>`;
+  for (const p of parcelas) {
+    const cliente = p.pedidos?.clientes;
+    const diasFixos = cliente?.dias_pagamento_fixos;
+    const dataPrevista = diasFixos ? calcularDataPrevista(p.data_vencimento, diasFixos) : null;
+    const vencida = p.status === "aberto" && (dataPrevista || p.data_vencimento) < hoje;
+    const classes = [vencida ? "linha-vencida" : "", p.id === idSelecionado ? "linha-selecionada" : ""].filter(Boolean).join(" ");
+
+    let seloHtml;
+    if (p.status === "pago") seloHtml = `<span class="selo-status pago">Paga</span>`;
+    else if (vencida) seloHtml = `<span class="selo-status vencida">Vencida</span>`;
+    else seloHtml = `<span class="selo-status aberto">Em aberto</span>`;
+
+    html += `<tr class="${classes}" data-id="${p.id}"><td>${cliente?.nome || "—"}</td>` +
+      `<td>${p.numeroNota ? "Nº " + p.numeroNota : "—"}</td><td>${p.numero_parcela || "—"}</td>` +
+      `<td>${isoParaDataBr(p.data_vencimento)}</td><td>${dataPrevista ? isoParaDataBr(dataPrevista) : "—"}</td>` +
+      `<td class="num">${formatarMoeda(p.valor)}</td><td class="num">${p.valor_recebido != null ? formatarMoeda(p.valor_recebido) : "—"}</td>` +
+      `<td>${seloHtml}</td><td>${isoParaDataBr(p.data_pagamento)}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+  alvo.className = "";
+  alvo.innerHTML = html;
+
+  alvo.querySelectorAll("tbody tr").forEach(tr => {
+    tr.addEventListener("click", () => selecionarLinha(Number(tr.dataset.id)));
+  });
+}
+
+document.getElementById("botao-filtrar").addEventListener("click", filtrarParcelas);
+document.getElementById("botao-limpar-filtros").addEventListener("click", () => {
+  document.getElementById("filtro-data-de").value = "";
+  document.getElementById("filtro-data-ate").value = "";
+  document.getElementById("filtro-busca-cliente").value = "";
+  clienteEscolhido = null;
+  document.getElementById("filtro-numero-nf").value = "";
+  document.getElementById("filtro-valor").value = "";
+  document.getElementById("filtro-historico").checked = false;
+  filtrarParcelas();
+});
+
+async function iniciar() {
+  await carregarClientes();
+  await filtrarParcelas();
+}
+iniciar();
+</script>
+</body>
+</html>
