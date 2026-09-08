@@ -65,6 +65,7 @@
         { nome: "DRE", href: "dre.html" },
         { nome: "Extrato Geral", href: "extrato-geral.html" },
         { nome: "Gastos por Categoria", href: "gastos-por-categoria.html" },
+        { nome: "Notas Recebidas", href: "notas-recebidas.html" },
       ],
     },
     {
