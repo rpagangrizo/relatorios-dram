@@ -54,7 +54,7 @@
       ],
     },
     {
-      chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: true, restrito: true,
+      chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: true, restrito: true, oculto: true,
       itens: [
         { nome: "Categorias e Fornecedores", href: "categorias-fornecedores.html" },
         { nome: "Contas a Pagar", href: "contas-pagar.html" },
@@ -67,7 +67,7 @@
       ],
     },
     {
-      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true,
+      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true, oculto: true,
       itens: [
         { nome: "Backoffice", href: "backoffice.html" },
         { nome: "Comiss\u00f5es", href: "comissoes.html" },
@@ -135,6 +135,7 @@
     var html = "";
     for (var i = 0; i < MODULOS.length; i++) {
       var m = MODULOS[i];
+      if (m.oculto) continue; // nem aparece na sidebar - nao e' so' desabilitado
       var liberado = moduloLiberado(m);
       var ativo = m === moduloAtivo;
       var classes = "item-modulo" + (ativo ? " ativo" : "") + (!liberado ? " desabilitado" : "");
