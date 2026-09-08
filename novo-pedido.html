@@ -824,6 +824,11 @@ async function iniciar() {
   tabelaPrecoTransferenciaId = tabelaTransferencia ? tabelaTransferencia.id : null;
   popularSelectsDeposito();
   await carregarEquipamentosComodato();
+  // aplica a visibilidade certa dos cartoes (Transportadora, Cliente,
+  // Itens, etc.) logo de cara - sem isso, so' aparecia se o usuario
+  // trocasse o dropdown manualmente (o evento "change" nunca dispara
+  // sozinho na carga inicial da pagina)
+  await aplicarTipoOperacaoNaTela();
 }
 
 function popularSelectsDeposito() {
