@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - DANFE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #EEF2F4; font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; }
+  .folha { background: #fff; max-width: 900px; margin: 0 auto; padding: 14px; border: 1px solid #999; }
+  .caixa { border: 1px solid #000; }
+  .grade { display: grid; }
+  .celula { border-right: 1px solid #000; border-bottom: 1px solid #000; padding: 3px 5px; }
+  .celula:last-child { border-right: none; }
+  .rotulo { font-size: 7px; text-transform: uppercase; color: #333; display: block; }
+  .valor { font-size: 10.5px; }
+  .valor.grande { font-size: 13px; font-weight: bold; }
+  h2.titulo-secao { background: #ddd; font-size: 9px; text-transform: uppercase; margin: 10px 0 0; padding: 3px 6px; border: 1px solid #000; border-bottom: none; }
+  table.itens { width: 100%; border-collapse: collapse; font-size: 8.5px; }
+  table.itens th, table.itens td { border: 1px solid #000; padding: 3px 4px; text-align: left; }
+  table.itens th { background: #ddd; font-size: 7.5px; text-transform: uppercase; }
+  table.itens td.num { text-align: right; }
+  .barra-topo { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .botao-imprimir { padding: 10px 18px; border-radius: 8px; border: none; background: #D9662F; color: #fff; font-weight: 700; cursor: pointer; font-size: 13px; }
+  .carregando, .erro { text-align: center; padding: 40px; font-size: 14px; color: #666; }
+  @media print { body { background: #fff; padding: 0; } .folha { border: none; max-width: 100%; } .barra-topo { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="barra-topo">
+  <span></span>
+  <button class="botao-imprimir" onclick="window.print()">Imprimir / Salvar PDF</button>
+</div>
+
+<div id="conteudo" class="carregando">Carregando...</div>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+// dados fixos do destinatario (a propria Arco Iris) - toda nota recebida
+// tem a gente como destinatario, entao nao precisa vir do banco
+const DESTINATARIO = {
+  nome: "Arco Íris Alimentos Congelados",
+  cnpj: "13.086.597/0001-80",
+  endereco: "Sit Santo Antonio da Rodo Print, S/N - Zona Rural",
+  municipio: "Descalvado", uf: "SP", cep: "13.690-000",
+};
+
+async function chamarSupabase(caminho) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } });
+  if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
+  return resposta.json();
+}
+function formatarMoeda(v) { return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
+function formatarCnpj(cnpj) {
+  if (!cnpj) return "—";
+  const d = cnpj.replace(/\D/g, "");
+  return d.length === 14 ? `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}` : cnpj;
+}
+function formatarChave(chave) {
+  // separa em grupos de 4, igual sai impresso na DANFE de verdade
+  return (chave || "").replace(/(\d{4})(?=\d)/g, "$1 ");
+}
+function formatarDataHora(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleString("pt-BR");
+}
+
+async function montarDanfe() {
+  const parametros = new URLSearchParams(window.location.search);
+  const id = parametros.get("id");
+  const alvo = document.getElementById("conteudo");
+  if (!id) { alvo.className = "erro"; alvo.textContent = "Nota não informada."; return; }
+
+  try {
+    const notas = await chamarSupabase(`notas_recebidas?id=eq.${id}&select=chave_acesso,dados_danfe,status`);
+    const nota = notas[0];
+    if (!nota) { alvo.className = "erro"; alvo.textContent = "Nota não encontrada."; return; }
+    if (nota.status !== "completo" || !nota.dados_danfe) {
+      alvo.className = "erro";
+      alvo.textContent = "Essa nota ainda não tem o XML completo liberado. Volte na tela de Notas Recebidas e aguarde a próxima consulta automática.";
+      return;
+    }
+    const d = nota.dados_danfe;
+    const itensHtml = (d.itens || []).map(i => `
+      <tr>
+        <td>${i.codigo || ""}</td>
+        <td>${i.descricao || ""}</td>
+        <td>${i.ncm || ""}</td>
+        <td>${i.cfop || ""}</td>
+        <td>${i.unidade || ""}</td>
+        <td class="num">${Number(i.quantidade || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+        <td class="num">${formatarMoeda(i.valor_unitario)}</td>
+        <td class="num">${formatarMoeda(i.valor_total)}</td>
+      </tr>`).join("");
+
+    alvo.className = "";
+    alvo.innerHTML = `
+    <div class="folha">
+      <!-- cabecalho: emitente | DANFE + numero | chave de acesso -->
+      <div class="caixa grade" style="grid-template-columns: 1.3fr 1fr 1.3fr">
+        <div class="celula">
+          <div class="valor" style="font-weight:bold; font-size:12px">${d.emitente_nome || d.emitente_fantasia || "—"}</div>
+          <div class="valor">${d.emitente_endereco || ""}${d.emitente_numero ? ", " + d.emitente_numero : ""}</div>
+          <div class="valor">${d.emitente_bairro || ""} - ${d.emitente_municipio || ""}/${d.emitente_uf || ""} - CEP ${d.emitente_cep || "—"}</div>
+          <div class="valor">CNPJ: ${formatarCnpj(d.emitente_cnpj)} ${d.emitente_ie ? "  IE: " + d.emitente_ie : ""}</div>
+        </div>
+        <div class="celula" style="text-align:center">
+          <div class="valor grande">DANFE</div>
+          <div class="valor" style="font-size:7.5px">Documento Auxiliar da Nota Fiscal Eletrônica</div>
+          <div class="valor" style="margin-top:6px">Nº ${d.numero || "—"}&nbsp;&nbsp;&nbsp;Série ${d.serie || "—"}</div>
+        </div>
+        <div class="celula" style="text-align:center">
+          <svg id="codigo-barras"></svg>
+          <div class="valor" style="font-size:8px; letter-spacing:0.3px">${formatarChave(nota.chave_acesso)}</div>
+          <div class="valor" style="font-size:7px; color:#333">Consulta em www.nfe.fazenda.gov.br</div>
+          <div class="valor" style="font-size:7px">Protocolo: ${d.protocolo_autorizacao || "—"} ${d.data_autorizacao ? "- " + formatarDataHora(d.data_autorizacao) : ""}</div>
+        </div>
+      </div>
+
+      <h2 class="titulo-secao">Natureza da operação</h2>
+      <div class="caixa celula">${d.natureza_operacao || "—"}</div>
+
+      <h2 class="titulo-secao">Destinatário / Remetente</h2>
+      <div class="caixa grade" style="grid-template-columns: 1.5fr 1fr">
+        <div class="celula"><span class="rotulo">Nome / Razão social</span><span class="valor">${DESTINATARIO.nome}</span></div>
+        <div class="celula"><span class="rotulo">CNPJ</span><span class="valor">${DESTINATARIO.cnpj}</span></div>
+      </div>
+      <div class="caixa grade" style="grid-template-columns: 2fr 1fr 1fr">
+        <div class="celula"><span class="rotulo">Endereço</span><span class="valor">${DESTINATARIO.endereco}</span></div>
+        <div class="celula"><span class="rotulo">Município / UF</span><span class="valor">${DESTINATARIO.municipio}/${DESTINATARIO.uf}</span></div>
+        <div class="celula"><span class="rotulo">CEP</span><span class="valor">${DESTINATARIO.cep}</span></div>
+      </div>
+
+      <h2 class="titulo-secao">Cálculo do imposto</h2>
+      <div class="caixa grade" style="grid-template-columns: repeat(4, 1fr)">
+        <div class="celula"><span class="rotulo">Base de cálculo ICMS</span><span class="valor">${formatarMoeda(d.valor_bc_icms)}</span></div>
+        <div class="celula"><span class="rotulo">Valor ICMS</span><span class="valor">${formatarMoeda(d.valor_icms)}</span></div>
+        <div class="celula"><span class="rotulo">Valor IPI</span><span class="valor">${formatarMoeda(d.valor_ipi)}</span></div>
+        <div class="celula"><span class="rotulo">Valor total produtos</span><span class="valor">${formatarMoeda(d.valor_produtos)}</span></div>
+      </div>
+      <div class="caixa grade" style="grid-template-columns: repeat(4, 1fr)">
+        <div class="celula"><span class="rotulo">Frete</span><span class="valor">${formatarMoeda(d.valor_frete)}</span></div>
+        <div class="celula"><span class="rotulo">Seguro</span><span class="valor">${formatarMoeda(d.valor_seguro)}</span></div>
+        <div class="celula"><span class="rotulo">Desconto</span><span class="valor">${formatarMoeda(d.valor_desconto)}</span></div>
+        <div class="celula"><span class="rotulo">Valor total da nota</span><span class="valor grande">${formatarMoeda(d.valor_total_nota)}</span></div>
+      </div>
+
+      ${d.transportador_nome ? `
+      <h2 class="titulo-secao">Transportador</h2>
+      <div class="caixa grade" style="grid-template-columns: 2fr 1fr">
+        <div class="celula"><span class="rotulo">Nome</span><span class="valor">${d.transportador_nome}</span></div>
+        <div class="celula"><span class="rotulo">Placa do veículo</span><span class="valor">${d.transportador_placa || "—"}</span></div>
+      </div>` : ""}
+
+      <h2 class="titulo-secao">Dados dos produtos / serviços</h2>
+      <table class="itens">
+        <thead><tr><th>Código</th><th>Descrição</th><th>NCM</th><th>CFOP</th><th>Unid.</th><th>Qtd.</th><th>Vl. unit.</th><th>Vl. total</th></tr></thead>
+        <tbody>${itensHtml || `<tr><td colspan="8" style="text-align:center; color:#888">Nenhum item encontrado</td></tr>`}</tbody>
+      </table>
+
+      <h2 class="titulo-secao">Dados adicionais</h2>
+      <div class="caixa celula" style="min-height:40px">${d.informacoes_complementares || "—"}</div>
+    </div>`;
+
+    if (window.JsBarcode) {
+      try {
+        JsBarcode("#codigo-barras", nota.chave_acesso, { format: "CODE128C", displayValue: false, height: 32, margin: 0, width: 1.1 });
+      } catch (erroBarcode) {
+        console.warn("Não consegui desenhar o código de barras:", erroBarcode);
+      }
+    }
+  } catch (erro) {
+    alvo.className = "erro"; alvo.textContent = `Não consegui carregar a DANFE: ${erro.message}`;
+  }
+}
+
+montarDanfe();
+</script>
+</body>
+</html>
