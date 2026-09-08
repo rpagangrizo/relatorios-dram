@@ -43,6 +43,7 @@
         { nome: "Clientes", href: "clientes.html" },
         { nome: "Produtos", href: "produtos.html" },
         { nome: "Tabelas de Pre\u00e7o", href: "tabelas-preco.html" },
+        { nome: "Transportadoras", href: "transportadoras.html" },
         { nome: "Vendedores", href: "vendedores.html" },
       ],
     },
@@ -54,7 +55,7 @@
       ],
     },
     {
-      chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: true, restrito: true, oculto: true,
+      chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: true, restrito: true,
       itens: [
         { nome: "Categorias e Fornecedores", href: "categorias-fornecedores.html" },
         { nome: "Contas a Pagar", href: "contas-pagar.html" },
@@ -67,7 +68,7 @@
       ],
     },
     {
-      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true, oculto: true,
+      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true,
       itens: [
         { nome: "Backoffice", href: "backoffice.html" },
         { nome: "Comiss\u00f5es", href: "comissoes.html" },
@@ -135,7 +136,6 @@
     var html = "";
     for (var i = 0; i < MODULOS.length; i++) {
       var m = MODULOS[i];
-      if (m.oculto) continue; // nem aparece na sidebar - nao e' so' desabilitado
       var liberado = moduloLiberado(m);
       var ativo = m === moduloAtivo;
       var classes = "item-modulo" + (ativo ? " ativo" : "") + (!liberado ? " desabilitado" : "");
