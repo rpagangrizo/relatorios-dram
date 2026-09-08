@@ -172,6 +172,8 @@
     color: var(--texto-suave); margin-bottom: 6px; font-weight: 600; }
   .caixa-aviso-forma-pagamento { border-color: var(--laranja); background: #FFF3E0; }
   .caixa-aviso-forma-pagamento .nome { color: #92600C; }
+  .linha-dupla { display: flex; gap: 10px; }
+  .linha-dupla .campo { flex: 1; margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -331,6 +333,29 @@
           Emitir nota fiscal para este pedido
         </label>
         <p class="ajuda-nota-fiscal" id="texto-ajuda-nota-fiscal">Independente de emitir nota ou não, a forma de pagamento (boleto/PIX/depósito) continua sendo a mesma escolhida no cadastro do cliente.</p>
+      </div>
+
+      <div class="cartao" id="cartao-transportadora" style="display:none">
+        <div class="titulo-cartao">Transportadora (opcional)</div>
+        <div class="campo" style="position:relative">
+          <label>Transportadora</label>
+          <input type="text" id="campo-busca-transportadora" placeholder="Buscar transportadora..." autocomplete="off">
+          <div class="lista-produtos" id="lista-transportadoras" style="position:absolute; z-index:5; left:0; right:0; display:none; background:#fff"></div>
+        </div>
+        <div class="selecionado-caixa" id="caixa-transportadora-selecionada">
+          <div class="nome" id="nome-transportadora-selecionada"></div>
+        </div>
+        <div class="linha-dupla" style="margin-top:10px">
+          <div class="campo">
+            <label>Placa do veículo</label>
+            <input type="text" id="campo-veiculo-placa" placeholder="ABC1D23">
+          </div>
+          <div class="campo">
+            <label>UF do veículo</label>
+            <input type="text" id="campo-veiculo-uf" maxlength="2" placeholder="SP">
+          </div>
+        </div>
+        <p class="ajuda-nota-fiscal">Se preenchida, esses dados saem no grupo de transportador da nota fiscal.</p>
       </div>
 
       <div class="cartao" id="cartao-desconto-boleto" style="display:none">
@@ -494,6 +519,8 @@ let precosTabela = new Map();
 let itensPedido = [];
 let parcelasPedido = []; // [{numero_parcela, data_vencimento}] - data_vencimento em formato AAAA-MM-DD
 let tipoOperacao = "venda"; // 'venda' | 'bonificacao' | 'comodato' | 'devolucao_comodato' | 'transferencia'
+let transportadoras = [];
+let transportadoraEscolhida = null;
 
 // CNPJ da Filial (Barueri), cadastrada como cliente normal - usada como
 // destinatario automatico quando a transferencia envolve o deposito dela.
@@ -596,6 +623,7 @@ async function aplicarTipoOperacaoNaTela() {
   depositoDestinoEscolhidoId = null;
   itensPedido = [];
   parcelasPedido = [];
+  transportadoraEscolhida = null;
   document.getElementById("campo-busca-cliente").value = "";
   document.getElementById("lista-clientes").innerHTML = "";
   document.getElementById("caixa-cliente-selecionado").style.display = "none";
@@ -613,6 +641,10 @@ async function aplicarTipoOperacaoNaTela() {
   document.getElementById("cartao-desconto-boleto").style.display = "none";
   document.getElementById("campo-observacoes").value = "";
   document.getElementById("campo-frete").value = "";
+  document.getElementById("campo-busca-transportadora").value = "";
+  document.getElementById("caixa-transportadora-selecionada").style.display = "none";
+  document.getElementById("campo-veiculo-placa").value = "";
+  document.getElementById("campo-veiculo-uf").value = "";
   abrirCartao("cliente");
   abrirCartao("equipamento");
   abrirCartao("itens");
@@ -659,6 +691,11 @@ async function aplicarTipoOperacaoNaTela() {
   // bonificacao nao tem parcela (sem cobranca) - so' venda tem
   document.getElementById("cartao-parcelas").style.display = ehVenda ? "" : "none";
   document.getElementById("cartao-parcelas").classList.add("desabilitado");
+
+  // transportadora: so' faz sentido em Venda (mesmo escopo do pedido de
+  // "cadastrar transportadora" - Bonificacao/Transferencia podem ganhar
+  // isso depois, se precisar)
+  document.getElementById("cartao-transportadora").style.display = ehVenda ? "" : "none";
 
   // nota fiscal: em bonificacao/comodato/devolucao sempre precisa (sem
   // checkbox, forcado); em transferencia, so' precisa se envolver o
@@ -774,13 +811,15 @@ ativarFechamentoAutomatico("conteudo-parcelas", "cartao-parcelas",
   });
 
 async function iniciar() {
-  const [clientesResp, depositosResp, tabelasPrecoResp] = await Promise.all([
+  const [clientesResp, depositosResp, tabelasPrecoResp, transportadorasResp] = await Promise.all([
     chamarSupabase("clientes?select=id,nome,cnpj_cpf,tabela_preco_id,forma_pagamento,prazo_dias,parcelas,desconto_boleto_tipo,desconto_boleto_valor,observacao_padrao_nota,dias_parcelas_customizado&order=nome"),
     chamarSupabase("depositos?select=id,nome&order=id"),
     chamarSupabase("tabelas_preco?select=id,nome"),
+    chamarSupabase("transportadoras?select=id,nome&order=nome"),
   ]);
   clientes = clientesResp;
   depositos = depositosResp;
+  transportadoras = transportadorasResp;
   const tabelaTransferencia = tabelasPrecoResp.find(t => t.nome === NOME_TABELA_PRECO_TRANSFERENCIA);
   tabelaPrecoTransferenciaId = tabelaTransferencia ? tabelaTransferencia.id : null;
   popularSelectsDeposito();
@@ -880,6 +919,32 @@ function desenharListaClientes(filtro) {
   });
 }
 document.getElementById("campo-busca-cliente").addEventListener("input", (e) => desenharListaClientes(e.target.value));
+
+// --- transportadora (opcional, so' aparece em Venda) ---
+function desenharListaTransportadoras(filtro) {
+  const alvo = document.getElementById("lista-transportadoras");
+  if (!filtro) { alvo.style.display = "none"; alvo.innerHTML = ""; return; }
+  const filtradas = transportadoras.filter(t => t.nome.toLowerCase().includes(filtro.toLowerCase()));
+  alvo.innerHTML = filtradas.length === 0
+    ? `<div class="item-produto">Nenhuma transportadora encontrada.</div>`
+    : filtradas.slice(0, 20).map(t => `<div class="item-produto" data-id="${t.id}">${t.nome}</div>`).join("");
+  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+    linha.addEventListener("click", () => {
+      transportadoraEscolhida = transportadoras.find(t => t.id === Number(linha.dataset.id));
+      document.getElementById("campo-busca-transportadora").value = "";
+      alvo.style.display = "none";
+      document.getElementById("nome-transportadora-selecionada").textContent = transportadoraEscolhida.nome;
+      document.getElementById("caixa-transportadora-selecionada").style.display = "block";
+    });
+  });
+  alvo.style.display = "block";
+}
+document.getElementById("campo-busca-transportadora").addEventListener("input", (e) => desenharListaTransportadoras(e.target.value));
+document.addEventListener("click", (evento) => {
+  const campo = document.getElementById("campo-busca-transportadora");
+  const lista = document.getElementById("lista-transportadoras");
+  if (campo && lista && !campo.contains(evento.target) && !lista.contains(evento.target)) lista.style.display = "none";
+});
 
 function atualizarCardDescontoBoleto() {
   const cartao = document.getElementById("cartao-desconto-boleto");
@@ -1289,6 +1354,9 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
           p_desconto_boleto_tipo: descontoTipo,
           p_desconto_boleto_valor: descontoValor,
           p_valor_frete: obterFrete(),
+          p_transportadora_id: transportadoraEscolhida ? transportadoraEscolhida.id : null,
+          p_veiculo_placa: document.getElementById("campo-veiculo-placa").value.trim() || null,
+          p_veiculo_uf: document.getElementById("campo-veiculo-uf").value.trim().toUpperCase() || null,
         }),
       });
 
@@ -1406,6 +1474,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     depositoEscolhidoId = null;
     depositoDestinoEscolhidoId = null;
     parcelasPedido = [];
+    transportadoraEscolhida = null;
     document.getElementById("caixa-cliente-selecionado").style.display = "none";
     document.getElementById("caixa-forma-pagamento-faltando").style.display = "none";
     document.getElementById("campo-forma-pagamento-cliente").value = "";
@@ -1424,6 +1493,10 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     document.getElementById("cartao-desconto-boleto").style.display = "none";
     document.getElementById("campo-desconto-tipo-pedido").value = "nenhum";
     document.getElementById("campo-desconto-valor-pedido").value = "";
+    document.getElementById("campo-busca-transportadora").value = "";
+    document.getElementById("caixa-transportadora-selecionada").style.display = "none";
+    document.getElementById("campo-veiculo-placa").value = "";
+    document.getElementById("campo-veiculo-uf").value = "";
     abrirCartao("cliente");
     abrirCartao("equipamento");
     abrirCartao("itens");
