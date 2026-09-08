@@ -133,8 +133,8 @@ const MODULOS = [
   { nome: "Vendas", emoji: "🧾", href: "novo-pedido.html", restrito: false },
   { nome: "Cadastros", emoji: "👤", href: "clientes.html", restrito: false },
   { nome: "Estoque", emoji: "📦", href: "estoque.html", restrito: false },
-  { nome: "Financeiro", emoji: "💰", href: "categorias-fornecedores.html", restrito: true },
-  { nome: "Relatórios", emoji: "📊", href: "faturamento.html", restrito: true },
+  { nome: "Financeiro", emoji: "💰", href: "categorias-fornecedores.html", restrito: true, oculto: true },
+  { nome: "Relatórios", emoji: "📊", href: "faturamento.html", restrito: true, oculto: true },
 ];
 
 function salvarSessao(dados) {
@@ -153,7 +153,7 @@ function limparSessao() {
 function montarGradeLinks(email) {
   const souRaphael = email === EMAIL_RAPHAEL;
   const alvo = document.getElementById("grade-links");
-  alvo.innerHTML = MODULOS.map(m => {
+  alvo.innerHTML = MODULOS.filter(m => !m.oculto).map(m => {
     const liberado = !m.restrito || souRaphael;
     if (liberado && m.href) {
       return `<a class="link-app" href="${m.href}"><span class="emoji">${m.emoji}</span>${m.nome}</a>`;
