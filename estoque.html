@@ -271,6 +271,37 @@
     color: #fff;
     border-bottom-color: #D9662F;
   }
+
+  /* --- modal do Kardex --- */
+  .modal-fundo {
+    display: none;
+    position: fixed; inset: 0; background: rgba(20, 30, 40, 0.45);
+    z-index: 1000; align-items: flex-start; justify-content: center;
+    padding: 24px 14px; overflow-y: auto;
+  }
+  .modal-fundo.aberto { display: flex; }
+  .modal-painel {
+    background: var(--papel); border-radius: 14px; max-width: 720px; width: 100%;
+    max-height: calc(100vh - 48px); display: flex; flex-direction: column;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  }
+  .modal-cabecalho {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px; border-bottom: 1px solid var(--linha);
+  }
+  .modal-cabecalho h3 { margin: 0; font-size: 15.5px; }
+  .modal-fechar {
+    background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer;
+    color: var(--texto-suave); padding: 2px 6px;
+  }
+  .modal-corpo { padding: 8px 18px 18px; overflow-y: auto; }
+  .modal-corpo table { font-size: 13px; }
+  .modal-corpo thead th { position: sticky; top: 0; background: var(--papel); }
+  .selo-tipo {
+    display: inline-block; padding: 2px 8px; border-radius: 100px; font-size: 11.5px; font-weight: 700;
+  }
+  .selo-tipo.entrada { background: #E4F3E8; color: var(--verde); }
+  .selo-tipo.saida { background: #FBE7E4; color: var(--vermelho); }
 </style>
 </head>
 <body>
@@ -319,6 +350,16 @@
 
   <p class="rodape">Powered by DRAM</p>
 </main>
+
+<div class="modal-fundo" id="modal-kardex">
+  <div class="modal-painel">
+    <div class="modal-cabecalho">
+      <h3 id="titulo-modal-kardex">Kardex</h3>
+      <button type="button" class="modal-fechar" id="botao-fechar-kardex">✕</button>
+    </div>
+    <div class="modal-corpo" id="corpo-modal-kardex">Carregando...</div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -443,7 +484,7 @@ function desenharProdutoAcabado(filtro) {
     html += `<tr class="linha-categoria"><td colspan="${numColunas}">${nomeCategoria}</td></tr>`;
 
     for (const item of gruposPorCategoria.get(categoriaId)) {
-      html += `<tr><td>${item.nome}</td>`;
+      html += `<tr><td><span class="texto-editavel" data-acao="ver-kardex" data-item-id="${item.id}" data-item-nome="${item.nome}" title="Clique pra ver o histórico de movimentações">${item.nome} 📋</span></td>`;
       let total = 0;
       for (const dep of depositos) {
         const qtd = saldos.get(`${item.id}-${dep.id}`) || 0;
@@ -455,6 +496,10 @@ function desenharProdutoAcabado(filtro) {
   }
   html += `</tbody></table>`;
   alvo.innerHTML = html;
+
+  alvo.querySelectorAll('[data-acao="ver-kardex"]').forEach(span => {
+    span.addEventListener("click", () => abrirKardex(Number(span.dataset.itemId), span.dataset.itemNome));
+  });
 }
 
 async function carregarMateriaPrima() {
@@ -754,6 +799,83 @@ function exportarMateriaPrimaParaExcel() {
 
 carregarProdutoAcabado();
 carregarMateriaPrima();
+
+// --- Kardex: historico de movimentacoes de um item de produto acabado ---
+const ROTULOS_TIPO_MOVIMENTACAO = { entrada: "Entrada", saida: "Saída" };
+
+function formatarDataHoraKardex(iso) {
+  if (!iso) return "—";
+  const data = new Date(iso);
+  return data.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function referenciaMovimentacao(mov) {
+  if (mov.pedido_id) return `Pedido nº ${mov.pedido_id}`;
+  if (mov.operacao_especial_id) return `Operação nº ${mov.operacao_especial_id}`;
+  return "—";
+}
+
+async function abrirKardex(itemId, itemNome) {
+  const modal = document.getElementById("modal-kardex");
+  const corpo = document.getElementById("corpo-modal-kardex");
+  document.getElementById("titulo-modal-kardex").textContent = `Kardex — ${itemNome}`;
+  corpo.className = "";
+  corpo.innerHTML = `<div class="carregando">Carregando...</div>`;
+  modal.classList.add("aberto");
+
+  try {
+    const movimentacoes = await chamarSupabase(
+      `movimentacoes_estoque_produto_acabado?item_id=eq.${itemId}` +
+      `&select=deposito_id,tipo,quantidade,pessoa,criado_em,motivo,pedido_id,operacao_especial_id,saldo_resultante` +
+      `&order=criado_em.desc&limit=200`
+    );
+
+    if (movimentacoes.length === 0) {
+      corpo.innerHTML = `<div class="vazio">Nenhuma movimentação registrada pra esse item ainda.</div>`;
+      return;
+    }
+
+    const nomeDepositoPorId = new Map((dadosProdutoAcabado?.depositos || []).map(d => [d.id, d.nome]));
+
+    let html = `<table><thead><tr>
+      <th>Data</th><th>Tipo</th><th>Depósito</th><th class="num">Quantidade</th>
+      <th class="num">Saldo após</th><th>Motivo</th><th>Referência</th><th>Pessoa</th>
+    </tr></thead><tbody>`;
+    for (const mov of movimentacoes) {
+      const classeTipo = mov.tipo === "entrada" ? "entrada" : "saida";
+      html += `<tr>
+        <td>${formatarDataHoraKardex(mov.criado_em)}</td>
+        <td><span class="selo-tipo ${classeTipo}">${ROTULOS_TIPO_MOVIMENTACAO[mov.tipo] || mov.tipo}</span></td>
+        <td>${nomeDepositoPorId.get(mov.deposito_id) || "—"}</td>
+        <td class="num">${Number(mov.quantidade).toLocaleString("pt-BR")}</td>
+        <td class="num">${mov.saldo_resultante !== null ? Number(mov.saldo_resultante).toLocaleString("pt-BR") : "—"}</td>
+        <td>${mov.motivo || "—"}</td>
+        <td>${referenciaMovimentacao(mov)}</td>
+        <td>${mov.pessoa || "—"}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    if (movimentacoes.length === 200) {
+      html += `<p style="color:var(--texto-suave); font-size:12px; margin-top:10px">Mostrando as 200 movimentações mais recentes.</p>`;
+    }
+    corpo.innerHTML = html;
+  } catch (erro) {
+    corpo.className = "erro";
+    corpo.textContent = `Não consegui carregar o histórico: ${erro.message}`;
+  }
+}
+
+function fecharKardex() {
+  document.getElementById("modal-kardex").classList.remove("aberto");
+}
+document.getElementById("botao-fechar-kardex").addEventListener("click", fecharKardex);
+document.getElementById("modal-kardex").addEventListener("click", (evento) => {
+  if (evento.target.id === "modal-kardex") fecharKardex(); // clicou fora do painel
+});
+document.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape") fecharKardex();
+});
+
 </script>
 </body>
 </html>
