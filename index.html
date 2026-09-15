@@ -123,18 +123,14 @@
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
 const CHAVE_LOCAL = "dram_auth";
-const EMAIL_RAPHAEL = "raphael@arcoirisalimentos.com.br";
 
-// mesmos 5 modulos do menu lateral (menu.js) - cada card leva pra
-// primeira tela daquele modulo. Financeiro/Relatorios ficam
-// desabilitados (cinza, sem link) pra quem nao for o Raphael - mesma
-// regra ja aplicada no menu.js.
+// modulos do menu lateral (menu.js) - cada card leva pra primeira tela
+// daquele modulo. Financeiro e Relatorios foram REMOVIDOS de vez (nao
+// so' ocultos) - o Desktop voltou a ser a fonte unica desses dois.
 const MODULOS = [
-  { nome: "Vendas", emoji: "🧾", href: "pedidos.html", restrito: false },
-  { nome: "Cadastros", emoji: "👤", href: "clientes.html", restrito: false },
-  { nome: "Estoque", emoji: "📦", href: "estoque.html", restrito: false },
-  { nome: "Financeiro", emoji: "💰", href: "categorias-fornecedores.html", restrito: true, oculto: true },
-  { nome: "Relatórios", emoji: "📊", href: "faturamento.html", restrito: true, oculto: true },
+  { nome: "Vendas", emoji: "🧾", href: "pedidos.html" },
+  { nome: "Cadastros", emoji: "👤", href: "clientes.html" },
+  { nome: "Estoque", emoji: "📦", href: "estoque.html" },
 ];
 
 function salvarSessao(dados) {
@@ -150,24 +146,18 @@ function limparSessao() {
   localStorage.removeItem(CHAVE_LOCAL);
 }
 
-function montarGradeLinks(email) {
-  const souRaphael = email === EMAIL_RAPHAEL;
+function montarGradeLinks() {
   const alvo = document.getElementById("grade-links");
-  alvo.innerHTML = MODULOS.filter(m => !m.oculto).map(m => {
-    const liberado = !m.restrito || souRaphael;
-    if (liberado && m.href) {
-      return `<a class="link-app" href="${m.href}"><span class="emoji">${m.emoji}</span>${m.nome}</a>`;
-    }
-    return `<span class="link-app desabilitado"><span class="emoji">${m.emoji}</span>${m.nome}` +
-      (!liberado ? "" : `<span class="tag-em-breve">em breve</span>`) + `</span>`;
-  }).join("");
+  alvo.innerHTML = MODULOS.map(m =>
+    `<a class="link-app" href="${m.href}"><span class="emoji">${m.emoji}</span>${m.nome}</a>`
+  ).join("");
 }
 
 function mostrarPainel(sessao) {
   document.getElementById("cartao-login").style.display = "none";
   document.getElementById("painel").style.display = "block";
   document.getElementById("nome-usuario").textContent = sessao.email;
-  montarGradeLinks(sessao.email);
+  montarGradeLinks();
 }
 
 function mostrarLogin() {
