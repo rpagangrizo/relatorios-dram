@@ -40,6 +40,13 @@
         { nome: "Estoque", href: "estoque.html" },
       ],
     },
+    {
+      chave: "producao", nome: "Produ\u00e7\u00e3o", emoji: "\ud83c\udfed", ativo: true,
+      itens: [
+        { nome: "Apontamento", href: "apontamento-producao.html" },
+        { nome: "Aprova\u00e7\u00e3o", href: "aprovacao-producao.html" },
+      ],
+    },
   ];
 
   var ESTILO = ""
