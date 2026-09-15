@@ -36,8 +36,8 @@
     {
       chave: "estoque", nome: "Estoque", emoji: "\ud83d\udce6", ativo: true,
       itens: [
-        { nome: "Ajustar Estoque", href: "ajustar-estoque.html" },
         { nome: "Estoque", href: "estoque.html" },
+        { nome: "Ajustar Estoque", href: "ajustar-estoque.html" },
       ],
     },
     {
