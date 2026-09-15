@@ -96,8 +96,8 @@
     <div class="cartao-login" id="cartao-login">
       <h2>Entrar</h2>
       <div class="campo">
-        <label>E-mail</label>
-        <input type="email" id="campo-email" autocomplete="username">
+        <label>Usuário ou e-mail</label>
+        <input type="text" id="campo-email" autocomplete="username">
       </div>
       <div class="campo">
         <label>Senha</label>
@@ -123,13 +123,25 @@
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
 const CHAVE_LOCAL = "dram_auth";
+const EMAIL_ADMIN = "raphael@arcoirisalimentos.com.br";
+const EMAILS_GERENCIA = ["fabrica@arcoirisalimentos.com.br", "contato@arcoirisalimentos.com.br"];
+const DOMINIO_PRODUCAO = "@dram.interno"; // logins de producao usam esse dominio interno, nao e' e-mail de verdade
 
-// modulos do menu lateral (menu.js) - cada card leva pra primeira tela
-// daquele modulo. Financeiro e Relatorios foram REMOVIDOS de vez (nao
-// so' ocultos) - o Desktop voltou a ser a fonte unica desses dois.
+function obterPapel(email) {
+  if (!email) return null;
+  if (email === EMAIL_ADMIN) return "admin";
+  if (EMAILS_GERENCIA.includes(email)) return "gerencia";
+  if (email.includes(DOMINIO_PRODUCAO)) return "producao";
+  return "gerencia"; // fallback seguro pra login nao mapeado
+}
+
+// modulos da tela inicial - cada card leva pra primeira tela daquele
+// modulo. "papeis" define quem ve o card (sem "papeis", todo mundo
+// logado ve). Financeiro e Relatorios foram REMOVIDOS de vez (nao so'
+// ocultos) - o Desktop voltou a ser a fonte unica desses dois.
 const MODULOS = [
-  { nome: "Vendas", emoji: "🧾", href: "pedidos.html" },
-  { nome: "Cadastros", emoji: "👤", href: "clientes.html" },
+  { nome: "Vendas", emoji: "🧾", href: "pedidos.html", papeis: ["admin", "gerencia"] },
+  { nome: "Cadastros", emoji: "👤", href: "clientes.html", papeis: ["admin", "gerencia"] },
   { nome: "Estoque", emoji: "📦", href: "estoque.html" },
   { nome: "Produção", emoji: "🏭", href: "apontamento-producao.html" },
 ];
@@ -147,18 +159,23 @@ function limparSessao() {
   localStorage.removeItem(CHAVE_LOCAL);
 }
 
-function montarGradeLinks() {
+function montarGradeLinks(papel) {
   const alvo = document.getElementById("grade-links");
-  alvo.innerHTML = MODULOS.map(m =>
+  const modulosAcessiveis = MODULOS.filter(m => !m.papeis || m.papeis.includes(papel));
+  alvo.innerHTML = modulosAcessiveis.map(m =>
     `<a class="link-app" href="${m.href}"><span class="emoji">${m.emoji}</span>${m.nome}</a>`
   ).join("");
+}
+
+function nomeParaExibir(email) {
+  return email.includes(DOMINIO_PRODUCAO) ? email.replace(DOMINIO_PRODUCAO, "") : email;
 }
 
 function mostrarPainel(sessao) {
   document.getElementById("cartao-login").style.display = "none";
   document.getElementById("painel").style.display = "block";
-  document.getElementById("nome-usuario").textContent = sessao.email;
-  montarGradeLinks();
+  document.getElementById("nome-usuario").textContent = nomeParaExibir(sessao.email);
+  montarGradeLinks(obterPapel(sessao.email));
 }
 
 function mostrarLogin() {
@@ -177,17 +194,22 @@ document.getElementById("botao-entrar").addEventListener("click", fazerLogin);
 document.getElementById("campo-senha").addEventListener("keydown", (e) => { if (e.key === "Enter") fazerLogin(); });
 
 async function fazerLogin() {
-  const email = document.getElementById("campo-email").value.trim();
+  const digitado = document.getElementById("campo-email").value.trim();
   const senha = document.getElementById("campo-senha").value;
   const botao = document.getElementById("botao-entrar");
   const mensagemErro = document.getElementById("mensagem-erro");
   mensagemErro.style.display = "none";
 
-  if (!email || !senha) {
-    mensagemErro.textContent = "Preencha e-mail e senha.";
+  if (!digitado || !senha) {
+    mensagemErro.textContent = "Preencha usuário/e-mail e senha.";
     mensagemErro.style.display = "block";
     return;
   }
+
+  // login de producao digita so' o usuario (sem "@") - completa sozinho
+  // com o dominio interno antes de mandar pro Supabase. Quem digita um
+  // e-mail de verdade (com "@") usa exatamente o que digitou.
+  const email = digitado.includes("@") ? digitado : `${digitado}${DOMINIO_PRODUCAO}`;
 
   botao.disabled = true;
   botao.textContent = "Entrando...";
