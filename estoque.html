@@ -366,6 +366,27 @@
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
 
+// papel de quem esta logado - "producao" so' visualiza aqui, nunca edita
+// (nem nome de item, nem lote). Kardex fica disponivel pra todo mundo,
+// ja que e' so' consulta de historico, nao mexe em nada.
+const EMAIL_ADMIN = "raphael@arcoirisalimentos.com.br";
+const EMAILS_GERENCIA = ["fabrica@arcoirisalimentos.com.br", "contato@arcoirisalimentos.com.br"];
+const DOMINIO_PRODUCAO = "@dram.interno";
+function obterPapel(email) {
+  if (!email) return null;
+  if (email === EMAIL_ADMIN) return "admin";
+  if (EMAILS_GERENCIA.includes(email)) return "gerencia";
+  if (email.includes(DOMINIO_PRODUCAO)) return "producao";
+  return "gerencia";
+}
+function lerSessaoDram() {
+  try {
+    const sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+    return (sessao && sessao.expira_em > Date.now()) ? sessao : null;
+  } catch { return null; }
+}
+const papelAtual = obterPapel(lerSessaoDram()?.email);
+
 
 async function chamarSupabase(caminho, opcoes = {}) {
   const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
@@ -559,8 +580,12 @@ function desenharMateriaPrima(filtro) {
     const custoTexto = item.custo_medio !== null && item.custo_medio !== undefined
       ? formatarMoeda(item.custo_medio) : "—";
     // nome do item e' clicavel - so' corrige erro de digitacao, nunca mexe
-    // em quantidade (isso so' muda por entrada/saida, na tela de Ajustar Estoque)
-    html += `<tr><td><span class="texto-editavel" data-acao="editar-nome-item" data-item-id="${item.id}" title="Clique pra corrigir o nome">${item.nome} ✎</span></td><td class="num">${celulaSelo(qtd)}</td><td class="num">${custoTexto}</td></tr>`;
+    // em quantidade (isso so' muda por entrada/saida, na tela de Ajustar Estoque).
+    // Papel "producao" so' visualiza aqui, nao pode corrigir nada.
+    const nomeItemHtml = papelAtual === "producao"
+      ? item.nome
+      : `<span class="texto-editavel" data-acao="editar-nome-item" data-item-id="${item.id}" title="Clique pra corrigir o nome">${item.nome} ✎</span>`;
+    html += `<tr><td>${nomeItemHtml}</td><td class="num">${celulaSelo(qtd)}</td><td class="num">${custoTexto}</td></tr>`;
 
     // sub-linhas: um lote pode ter mais de uma embalagem (ex: mesmo lote
     // com tambores de 190kg E sacos de 25kg) - cada combinacao vira uma
@@ -568,9 +593,13 @@ function desenharMateriaPrima(filtro) {
     const lotesDoItem = (lotesPorItem.get(item.id) || []).filter(l => l.quantidade_unidades > 0);
     for (const lote of lotesDoItem) {
       // texto do lote tambem e' clicavel - corrige so' o texto do lote,
-      // aplicando em todas as embalagens que compartilham esse mesmo lote
+      // aplicando em todas as embalagens que compartilham esse mesmo lote.
+      // Papel "producao" so' visualiza, sem essa opcao.
+      const textoLoteHtml = papelAtual === "producao"
+        ? `Lote ${lote.lote}`
+        : `<span class="texto-editavel" data-acao="editar-lote" data-item-id="${item.id}" data-lote-atual="${lote.lote}" title="Clique pra corrigir o nome do lote">Lote ${lote.lote}</span>`;
       html += `<tr class="linha-lote">
-        <td class="celula-lote"><span class="texto-editavel" data-acao="editar-lote" data-item-id="${item.id}" data-lote-atual="${lote.lote}" title="Clique pra corrigir o nome do lote">Lote ${lote.lote}</span> — ${lote.tipo_embalagem} ${Number(lote.capacidade_kg)}kg</td>
+        <td class="celula-lote">${textoLoteHtml} — ${lote.tipo_embalagem} ${Number(lote.capacidade_kg)}kg</td>
         <td class="num">${lote.quantidade_unidades} un. (${Number(lote.peso_total_kg).toLocaleString("pt-BR")} kg)</td>
         <td class="num">—</td>
       </tr>`;
