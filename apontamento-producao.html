@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Apontamento de Produção</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --azul-claro: #EAF1F6; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870;
+    --linha: #DCE3E7; --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+  main { max-width: 520px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 14px; border: 1px solid var(--linha); padding: 20px;
+    box-shadow: 0 1px 3px rgba(20,30,40,0.04); }
+  .campo { margin-bottom: 16px; position: relative; }
+  .campo label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--texto-suave); margin-bottom: 6px; font-weight: 600; }
+  .campo input, .campo select {
+    width: 100%; padding: 13px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 15px; color: var(--texto); background: #fff;
+  }
+  .campo input:focus, .campo select:focus { outline: none; border-color: var(--azul); }
+
+  .lista-produtos { max-height: 220px; overflow-y: auto; margin-top: 6px; border-radius: 9px;
+    border: 1px solid var(--linha); position: absolute; z-index: 5; left: 0; right: 0; background: #fff;
+    box-shadow: 0 6px 18px rgba(20,30,40,0.12); display: none; }
+  .item-produto { padding: 11px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14px; }
+  .item-produto:last-child { border-bottom: none; }
+  .item-produto:hover { background: #F6F9FA; }
+
+  .item-selecionado { margin-top: 8px; padding: 11px 14px; border-radius: 9px; background: var(--azul-claro);
+    border: 1.5px solid var(--azul); color: var(--azul); font-weight: 700; font-size: 14.5px; display: none; }
+
+  .botao { width: 100%; padding: 15px; border-radius: 9px; border: none; background: var(--laranja);
+    color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 4px; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+
+  .mensagem { margin-top: 14px; padding: 13px 15px; border-radius: 9px; font-size: 14px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos"><h1>Apontamento de Produção</h1><p id="texto-pessoa">Identificando...</p></div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao">
+    <div class="campo">
+      <label>O que foi produzido</label>
+      <input type="text" id="campo-busca-item" placeholder="Buscar produto..." autocomplete="off">
+      <div class="lista-produtos" id="lista-itens"></div>
+      <div class="item-selecionado" id="item-selecionado"></div>
+    </div>
+
+    <div class="campo">
+      <label>Quantidade (caixas)</label>
+      <input type="number" id="campo-quantidade" min="0.01" step="0.01" placeholder="0">
+    </div>
+
+    <div class="campo">
+      <label>Em qual estoque</label>
+      <select id="select-deposito"><option value="">Selecione...</option></select>
+    </div>
+
+    <button class="botao" id="botao-registrar" disabled>Registrar</button>
+    <div class="mensagem" id="mensagem"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) throw new Error(await resposta.text() || `Erro ${resposta.status}`);
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+// --- identificação: sessão de login, senão ?pessoa= na URL ---
+function lerSessaoDram() {
+  try {
+    const sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+    return (sessao && sessao.expira_em > Date.now()) ? sessao : null;
+  } catch { return null; }
+}
+const sessaoDram = lerSessaoDram();
+const parametros = new URLSearchParams(window.location.search);
+const pessoa = (sessaoDram && sessaoDram.email) || parametros.get("pessoa") || null;
+document.getElementById("texto-pessoa").textContent = pessoa ? `Lançado por ${pessoa}` : "Identificação não encontrada";
+
+let itensCatalogo = [];
+let depositos = [];
+let itemEscolhido = null;
+
+async function iniciar() {
+  const [itensResp, depositosResp] = await Promise.all([
+    chamarSupabase("itens?select=id,nome&order=nome"),
+    chamarSupabase("depositos?select=id,nome&order=id"),
+  ]);
+  itensCatalogo = itensResp;
+  depositos = depositosResp;
+  document.getElementById("select-deposito").innerHTML =
+    '<option value="">Selecione...</option>' + depositos.map(d => `<option value="${d.id}">${d.nome}</option>`).join("");
+}
+
+function desenharListaItens(filtro) {
+  const alvo = document.getElementById("lista-itens");
+  if (!filtro) { alvo.style.display = "none"; alvo.innerHTML = ""; return; }
+  const filtrados = itensCatalogo.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
+  alvo.innerHTML = filtrados.length === 0
+    ? `<div class="item-produto">Nenhum produto encontrado.</div>`
+    : filtrados.slice(0, 30).map(i => `<div class="item-produto" data-id="${i.id}">${i.nome}</div>`).join("");
+  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+    linha.addEventListener("click", () => {
+      itemEscolhido = itensCatalogo.find(i => i.id === Number(linha.dataset.id));
+      document.getElementById("campo-busca-item").value = "";
+      alvo.style.display = "none";
+      const caixaSelecionada = document.getElementById("item-selecionado");
+      caixaSelecionada.textContent = itemEscolhido.nome;
+      caixaSelecionada.style.display = "block";
+      atualizarBotao();
+    });
+  });
+  alvo.style.display = "block";
+}
+document.getElementById("campo-busca-item").addEventListener("input", (e) => {
+  itemEscolhido = null;
+  document.getElementById("item-selecionado").style.display = "none";
+  desenharListaItens(e.target.value);
+  atualizarBotao();
+});
+document.addEventListener("click", (evento) => {
+  const campo = document.getElementById("campo-busca-item");
+  const lista = document.getElementById("lista-itens");
+  if (!campo.contains(evento.target) && !lista.contains(evento.target)) lista.style.display = "none";
+});
+
+function atualizarBotao() {
+  const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
+  const depositoId = document.getElementById("select-deposito").value;
+  document.getElementById("botao-registrar").disabled =
+    !itemEscolhido || !(quantidade > 0) || !depositoId || !pessoa;
+}
+document.getElementById("campo-quantidade").addEventListener("input", atualizarBotao);
+document.getElementById("select-deposito").addEventListener("change", atualizarBotao);
+
+document.getElementById("botao-registrar").addEventListener("click", async () => {
+  const botao = document.getElementById("botao-registrar");
+  const mensagem = document.getElementById("mensagem");
+  const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
+  const depositoId = Number(document.getElementById("select-deposito").value);
+  const nomeItemRegistrado = itemEscolhido.nome;
+
+  botao.disabled = true;
+  botao.textContent = "Registrando...";
+  mensagem.className = "mensagem";
+
+  try {
+    await chamarSupabase("apontamentos_producao", {
+      method: "POST",
+      body: JSON.stringify({
+        item_id: itemEscolhido.id, quantidade, deposito_id: depositoId, pessoa, status: "pendente",
+      }),
+    });
+
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `Registrado: ${quantidade} cx de "${nomeItemRegistrado}". Aguardando aprovação.`;
+
+    // limpa tudo, pronta pro proximo apontamento
+    itemEscolhido = null;
+    document.getElementById("campo-busca-item").value = "";
+    document.getElementById("item-selecionado").style.display = "none";
+    document.getElementById("campo-quantidade").value = "";
+    document.getElementById("select-deposito").value = "";
+    atualizarBotao();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui registrar: ${erro.message}`;
+  } finally {
+    botao.textContent = "Registrar";
+    atualizarBotao();
+  }
+});
+
+iniciar();
+</script>
+</body>
+</html>
