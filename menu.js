@@ -9,25 +9,11 @@
 // p\u00e1gina dentro do MODULO certo na lista abaixo. Nao precisa de mais
 // nada - o menu se monta sozinho, detectando a p\u00e1gina atual pela URL.
 //
-// Pra adicionar um modulo novo (ex: Financeiro, quando as telas dele
-// existirem): troque "ativo: false" pra "true" e preencha "itens" com as
-// paginas dele, no mesmo formato dos outros modulos.
+// Financeiro e Relat\u00f3rios foram REMOVIDOS de vez (n\u00e3o s\u00f3 ocultos) -
+// o Desktop voltou a ser a fonte \u00fanica desses dois m\u00f3dulos. Os arquivos
+// HTML correspondentes tamb\u00e9m foram apagados do GitHub.
 
 (function () {
-  // so' o Raphael pode ver Financeiro/Relatorios - os modulos marcados
-  // com "restrito: true" abaixo ficam escondidos (e a pagina redireciona
-  // sozinha) pra qualquer outra conta logada.
-  var EMAIL_RAPHAEL = "raphael@arcoirisalimentos.com.br";
-
-  function souRaphael() {
-    try {
-      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
-      return !!sessao && sessao.email === EMAIL_RAPHAEL;
-    } catch (erro) {
-      return false;
-    }
-  }
-
   var MODULOS = [
     {
       chave: "vendas", nome: "Vendas", emoji: "\ud83e\uddfe", ativo: true,
@@ -52,33 +38,6 @@
       itens: [
         { nome: "Ajustar Estoque", href: "ajustar-estoque.html" },
         { nome: "Estoque", href: "estoque.html" },
-      ],
-    },
-    {
-      chave: "financeiro", nome: "Financeiro", emoji: "\ud83d\udcb0", ativo: true, restrito: true, oculto: true,
-      itens: [
-        { nome: "Categorias e Fornecedores", href: "categorias-fornecedores.html" },
-        { nome: "Contas a Pagar", href: "contas-pagar.html" },
-        { nome: "Contas a Receber", href: "contas-receber.html" },
-        { nome: "Despesa Mensal", href: "despesa-mensal.html" },
-        { nome: "Despesa por Fornecedor", href: "despesa-por-fornecedor.html" },
-        { nome: "DRE", href: "dre.html" },
-        { nome: "Extrato Geral", href: "extrato-geral.html" },
-        { nome: "Gastos por Categoria", href: "gastos-por-categoria.html" },
-        { nome: "Notas Recebidas", href: "notas-recebidas.html" },
-      ],
-    },
-    {
-      chave: "relatorios", nome: "Relat\u00f3rios", emoji: "\ud83d\udcca", ativo: true, restrito: true, oculto: true,
-      itens: [
-        { nome: "Backoffice", href: "backoffice.html" },
-        { nome: "Comiss\u00f5es", href: "comissoes.html" },
-        { nome: "Faturamento", href: "faturamento.html" },
-        { nome: "Faturamento Mensal", href: "faturamento-mensal.html" },
-        { nome: "M\u00e9dias", href: "medias.html" },
-        { nome: "Peso Vendido", href: "peso-vendido.html" },
-        { nome: "Resultados", href: "resultados.html" },
-        { nome: "Vendas Lan\u00e7adas", href: "vendas-lancadas.html" },
       ],
     },
   ];
@@ -130,7 +89,7 @@
   }
 
   function moduloLiberado(m) {
-    return m.ativo && (!m.restrito || souRaphael());
+    return m.ativo;
   }
 
   function montarSidebarHtml(moduloAtivo) {
@@ -199,18 +158,5 @@
     document.body.appendChild(layout);
   }
 
-  // trava de acesso: roda ANTES de qualquer outra coisa (mesmo antes do
-  // menu ser montado), pra fechar a porta pra quem digitar a URL direto
-  // numa pagina restrita. Se a pessoa nao for o Raphael, manda ela
-  // embora na hora - o "return" impede que o resto do menu.js (e,
-  // criticamente, o script da propria pagina que busca os dados
-  // financeiros) continue rodando, porque a navegacao pra index.html
-  // interrompe o carregamento do resto da pagina.
-  var paginaAgora = paginaAtual();
-  var moduloAgora = moduloDaPagina(paginaAgora);
-  if (moduloAgora.restrito && !souRaphael()) {
-    location.href = "index.html";
-  } else {
-    document.addEventListener("DOMContentLoaded", montarMenu);
-  }
+  document.addEventListener("DOMContentLoaded", montarMenu);
 })();
