@@ -60,6 +60,7 @@
       chave: "producao", nome: "Produ\u00e7\u00e3o", emoji: "\ud83c\udfed", ativo: true, papeis: ["admin", "gerencia", "producao"],
       itens: [
         { nome: "Apontamento", href: "apontamento-producao.html" },
+        { nome: "Di\u00e1rio", href: "diario-producao.html" },
         { nome: "Aprova\u00e7\u00e3o", href: "aprovacao-producao.html", papeis: ["admin", "gerencia"] },
       ],
     },
