@@ -34,7 +34,7 @@
   main { max-width: 820px; margin: 0 auto; padding: 18px 16px 60px; }
 
   .cartao { background: var(--papel); border-radius: 12px; border: 1px solid var(--linha); overflow: hidden; overflow-x: auto; }
-  table { width: 100%; min-width: 640px; border-collapse: collapse; }
+  table { width: 100%; min-width: 700px; border-collapse: collapse; }
   thead th { text-align: left; font-size: 11px; text-transform: uppercase; color: var(--texto-suave);
     padding: 10px 14px; border-bottom: 1px solid var(--linha); white-space: nowrap; }
   tbody td { padding: 11px 14px; border-bottom: 1px solid var(--linha); font-size: 14px; }
@@ -129,7 +129,7 @@ async function carregar() {
     const [itensResp, depositosResp, pendentesResp] = await Promise.all([
       chamarSupabase("itens?select=id,nome&order=nome"),
       chamarSupabase("depositos?select=id,nome&order=id"),
-      chamarSupabase("apontamentos_producao?status=eq.pendente&select=id,item_id,quantidade,deposito_id,pessoa,criado_em&order=criado_em"),
+      chamarSupabase("apontamentos_producao?status=eq.pendente&select=id,item_id,quantidade,lote,deposito_id,pessoa,criado_em&order=criado_em"),
     ]);
     itensCatalogo = itensResp;
     depositos = depositosResp;
@@ -154,12 +154,13 @@ function desenharTabela() {
   }
 
   let html = `<table><thead><tr>
-    <th>Item</th><th>Quantidade</th><th>Depósito</th><th>Pessoa</th><th>Horário</th><th></th>
+    <th>Item</th><th>Quantidade</th><th>Lote</th><th>Depósito</th><th>Pessoa</th><th>Horário</th><th></th>
   </tr></thead><tbody>`;
   for (const p of pendentes) {
     html += `<tr data-id="${p.id}">
       <td><span class="texto-editavel" data-acao="editar-item">${nomeItem(p.item_id)}</span></td>
       <td><span class="texto-editavel" data-acao="editar-quantidade">${Number(p.quantidade).toLocaleString("pt-BR")} cx</span></td>
+      <td><span class="texto-editavel" data-acao="editar-lote">${p.lote || "—"}</span></td>
       <td><span class="texto-editavel" data-acao="editar-deposito">${nomeDeposito(p.deposito_id)}</span></td>
       <td>${p.pessoa || "—"}</td>
       <td>${formatarDataHora(p.criado_em)}</td>
@@ -171,6 +172,7 @@ function desenharTabela() {
 
   alvo.querySelectorAll('[data-acao="editar-item"]').forEach(el => el.addEventListener("click", (e) => editarItem(linhaId(e))));
   alvo.querySelectorAll('[data-acao="editar-quantidade"]').forEach(el => el.addEventListener("click", (e) => editarQuantidade(linhaId(e))));
+  alvo.querySelectorAll('[data-acao="editar-lote"]').forEach(el => el.addEventListener("click", (e) => editarLote(linhaId(e))));
   alvo.querySelectorAll('[data-acao="editar-deposito"]').forEach(el => el.addEventListener("click", (e) => editarDeposito(linhaId(e))));
   alvo.querySelectorAll('[data-acao="excluir"]').forEach(el => el.addEventListener("click", (e) => excluirApontamento(linhaId(e))));
 
@@ -207,6 +209,13 @@ async function editarQuantidade(id) {
     return;
   }
   await salvarCampo(id, { quantidade: novaQuantidade });
+}
+
+async function editarLote(id) {
+  const apontamento = pendentes.find(p => p.id === id);
+  const novoLote = window.prompt("Corrigir lote:", apontamento.lote || "");
+  if (novoLote === null || !novoLote.trim()) return;
+  await salvarCampo(id, { lote: novoLote.trim() });
 }
 
 async function editarDeposito(id) {
