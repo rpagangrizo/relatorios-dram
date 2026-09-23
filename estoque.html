@@ -222,6 +222,13 @@
   .texto-editavel { cursor: pointer; }
   .texto-editavel:hover { text-decoration: underline; color: var(--azul); }
 
+  .botao-excluir-item {
+    border: none; background: none; cursor: pointer;
+    font-size: 15px; padding: 2px 6px; border-radius: 6px;
+    opacity: 0.75;
+  }
+  .botao-excluir-item:hover { opacity: 1; background: #FBE7E4; }
+
   .selo {
     display: inline-flex;
     align-items: center;
@@ -574,7 +581,16 @@ function desenharMateriaPrima(filtro) {
     return;
   }
 
-  let html = `<table><thead><tr><th>Item / Lote</th><th class="num">Quantidade</th><th class="num">Custo médio</th></tr></thead><tbody>`;
+  // botao de excluir so' aparece pra admin/gerencia (producao so' visualiza,
+  // igual as outras acoes desta tela), e so' pra item SEM saldo - excluir
+  // um item que ainda tem estoque nao faz sentido (o saldo ficaria "orfao").
+  // Mesmo assim, quem realmente impede excluir um item que tenha lote ou
+  // movimentacao no historico e' o proprio banco (chave estrangeira) - o
+  // filtro por saldo aqui e' so' pra nao oferecer o botao a toa.
+  const podeExcluir = papelAtual !== "producao";
+
+  let html = `<table><thead><tr><th>Item / Lote</th><th class="num">Quantidade</th><th class="num">Custo médio</th>`
+    + (podeExcluir ? `<th class="num">Ações</th>` : ``) + `</tr></thead><tbody>`;
   for (const item of itensFiltrados) {
     const qtd = saldos.get(item.id) || 0;
     const custoTexto = item.custo_medio !== null && item.custo_medio !== undefined
@@ -585,7 +601,13 @@ function desenharMateriaPrima(filtro) {
     const nomeItemHtml = papelAtual === "producao"
       ? item.nome
       : `<span class="texto-editavel" data-acao="editar-nome-item" data-item-id="${item.id}" title="Clique pra corrigir o nome">${item.nome} ✎</span>`;
-    html += `<tr><td>${nomeItemHtml}</td><td class="num">${celulaSelo(qtd)}</td><td class="num">${custoTexto}</td></tr>`;
+    const botaoExcluirHtml = podeExcluir
+      ? (qtd === 0
+          ? `<button type="button" class="botao-excluir-item" data-acao="excluir-item" data-item-id="${item.id}" data-item-nome="${item.nome}" title="Excluir este item">🗑️</button>`
+          : `<span title="Só é possível excluir um item sem saldo" style="color:var(--texto-suave)">—</span>`)
+      : ``;
+    html += `<tr><td>${nomeItemHtml}</td><td class="num">${celulaSelo(qtd)}</td><td class="num">${custoTexto}</td>`
+      + (podeExcluir ? `<td class="num">${botaoExcluirHtml}</td>` : ``) + `</tr>`;
 
     // sub-linhas: um lote pode ter mais de uma embalagem (ex: mesmo lote
     // com tambores de 190kg E sacos de 25kg) - cada combinacao vira uma
@@ -601,8 +623,7 @@ function desenharMateriaPrima(filtro) {
       html += `<tr class="linha-lote">
         <td class="celula-lote">${textoLoteHtml} — ${lote.tipo_embalagem} ${Number(lote.capacidade_kg)}kg</td>
         <td class="num">${lote.quantidade_unidades} un. (${Number(lote.peso_total_kg).toLocaleString("pt-BR")} kg)</td>
-        <td class="num">—</td>
-      </tr>`;
+        <td class="num">—</td>` + (podeExcluir ? `<td class="num">—</td>` : ``) + `</tr>`;
     }
   }
   html += `</tbody></table>`;
@@ -613,6 +634,9 @@ function desenharMateriaPrima(filtro) {
   });
   alvo.querySelectorAll('[data-acao="editar-lote"]').forEach(span => {
     span.addEventListener("click", () => editarLote(Number(span.dataset.itemId), span.dataset.loteAtual));
+  });
+  alvo.querySelectorAll('[data-acao="excluir-item"]').forEach(botao => {
+    botao.addEventListener("click", () => excluirItemMateriaPrima(Number(botao.dataset.itemId), botao.dataset.itemNome));
   });
 }
 
@@ -688,6 +712,37 @@ async function editarLote(itemId, loteAtual) {
     mostrarMensagemFlutuante("Lote corrigido com sucesso.", "sucesso");
   } catch (erro) {
     mostrarMensagemFlutuante(`Não consegui corrigir: ${erro.message}`, "erro");
+  }
+}
+
+// exclui o CADASTRO de um item de materia-prima (nao um lote - isso e'
+// definitivo). So' oferecido na tela quando o item esta com saldo zerado;
+// mesmo assim, se ainda existir algum lote ou movimentacao antiga
+// referenciando esse item no banco, o Postgres recusa a exclusao (chave
+// estrangeira) - nesse caso mostramos uma mensagem explicando, em vez de
+// deixar a tela quebrar.
+async function excluirItemMateriaPrima(itemId, itemNome) {
+  const confirmou = window.confirm(
+    `Excluir o item "${itemNome}"?\n\nEssa ação não pode ser desfeita.`
+  );
+  if (!confirmou) return;
+
+  try {
+    const removidos = await chamarSupabase(`itens_materia_prima?id=eq.${itemId}`, {
+      method: "DELETE",
+      headers: { "Prefer": "return=representation" },
+    });
+    if (!removidos || removidos.length === 0) {
+      mostrarMensagemFlutuante("Não encontrei esse item pra excluir (id não bateu com nada no banco).", "erro");
+      return;
+    }
+    await carregarMateriaPrima();
+    mostrarMensagemFlutuante(`"${itemNome}" foi excluído.`, "sucesso");
+  } catch (erro) {
+    const mensagemAmigavel = /foreign key|violates/i.test(erro.message)
+      ? `Não é possível excluir "${itemNome}": ele ainda está referenciado em algum lote ou movimentação de estoque antiga.`
+      : `Não consegui excluir: ${erro.message}`;
+    mostrarMensagemFlutuante(mensagemAmigavel, "erro");
   }
 }
 
