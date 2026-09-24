@@ -1,22 +1,26 @@
 // menu.js
-// Menu lateral (m\u00f3dulos) + submenu horizontal (p\u00e1ginas dentro do m\u00f3dulo),
-// compartilhado por todas as p\u00e1ginas internas do DRAM Web.
+// Menu lateral (modulos) + submenu horizontal (paginas dentro do modulo),
+// compartilhado por todas as paginas internas do DRAM Web.
 //
-// Sistema de papeis: cada login tem um papel (admin/gerencia/producao),
-// descoberto a partir do e-mail da sessao. Cada modulo (e, quando precisa
-// de granularidade maior, cada item dentro do modulo) declara em
-// "papeis" quem pode acessar - sem "papeis", todo mundo logado acessa.
-// Um item sem "papeis" proprio herda o papeis do modulo.
+// Sistema de papeis: cada login tem um papel (admin/gerencia/producao/
+// envase), descoberto a partir do e-mail da sessao. Cada modulo (e,
+// quando precisa de granularidade maior, cada item dentro do modulo)
+// declara em "papeis" quem pode acessar - sem "papeis", todo mundo
+// logado acessa. Um item sem "papeis" proprio herda o papeis do modulo.
 
 (function () {
   var EMAIL_ADMIN = "raphael@arcoirisalimentos.com.br";
   var EMAILS_GERENCIA = ["fabrica@arcoirisalimentos.com.br", "contato@arcoirisalimentos.com.br"];
+  var EMAIL_ENVASE = "envase@dram.interno";
+  var EMAIL_EMPACOTAMENTO = "empacotamento@dram.interno";
   var DOMINIO_PRODUCAO = "@dram.interno"; // logins de producao usam esse dominio interno, nao e' e-mail de verdade
 
   function obterPapel(email) {
     if (!email) return null;
     if (email === EMAIL_ADMIN) return "admin";
     if (EMAILS_GERENCIA.indexOf(email) !== -1) return "gerencia";
+    if (email === EMAIL_ENVASE) return "envase";
+    if (email === EMAIL_EMPACOTAMENTO) return "empacotamento";
     if (email.indexOf(DOMINIO_PRODUCAO) !== -1) return "producao";
     return "gerencia"; // fallback seguro pra login nao mapeado
   }
@@ -32,36 +36,42 @@
 
   var MODULOS = [
     {
-      chave: "vendas", nome: "Vendas", emoji: "\ud83e\uddfe", ativo: true, papeis: ["admin", "gerencia"],
+      chave: "vendas", nome: "Vendas", emoji: "🧾", ativo: true, papeis: ["admin", "gerencia"],
       itens: [
         { nome: "Pedidos", href: "pedidos.html" },
         { nome: "Novo Pedido", href: "novo-pedido.html" },
-        { nome: "Opera\u00e7\u00f5es Especiais", href: "operacoes-especiais.html" },
+        { nome: "Operações Especiais", href: "operacoes-especiais.html" },
       ],
     },
     {
-      chave: "cadastros", nome: "Cadastros", emoji: "\ud83d\udc64", ativo: true, papeis: ["admin", "gerencia"],
+      chave: "cadastros", nome: "Cadastros", emoji: "👤", ativo: true, papeis: ["admin", "gerencia"],
       itens: [
         { nome: "Clientes", href: "clientes.html" },
         { nome: "Produtos", href: "produtos.html" },
-        { nome: "Tabelas de Pre\u00e7o", href: "tabelas-preco.html" },
+        { nome: "Tabelas de Preço", href: "tabelas-preco.html" },
         { nome: "Transportadoras", href: "transportadoras.html" },
         { nome: "Vendedores", href: "vendedores.html" },
       ],
     },
     {
-      chave: "estoque", nome: "Estoque", emoji: "\ud83d\udce6", ativo: true, papeis: ["admin", "gerencia", "producao"],
+      chave: "estoque", nome: "Estoque", emoji: "📦", ativo: true, papeis: ["admin", "gerencia", "producao"],
       itens: [
         { nome: "Estoque", href: "estoque.html" },
         { nome: "Ajustar Estoque", href: "ajustar-estoque.html", papeis: ["admin", "gerencia"] },
       ],
     },
     {
-      chave: "producao", nome: "Produ\u00e7\u00e3o", emoji: "\ud83c\udfed", ativo: true, papeis: ["admin", "gerencia", "producao"],
+      chave: "producao", nome: "Produção", emoji: "🏭", ativo: true, papeis: ["admin", "gerencia", "producao"],
       itens: [
         { nome: "Apontamento", href: "apontamento-producao.html" },
-        { nome: "Di\u00e1rio", href: "diario-producao.html" },
-        { nome: "Aprova\u00e7\u00e3o", href: "aprovacao-producao.html", papeis: ["admin", "gerencia"] },
+        { nome: "Diário", href: "diario-producao.html" },
+        { nome: "Aprovação", href: "aprovacao-producao.html", papeis: ["admin", "gerencia"] },
+      ],
+    },
+    {
+      chave: "envase", nome: "Envase", emoji: "🪣", ativo: true, papeis: ["admin", "gerencia", "envase"],
+      itens: [
+        { nome: "Apontamento", href: "apontamento-envase.html" },
       ],
     },
   ];
