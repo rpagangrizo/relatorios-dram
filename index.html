@@ -125,12 +125,16 @@ const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
 const CHAVE_LOCAL = "dram_auth";
 const EMAIL_ADMIN = "raphael@arcoirisalimentos.com.br";
 const EMAILS_GERENCIA = ["fabrica@arcoirisalimentos.com.br", "contato@arcoirisalimentos.com.br"];
+const EMAIL_ENVASE = "envase@dram.interno";
+const EMAIL_EMPACOTAMENTO = "empacotamento@dram.interno";
 const DOMINIO_PRODUCAO = "@dram.interno"; // logins de producao usam esse dominio interno, nao e' e-mail de verdade
 
 function obterPapel(email) {
   if (!email) return null;
   if (email === EMAIL_ADMIN) return "admin";
   if (EMAILS_GERENCIA.includes(email)) return "gerencia";
+  if (email === EMAIL_ENVASE) return "envase";
+  if (email === EMAIL_EMPACOTAMENTO) return "empacotamento";
   if (email.includes(DOMINIO_PRODUCAO)) return "producao";
   return "gerencia"; // fallback seguro pra login nao mapeado
 }
@@ -142,8 +146,9 @@ function obterPapel(email) {
 const MODULOS = [
   { nome: "Vendas", emoji: "🧾", href: "pedidos.html", papeis: ["admin", "gerencia"] },
   { nome: "Cadastros", emoji: "👤", href: "clientes.html", papeis: ["admin", "gerencia"] },
-  { nome: "Estoque", emoji: "📦", href: "estoque.html" },
-  { nome: "Produção", emoji: "🏭", href: "apontamento-producao.html" },
+  { nome: "Estoque", emoji: "📦", href: "estoque.html", papeis: ["admin", "gerencia", "producao"] },
+  { nome: "Produção", emoji: "🏭", href: "apontamento-producao.html", papeis: ["admin", "gerencia", "producao"] },
+  { nome: "Envase", emoji: "🧴", href: "apontamento-envase.html", papeis: ["admin", "gerencia", "envase"] },
 ];
 
 function salvarSessao(dados) {
