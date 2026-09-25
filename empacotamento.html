@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DRAM Web - Empacotamento</title>
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<meta name="theme-color" content="#1B4F72">
+<script>
+  (function verificarLogin() {
+    try {
+      var sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+      if (!sessao || sessao.expira_em <= Date.now()) { window.location.href = "index.html"; }
+    } catch (erro) { window.location.href = "index.html"; }
+  })();
+</script>
+<style>
+  :root {
+    --azul: #1B4F72; --azul-claro: #EAF1F6; --laranja: #D9662F; --laranja-escuro: #B84F1F;
+    --fundo: #EEF2F4; --papel: #FFFFFF; --texto: #1E2328; --texto-suave: #5C6870;
+    --linha: #DCE3E7; --verde: #2F8F4E; --vermelho: #C0392B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--fundo); color: var(--texto);
+    font-family: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  header { background: var(--azul); color: #fff; padding: 18px 20px 22px; display: flex; align-items: center; gap: 14px; }
+  header .logo-caixa { background: #fff; border-radius: 8px; padding: 5px 10px; display: inline-flex; align-items: center; }
+  header .logo-caixa img { height: 24px; display: block; }
+  header .titulos h1 { font-size: 19px; font-weight: 700; margin: 0; }
+  header .titulos p { margin: 2px 0 0; font-size: 12.5px; color: #C9DCEA; }
+  main { max-width: 520px; margin: 0 auto; padding: 18px 16px 60px; }
+
+  .cartao { background: var(--papel); border-radius: 14px; border: 1px solid var(--linha); padding: 20px;
+    box-shadow: 0 1px 3px rgba(20,30,40,0.04); }
+  .campo { margin-bottom: 16px; position: relative; }
+  .campo label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--texto-suave); margin-bottom: 6px; font-weight: 600; }
+  .campo input, .campo select {
+    width: 100%; padding: 13px 14px; border-radius: 9px; border: 1.5px solid var(--linha);
+    font-size: 15px; color: var(--texto); background: #fff;
+  }
+  .campo input:focus, .campo select:focus { outline: none; border-color: var(--azul); }
+  .campo .dica { margin-top: 5px; font-size: 12px; color: var(--texto-suave); }
+
+  .lista-produtos { max-height: 220px; overflow-y: auto; margin-top: 6px; border-radius: 9px;
+    border: 1px solid var(--linha); position: absolute; z-index: 5; left: 0; right: 0; background: #fff;
+    box-shadow: 0 6px 18px rgba(20,30,40,0.12); display: none; }
+  .item-produto { padding: 11px 14px; border-bottom: 1px solid var(--linha); cursor: pointer; font-size: 14px; }
+  .item-produto:last-child { border-bottom: none; }
+  .item-produto:hover { background: #F6F9FA; }
+
+  .item-selecionado { margin-top: 8px; padding: 11px 14px; border-radius: 9px; background: var(--azul-claro);
+    border: 1.5px solid var(--azul); color: var(--azul); font-weight: 700; font-size: 14.5px; display: none; }
+
+  .aviso-sem-lote { margin-top: 8px; padding: 11px 14px; border-radius: 9px; background: #FBE7E4;
+    border: 1.5px solid var(--vermelho); color: var(--vermelho); font-weight: 600; font-size: 13.5px; display: none; }
+
+  .botao { width: 100%; padding: 15px; border-radius: 9px; border: none; background: var(--laranja);
+    color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 4px; }
+  .botao:active { background: var(--laranja-escuro); }
+  .botao:disabled { background: #C9CFD3; cursor: not-allowed; }
+
+  .mensagem { margin-top: 14px; padding: 13px 15px; border-radius: 9px; font-size: 14px; font-weight: 600; display: none; }
+  .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
+  .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+
+  .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
+  <div class="titulos"><h1>Empacotamento</h1><p id="texto-pessoa">Identificando...</p></div>
+</header>
+<script src="menu.js"></script>
+
+<main>
+  <div class="cartao">
+    <div class="campo">
+      <label>O que vai embalar</label>
+      <input type="text" id="campo-busca-item" placeholder="Buscar produto..." autocomplete="off">
+      <div class="lista-produtos" id="lista-itens"></div>
+      <div class="item-selecionado" id="item-selecionado"></div>
+      <div class="aviso-sem-lote" id="aviso-sem-lote"></div>
+    </div>
+
+    <div class="campo" id="campo-lote-wrap" style="display:none">
+      <label>Lote em trânsito (produzido, aguardando embalar)</label>
+      <select id="select-lote"><option value="">Selecione...</option></select>
+    </div>
+
+    <div class="campo" id="campo-lote-livre-wrap" style="display:none">
+      <label>Lote</label>
+      <input type="text" id="campo-lote-livre" placeholder="Ex: 220926-1" autocomplete="off">
+    </div>
+
+    <div class="campo">
+      <label>Quantidade (kg)</label>
+      <input type="number" id="campo-quantidade" min="0.01" step="0.01" placeholder="0">
+      <div class="dica" id="dica-saldo"></div>
+    </div>
+
+    <div class="campo">
+      <label>Em qual estoque</label>
+      <select id="select-deposito"><option value="">Selecione...</option></select>
+    </div>
+
+    <button class="botao" id="botao-registrar" disabled>Registrar</button>
+    <div class="mensagem" id="mensagem"></div>
+  </div>
+
+  <p class="rodape">Powered by DRAM</p>
+</main>
+
+<script>
+const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const CATEGORIA_POLPAS = 1;
+const CATEGORIA_FRUTAS = 2;
+const CATEGORIA_SALGADOS = 3;
+
+async function chamarSupabase(caminho, opcoes = {}) {
+  const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
+    ...opcoes,
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", ...(opcoes.headers || {}) },
+  });
+  if (!resposta.ok) throw new Error(await resposta.text() || `Erro ${resposta.status}`);
+  const texto = await resposta.text();
+  return texto ? JSON.parse(texto) : null;
+}
+
+function lerSessaoDram() {
+  try {
+    const sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
+    return (sessao && sessao.expira_em > Date.now()) ? sessao : null;
+  } catch { return null; }
+}
+const sessaoDram = lerSessaoDram();
+const parametros = new URLSearchParams(window.location.search);
+const pessoa = (sessaoDram && sessaoDram.email) || parametros.get("pessoa") || null;
+document.getElementById("texto-pessoa").textContent = pessoa ? `Lançado por ${pessoa}` : "Identificação não encontrada";
+
+let itensCatalogo = [];
+let depositos = [];
+let itemEscolhido = null;
+let lotesDisponiveis = [];
+let loteEscolhido = null;
+
+async function iniciar() {
+  const [itensResp, depositosResp] = await Promise.all([
+    chamarSupabase("itens?select=id,nome,categoria_produto_id,grupo_sabor,embalagem&order=nome"),
+    chamarSupabase("depositos?select=id,nome&order=id"),
+  ]);
+  itensCatalogo = itensResp;
+  depositos = depositosResp;
+  document.getElementById("select-deposito").innerHTML =
+    '<option value="">Selecione...</option>' + depositos.map(d => `<option value="${d.id}">${d.nome}</option>`).join("");
+}
+
+function desenharListaItens(filtro) {
+  const alvo = document.getElementById("lista-itens");
+  if (!filtro) { alvo.style.display = "none"; alvo.innerHTML = ""; return; }
+  const filtrados = itensCatalogo.filter(i => i.nome.toLowerCase().includes(filtro.toLowerCase()));
+  alvo.innerHTML = filtrados.length === 0
+    ? `<div class="item-produto">Nenhum produto encontrado.</div>`
+    : filtrados.slice(0, 30).map(i => `<div class="item-produto" data-id="${i.id}">${i.nome}</div>`).join("");
+  alvo.querySelectorAll(".item-produto[data-id]").forEach(linha => {
+    linha.addEventListener("click", async () => {
+      itemEscolhido = itensCatalogo.find(i => i.id === Number(linha.dataset.id));
+      document.getElementById("campo-busca-item").value = "";
+      alvo.style.display = "none";
+      const caixaSelecionada = document.getElementById("item-selecionado");
+      caixaSelecionada.textContent = itemEscolhido.nome;
+      caixaSelecionada.style.display = "block";
+      await ajustarFluxoPorCategoria();
+      atualizarBotao();
+    });
+  });
+  alvo.style.display = "block";
+}
+document.getElementById("campo-busca-item").addEventListener("input", (e) => {
+  itemEscolhido = null;
+  document.getElementById("item-selecionado").style.display = "none";
+  document.getElementById("aviso-sem-lote").style.display = "none";
+  document.getElementById("campo-lote-wrap").style.display = "none";
+  document.getElementById("campo-lote-livre-wrap").style.display = "none";
+  desenharListaItens(e.target.value);
+  atualizarBotao();
+});
+document.addEventListener("click", (evento) => {
+  const campo = document.getElementById("campo-busca-item");
+  const lista = document.getElementById("lista-itens");
+  if (!campo.contains(evento.target) && !lista.contains(evento.target)) lista.style.display = "none";
+});
+
+function ehFruta() { return itemEscolhido && itemEscolhido.categoria_produto_id === CATEGORIA_FRUTAS; }
+function ehPolpa() { return itemEscolhido && itemEscolhido.categoria_produto_id === CATEGORIA_POLPAS; }
+
+async function ajustarFluxoPorCategoria() {
+  const wrapLoteEmTransito = document.getElementById("campo-lote-wrap");
+  const wrapLoteLivre = document.getElementById("campo-lote-livre-wrap");
+  const aviso = document.getElementById("aviso-sem-lote");
+  loteEscolhido = null;
+  document.getElementById("dica-saldo").textContent = "";
+
+  if (ehFruta()) {
+    // fruta nao passa por producao - lote livre, sem trava de saldo
+    wrapLoteEmTransito.style.display = "none";
+    wrapLoteLivre.style.display = "block";
+    aviso.style.display = "none";
+    return;
+  }
+
+  wrapLoteLivre.style.display = "none";
+  wrapLoteEmTransito.style.display = "block";
+
+  let consulta;
+  if (ehPolpa()) {
+    // polpa: mesmo item do inicio ao fim, filtra so por ele
+    consulta = `saldo_transito_lotes?item_producao_id=eq.${itemEscolhido.id}&saldo=gt.0&order=lote`;
+  } else {
+    // salgado: item pode mudar (produção genérica -> pacote 1kg/400g),
+    // casa pelo grupo_sabor
+    if (!itemEscolhido.grupo_sabor) {
+      aviso.textContent = 'Esse item não tem "grupo_sabor" cadastrado, então não dá pra achar os lotes em trânsito dele automaticamente. Cadastre o grupo_sabor desse item primeiro.';
+      aviso.style.display = "block";
+      lotesDisponiveis = [];
+      document.getElementById("select-lote").innerHTML = '<option value="">Nenhum lote disponível</option>';
+      return;
+    }
+    consulta = `saldo_transito_lotes?grupo_sabor=eq.${encodeURIComponent(itemEscolhido.grupo_sabor)}&categoria_produto_id=eq.${CATEGORIA_SALGADOS}&saldo=gt.0&order=lote`;
+  }
+
+  try {
+    lotesDisponiveis = await chamarSupabase(consulta);
+  } catch (erro) {
+    lotesDisponiveis = [];
+  }
+
+  if (lotesDisponiveis.length === 0) {
+    aviso.textContent = "Não há lote em trânsito disponível pra esse item no momento.";
+    aviso.style.display = "block";
+    document.getElementById("select-lote").innerHTML = '<option value="">Nenhum lote disponível</option>';
+  } else {
+    aviso.style.display = "none";
+    document.getElementById("select-lote").innerHTML =
+      '<option value="">Selecione...</option>' +
+      lotesDisponiveis.map(l => `<option value="${l.lote}">${l.lote} — restam ${Number(l.saldo).toLocaleString("pt-BR")} kg (${l.item_producao_nome})</option>`).join("");
+  }
+}
+
+document.getElementById("select-lote").addEventListener("change", (e) => {
+  loteEscolhido = lotesDisponiveis.find(l => l.lote === e.target.value) || null;
+  const dica = document.getElementById("dica-saldo");
+  const campoQuantidade = document.getElementById("campo-quantidade");
+  if (loteEscolhido) {
+    dica.textContent = `Saldo disponível nesse lote: ${Number(loteEscolhido.saldo).toLocaleString("pt-BR")} kg`;
+    campoQuantidade.max = loteEscolhido.saldo;
+  } else {
+    dica.textContent = "";
+    campoQuantidade.removeAttribute("max");
+  }
+  atualizarBotao();
+});
+
+function atualizarBotao() {
+  const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
+  const depositoId = document.getElementById("select-deposito").value;
+  let loteOk = false;
+  if (ehFruta()) {
+    loteOk = !!document.getElementById("campo-lote-livre").value.trim();
+  } else {
+    loteOk = !!loteEscolhido && quantidade > 0 && quantidade <= loteEscolhido.saldo + 1e-9;
+  }
+  document.getElementById("botao-registrar").disabled =
+    !itemEscolhido || !(quantidade > 0) || !loteOk || !depositoId || !pessoa;
+}
+document.getElementById("campo-quantidade").addEventListener("input", atualizarBotao);
+document.getElementById("campo-lote-livre").addEventListener("input", atualizarBotao);
+document.getElementById("select-deposito").addEventListener("change", atualizarBotao);
+
+document.getElementById("botao-registrar").addEventListener("click", async () => {
+  const botao = document.getElementById("botao-registrar");
+  const mensagem = document.getElementById("mensagem");
+  const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
+  const depositoId = Number(document.getElementById("select-deposito").value);
+  const nomeItemRegistrado = itemEscolhido.nome;
+  const lote = ehFruta() ? document.getElementById("campo-lote-livre").value.trim() : loteEscolhido.lote;
+
+  if (!ehFruta() && quantidade > loteEscolhido.saldo + 1e-9) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Esse lote só tem ${Number(loteEscolhido.saldo).toLocaleString("pt-BR")} kg em trânsito - não dá pra empacotar ${quantidade} kg.`;
+    return;
+  }
+
+  botao.disabled = true;
+  botao.textContent = "Registrando...";
+  mensagem.className = "mensagem";
+
+  try {
+    await chamarSupabase("apontamentos_empacotamento", {
+      method: "POST",
+      body: JSON.stringify({
+        item_id: itemEscolhido.id, quantidade, lote, deposito_id: depositoId, pessoa, status: "pendente",
+      }),
+    });
+
+    mensagem.className = "mensagem sucesso";
+    mensagem.textContent = `Registrado: ${quantidade} kg de "${nomeItemRegistrado}" (lote ${lote}). Aguardando aprovação.`;
+
+    itemEscolhido = null;
+    loteEscolhido = null;
+    document.getElementById("campo-busca-item").value = "";
+    document.getElementById("item-selecionado").style.display = "none";
+    document.getElementById("aviso-sem-lote").style.display = "none";
+    document.getElementById("campo-lote-wrap").style.display = "none";
+    document.getElementById("campo-lote-livre-wrap").style.display = "none";
+    document.getElementById("campo-lote-livre").value = "";
+    document.getElementById("select-lote").innerHTML = '<option value="">Selecione...</option>';
+    document.getElementById("campo-quantidade").value = "";
+    document.getElementById("campo-quantidade").removeAttribute("max");
+    document.getElementById("dica-saldo").textContent = "";
+    document.getElementById("select-deposito").value = "";
+    atualizarBotao();
+  } catch (erro) {
+    mensagem.className = "mensagem erro";
+    mensagem.textContent = `Não consegui registrar: ${erro.message}`;
+  } finally {
+    botao.textContent = "Registrar";
+    atualizarBotao();
+  }
+});
+
+iniciar();
+</script>
+</body>
+</html>
