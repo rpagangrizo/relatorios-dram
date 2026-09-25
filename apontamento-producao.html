@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DRAM Web - Apontamento de Produção</title>
+<title>DRAM Web - Produção</title>
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="icon-192.png">
 <meta name="theme-color" content="#1B4F72">
@@ -43,6 +43,7 @@
     font-size: 15px; color: var(--texto); background: #fff;
   }
   .campo input:focus, .campo select:focus { outline: none; border-color: var(--azul); }
+  .campo .dica { margin-top: 5px; font-size: 12px; color: var(--texto-suave); }
 
   .lista-produtos { max-height: 220px; overflow-y: auto; margin-top: 6px; border-radius: 9px;
     border: 1px solid var(--linha); position: absolute; z-index: 5; left: 0; right: 0; background: #fff;
@@ -53,6 +54,11 @@
 
   .item-selecionado { margin-top: 8px; padding: 11px 14px; border-radius: 9px; background: var(--azul-claro);
     border: 1.5px solid var(--azul); color: var(--azul); font-weight: 700; font-size: 14.5px; display: none; }
+  .item-selecionado .embalagem { font-weight: 400; font-size: 12.5px; display: block; margin-top: 2px; }
+
+  .bloco-qualidade { display: none; border-top: 1px dashed var(--linha); padding-top: 14px; margin-top: 4px; }
+  .bloco-qualidade .titulo-bloco { font-size: 12px; font-weight: 700; text-transform: uppercase;
+    color: var(--texto-suave); margin: 0 0 12px; letter-spacing: 0.4px; }
 
   .botao { width: 100%; padding: 15px; border-radius: 9px; border: none; background: var(--laranja);
     color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; margin-top: 4px; }
@@ -70,7 +76,7 @@
 
 <header>
   <div class="logo-caixa"><img src="logo.png" alt="Arco Íris" onerror="this.parentElement.style.display='none'"></div>
-  <div class="titulos"><h1>Apontamento de Produção</h1><p id="texto-pessoa">Identificando...</p></div>
+  <div class="titulos"><h1>Produção</h1><p id="texto-pessoa">Identificando...</p></div>
 </header>
 <script src="menu.js"></script>
 
@@ -84,7 +90,7 @@
     </div>
 
     <div class="campo">
-      <label>Quantidade (caixas)</label>
+      <label>Quantidade (kg)</label>
       <input type="number" id="campo-quantidade" min="0.01" step="0.01" placeholder="0">
     </div>
 
@@ -93,9 +99,24 @@
       <input type="text" id="campo-lote" placeholder="Ex: 220926-1" autocomplete="off">
     </div>
 
-    <div class="campo">
-      <label>Em qual estoque</label>
-      <select id="select-deposito"><option value="">Selecione...</option></select>
+    <div class="bloco-qualidade" id="bloco-qualidade">
+      <p class="titulo-bloco">Rastreabilidade (polpa)</p>
+
+      <div class="campo">
+        <label>Cliente (opcional)</label>
+        <input type="text" id="campo-cliente" placeholder="Se já souber o destino" autocomplete="off">
+      </div>
+
+      <div class="campo">
+        <label>Matéria-prima (lote)</label>
+        <input type="text" id="campo-materia-prima-lote" placeholder="Lote da matéria-prima usada" autocomplete="off">
+      </div>
+
+      <div class="campo">
+        <label>°BRIX</label>
+        <input type="number" id="campo-brix" min="0" step="0.1" placeholder="0.0">
+        <div class="dica" id="dica-validade"></div>
+      </div>
     </div>
 
     <button class="botao" id="botao-registrar" disabled>Registrar</button>
@@ -108,6 +129,9 @@
 <script>
 const SUPABASE_URL = "https://ictjslaiumgaiphkcxdx.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Q0mPbsj_qfJ5UqWvvxk2Ww_y2gfm6xX";
+const CATEGORIA_POLPAS = 1;
+const CATEGORIA_FRUTAS = 2;
+const CATEGORIA_SALGADOS = 3;
 
 async function chamarSupabase(caminho, opcoes = {}) {
   const resposta = await fetch(`${SUPABASE_URL}/rest/v1/${caminho}`, {
@@ -119,7 +143,6 @@ async function chamarSupabase(caminho, opcoes = {}) {
   return texto ? JSON.parse(texto) : null;
 }
 
-// --- identificação: sessão de login, senão ?pessoa= na URL ---
 function lerSessaoDram() {
   try {
     const sessao = JSON.parse(localStorage.getItem("dram_auth") || "null");
@@ -132,18 +155,13 @@ const pessoa = (sessaoDram && sessaoDram.email) || parametros.get("pessoa") || n
 document.getElementById("texto-pessoa").textContent = pessoa ? `Lançado por ${pessoa}` : "Identificação não encontrada";
 
 let itensCatalogo = [];
-let depositos = [];
 let itemEscolhido = null;
 
 async function iniciar() {
-  const [itensResp, depositosResp] = await Promise.all([
-    chamarSupabase("itens?select=id,nome&order=nome"),
-    chamarSupabase("depositos?select=id,nome&order=id"),
-  ]);
-  itensCatalogo = itensResp;
-  depositos = depositosResp;
-  document.getElementById("select-deposito").innerHTML =
-    '<option value="">Selecione...</option>' + depositos.map(d => `<option value="${d.id}">${d.nome}</option>`).join("");
+  // só polpa e salgado passam pela Produção - fruta vai direto pro Empacotamento
+  itensCatalogo = await chamarSupabase(
+    `itens?select=id,nome,categoria_produto_id,embalagem&categoria_produto_id=in.(${CATEGORIA_POLPAS},${CATEGORIA_SALGADOS})&order=nome`
+  );
 }
 
 function desenharListaItens(filtro) {
@@ -158,9 +176,7 @@ function desenharListaItens(filtro) {
       itemEscolhido = itensCatalogo.find(i => i.id === Number(linha.dataset.id));
       document.getElementById("campo-busca-item").value = "";
       alvo.style.display = "none";
-      const caixaSelecionada = document.getElementById("item-selecionado");
-      caixaSelecionada.textContent = itemEscolhido.nome;
-      caixaSelecionada.style.display = "block";
+      atualizarItemSelecionado();
       atualizarBotao();
     });
   });
@@ -169,6 +185,7 @@ function desenharListaItens(filtro) {
 document.getElementById("campo-busca-item").addEventListener("input", (e) => {
   itemEscolhido = null;
   document.getElementById("item-selecionado").style.display = "none";
+  document.getElementById("bloco-qualidade").style.display = "none";
   desenharListaItens(e.target.value);
   atualizarBotao();
 });
@@ -178,47 +195,76 @@ document.addEventListener("click", (evento) => {
   if (!campo.contains(evento.target) && !lista.contains(evento.target)) lista.style.display = "none";
 });
 
+function ehPolpa() { return itemEscolhido && itemEscolhido.categoria_produto_id === CATEGORIA_POLPAS; }
+
+function atualizarItemSelecionado() {
+  const caixaSelecionada = document.getElementById("item-selecionado");
+  caixaSelecionada.innerHTML = itemEscolhido.nome
+    + (itemEscolhido.embalagem ? `<span class="embalagem">Embalagem: ${itemEscolhido.embalagem}</span>` : "");
+  caixaSelecionada.style.display = "block";
+
+  const blocoQualidade = document.getElementById("bloco-qualidade");
+  blocoQualidade.style.display = ehPolpa() ? "block" : "none";
+
+  const dicaValidade = document.getElementById("dica-validade");
+  const hoje = new Date();
+  const validade = new Date(hoje);
+  if (ehPolpa()) validade.setFullYear(validade.getFullYear() + 2);
+  else validade.setDate(validade.getDate() + 180);
+  dicaValidade.textContent = `Validade calculada automaticamente: ${validade.toLocaleDateString("pt-BR")}`;
+}
+
 function atualizarBotao() {
   const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
   const lote = document.getElementById("campo-lote").value.trim();
-  const depositoId = document.getElementById("select-deposito").value;
   document.getElementById("botao-registrar").disabled =
-    !itemEscolhido || !(quantidade > 0) || !lote || !depositoId || !pessoa;
+    !itemEscolhido || !(quantidade > 0) || !lote || !pessoa;
 }
 document.getElementById("campo-quantidade").addEventListener("input", atualizarBotao);
 document.getElementById("campo-lote").addEventListener("input", atualizarBotao);
-document.getElementById("select-deposito").addEventListener("change", atualizarBotao);
 
 document.getElementById("botao-registrar").addEventListener("click", async () => {
   const botao = document.getElementById("botao-registrar");
   const mensagem = document.getElementById("mensagem");
   const quantidade = parseFloat(document.getElementById("campo-quantidade").value);
   const lote = document.getElementById("campo-lote").value.trim();
-  const depositoId = Number(document.getElementById("select-deposito").value);
   const nomeItemRegistrado = itemEscolhido.nome;
+
+  const corpo = {
+    item_id: itemEscolhido.id,
+    categoria_produto_id: itemEscolhido.categoria_produto_id,
+    quantidade,
+    lote,
+    pessoa,
+  };
+  if (ehPolpa()) {
+    const cliente = document.getElementById("campo-cliente").value.trim();
+    const materiaPrimaLote = document.getElementById("campo-materia-prima-lote").value.trim();
+    const brixValor = document.getElementById("campo-brix").value;
+    corpo.cliente = cliente || null;
+    corpo.materia_prima_lote = materiaPrimaLote || null;
+    corpo.brix = brixValor !== "" ? parseFloat(brixValor) : null;
+  }
 
   botao.disabled = true;
   botao.textContent = "Registrando...";
   mensagem.className = "mensagem";
 
   try {
-    await chamarSupabase("apontamentos_producao", {
-      method: "POST",
-      body: JSON.stringify({
-        item_id: itemEscolhido.id, quantidade, lote, deposito_id: depositoId, pessoa, status: "pendente",
-      }),
-    });
+    await chamarSupabase("apontamentos_producao", { method: "POST", body: JSON.stringify(corpo) });
 
     mensagem.className = "mensagem sucesso";
-    mensagem.textContent = `Registrado: ${quantidade} cx de "${nomeItemRegistrado}" (lote ${lote}). Aguardando aprovação.`;
+    mensagem.textContent = `Registrado: ${quantidade} kg de "${nomeItemRegistrado}" (lote ${lote}). Disponível pra empacotar.`;
 
-    // limpa tudo, pronta pro proximo apontamento
     itemEscolhido = null;
     document.getElementById("campo-busca-item").value = "";
     document.getElementById("item-selecionado").style.display = "none";
+    document.getElementById("bloco-qualidade").style.display = "none";
     document.getElementById("campo-quantidade").value = "";
     document.getElementById("campo-lote").value = "";
-    document.getElementById("select-deposito").value = "";
+    document.getElementById("campo-cliente").value = "";
+    document.getElementById("campo-materia-prima-lote").value = "";
+    document.getElementById("campo-brix").value = "";
     atualizarBotao();
   } catch (erro) {
     mensagem.className = "mensagem erro";
