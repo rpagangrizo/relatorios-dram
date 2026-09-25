@@ -129,7 +129,7 @@ async function carregar() {
     const [itensResp, depositosResp, pendentesResp] = await Promise.all([
       chamarSupabase("itens?select=id,nome&order=nome"),
       chamarSupabase("depositos?select=id,nome&order=id"),
-      chamarSupabase("apontamentos_producao?status=eq.pendente&select=id,item_id,quantidade,lote,deposito_id,pessoa,criado_em&order=criado_em"),
+      chamarSupabase("apontamentos_empacotamento?status=eq.pendente&select=id,item_id,quantidade,lote,deposito_id,pessoa,criado_em&order=criado_em"),
     ]);
     itensCatalogo = itensResp;
     depositos = depositosResp;
@@ -235,7 +235,7 @@ async function editarDeposito(id) {
 
 async function salvarCampo(id, camposAlterados) {
   try {
-    await chamarSupabase(`apontamentos_producao?id=eq.${id}`, {
+    await chamarSupabase(`apontamentos_empacotamento?id=eq.${id}`, {
       method: "PATCH", body: JSON.stringify(camposAlterados),
     });
     await carregar();
@@ -249,7 +249,7 @@ async function excluirApontamento(id) {
   const apontamento = pendentes.find(p => p.id === id);
   if (!window.confirm(`Excluir esse apontamento (${nomeItem(apontamento.item_id)}, ${apontamento.quantidade} cx)? Essa ação não pode ser desfeita.`)) return;
   try {
-    await chamarSupabase(`apontamentos_producao?id=eq.${id}`, { method: "DELETE" });
+    await chamarSupabase(`apontamentos_empacotamento?id=eq.${id}`, { method: "DELETE" });
     await carregar();
     mostrarMensagem("Apontamento excluído.", "sucesso");
   } catch (erro) {
@@ -265,7 +265,7 @@ document.getElementById("botao-aprovar-tudo").addEventListener("click", async ()
   botao.disabled = true;
   botao.textContent = "Aprovando...";
   try {
-    const resultado = await chamarSupabase("rpc/aprovar_apontamentos_producao", {
+    const resultado = await chamarSupabase("rpc/aprovar_apontamentos_empacotamento", {
       method: "POST", body: JSON.stringify({ p_aprovador: pessoa }),
     });
     mostrarMensagem(`${resultado} apontamento(s) aprovado(s) — já entraram no estoque.`, "sucesso");
