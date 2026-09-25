@@ -132,7 +132,7 @@ async function carregar() {
     const [itensResp, apontamentosResp] = await Promise.all([
       chamarSupabase("itens?select=id,nome&order=nome"),
       chamarSupabase(
-        `apontamentos_producao?status=eq.aprovado&select=item_id,quantidade,lote,criado_em` +
+        `apontamentos_empacotamento?status=eq.aprovado&select=item_id,quantidade,lote,criado_em` +
         `&criado_em=gte.${inicioMes}&criado_em=lt.${inicioProximoMes}&order=criado_em.desc`
       ),
     ]);
