@@ -65,6 +65,7 @@
       itens: [
         { nome: "Produção", href: "apontamento-producao.html" },
         { nome: "Empacotamento", href: "empacotamento.html" },
+        { nome: "Em Trânsito", href: "em-transito-producao.html" },
         { nome: "Diário", href: "diario-producao.html" },
         { nome: "Aprovação", href: "aprovacao-producao.html", papeis: ["admin", "gerencia"] },
       ],
