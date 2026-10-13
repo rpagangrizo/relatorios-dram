@@ -150,6 +150,7 @@
   .mensagem { margin-top: 14px; padding: 13px 15px; border-radius: 9px; font-size: 14px; font-weight: 600; display: none; }
   .mensagem.sucesso { display: block; background: #E4F3E8; color: var(--verde); }
   .mensagem.erro { display: block; background: #FBE7E4; color: var(--vermelho); }
+  .mensagem.aviso { display: block; background: #FFF3E0; color: #92600C; }
 
   .aviso-pessoa { background: #FFF3E0; color: #92600C; border-radius: 9px; padding: 11px 14px; font-size: 13.5px; margin-bottom: 14px; }
   .opcao-checkbox { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 600; color: var(--texto); cursor: pointer; }
@@ -402,20 +403,69 @@ function obterSessao() {
   }
 }
 
-async function chamarFunction(nome, corpo) {
+// chamada a uma Edge Function, agora com limite de tempo (a pagina nao fica
+// pendurada se o servidor nao responder) e tolerante a resposta que nao e'
+// JSON (pagina de erro 502/504 etc) ou a sessao expirada (401) - nesses
+// casos devolve ok=false com uma mensagem legivel em dados.erro.
+async function chamarFunction(nome, corpo, timeoutMs = 60000) {
   const sessao = obterSessao();
-  const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
-      "apikey": SUPABASE_KEY,
-    },
-    body: JSON.stringify(corpo),
-  });
-  const dados = await resposta.json();
-  return { ok: resposta.ok, dados };
+  const controlador = new AbortController();
+  const timer = setTimeout(() => controlador.abort(), timeoutMs);
+  try {
+    const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
+        "apikey": SUPABASE_KEY,
+      },
+      body: JSON.stringify(corpo),
+      signal: controlador.signal,
+    });
+    let dados;
+    try {
+      dados = await resposta.json();
+    } catch {
+      dados = { erro: `Resposta inesperada do servidor (HTTP ${resposta.status}).` };
+    }
+    if (resposta.status === 401) {
+      dados.erro = "Sessão expirada. Saia do DRAM e entre de novo.";
+    } else if (!resposta.ok && !dados.erro && dados.message) {
+      dados.erro = dados.message;
+    }
+    return { ok: resposta.ok, dados };
+  } catch (erro) {
+    if (erro && erro.name === "AbortError") {
+      throw new Error(`Tempo esgotado (${timeoutMs / 1000}s) esperando a resposta de ${nome}.`);
+    }
+    throw erro;
+  } finally {
+    clearTimeout(timer);
+  }
 }
+
+// --- nivel da mensagem final: "ok" (verde), "aviso" (laranja: algo ainda em
+// andamento) ou "erro" (vermelho: algo NAO saiu e precisa de acao). Antes,
+// uma NF-e que falhou aparecia dentro da caixa verde de sucesso e passava
+// despercebida.
+function pior(nivelA, nivelB) {
+  const ordem = { ok: 0, aviso: 1, erro: 2 };
+  return ordem[nivelB] > ordem[nivelA] ? nivelB : nivelA;
+}
+function classeMensagemPorNivel(nivel) {
+  return nivel === "erro" ? "mensagem erro" : nivel === "aviso" ? "mensagem aviso" : "mensagem sucesso";
+}
+
+// enquanto o pedido esta sendo salvo/a nota emitida, fechar ou recarregar a
+// aba interrompe a emissao no meio (o pedido fica sem nota) - o navegador
+// avisa antes de deixar sair
+let emissaoEmAndamento = false;
+window.addEventListener("beforeunload", (evento) => {
+  if (emissaoEmAndamento) {
+    evento.preventDefault();
+    evento.returnValue = "";
+  }
+});
 
 // depois que um pedido de venda (pago por boleto) e' confirmado, gera o
 // boleto de CADA parcela automaticamente - sem isso, ficaria em aberto
@@ -1251,18 +1301,33 @@ async function emitirNotaFiscalDoPedido(pedidoId, botao) {
     }
 
     if (focusFinal && focusFinal.status === "autorizado") {
-      return { texto: ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`, autorizada: true };
+      return { texto: ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`, autorizada: true, nivel: "ok" };
     } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
       return {
-        texto: ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Pedidos (o boleto sai sozinho assim que a nota autorizar, ou clique em "Verificar status" lá).`,
+        texto: ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — a tela de Pedidos confere sozinha (o boleto sai assim que a nota autorizar).`,
         autorizada: false,
+        nivel: "aviso",
+      };
+    } else if (dados.ja_existe) {
+      return {
+        texto: ` ⏳ Esse pedido já tem uma nota fiscal em andamento — confira na tela de Pedidos.`,
+        autorizada: false,
+        nivel: "aviso",
       };
     } else {
       const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
-      return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Pedidos.`, autorizada: false };
+      return {
+        texto: ` ⚠️ NOTA FISCAL NÃO EMITIDA (${motivo}). O pedido foi salvo — use o botão "Emitir NF-e" ou "Verificar status" na tela de Pedidos.`,
+        autorizada: false,
+        nivel: "erro",
+      };
     }
   } catch (erro) {
-    return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Pedidos.`, autorizada: false };
+    return {
+      texto: ` ⚠️ Sem resposta da emissão da nota fiscal (${erro.message}). O pedido foi salvo, mas a nota PODE não ter sido emitida — confira na tela de Pedidos ("Verificar status" ou "Emitir NF-e").`,
+      autorizada: false,
+      nivel: "erro",
+    };
   }
 }
 
@@ -1282,18 +1347,27 @@ async function emitirNotaEspecialDaOperacao(operacaoId, botao) {
     }
 
     if (focusFinal && focusFinal.status === "autorizado") {
-      return { texto: ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`, autorizada: true };
+      return { texto: ` Nota fiscal nº ${focusFinal.numero || ""} emitida.`, autorizada: true, nivel: "ok" };
     } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
       return {
         texto: ` ⏳ Nota fiscal ainda em processamento pela SEFAZ — confira o status daqui a pouco na tela de Operações Especiais.`,
         autorizada: false,
+        nivel: "aviso",
       };
     } else {
       const motivo = (focusFinal && focusFinal.mensagem_sefaz) || dados.erro || "erro desconhecido";
-      return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${motivo}) — confira na tela de Operações Especiais.`, autorizada: false };
+      return {
+        texto: ` ⚠️ NOTA FISCAL NÃO EMITIDA (${motivo}) — confira na tela de Operações Especiais.`,
+        autorizada: false,
+        nivel: "erro",
+      };
     }
   } catch (erro) {
-    return { texto: ` ⚠️ Não consegui emitir a nota fiscal (${erro.message}) — confira na tela de Operações Especiais.`, autorizada: false };
+    return {
+      texto: ` ⚠️ Sem resposta da emissão da nota fiscal (${erro.message}). A nota PODE não ter sido emitida — confira na tela de Operações Especiais.`,
+      autorizada: false,
+      nivel: "erro",
+    };
   }
 }
 
@@ -1303,6 +1377,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
   botao.disabled = true;
   botao.textContent = "Salvando...";
   mensagem.className = "mensagem";
+  emissaoEmAndamento = true;
 
   try {
     let resultadoId;
@@ -1366,11 +1441,13 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       });
 
       let textoNota = "";
+      let nivelMensagem = "ok";
       let notaAutorizada = !document.getElementById("campo-emite-nota").checked; // sem nota marcada, nada bloqueia o boleto
       if (document.getElementById("campo-emite-nota").checked) {
         const resultadoNota = await emitirNotaFiscalDoPedido(resultadoId, botao);
         textoNota = resultadoNota.texto;
         notaAutorizada = resultadoNota.autorizada;
+        nivelMensagem = resultadoNota.nivel;
       }
 
       let textoBoleto = "";
@@ -1379,7 +1456,8 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         // espera) - NAO tenta o boleto agora, porque ele so' ia falhar com
         // "nota nao autorizada ainda". O botao "Verificar status" na tela
         // de Pedidos gera o boleto sozinho assim que a nota autorizar.
-        textoBoleto = ` ⏳ Boleto será gerado assim que a nota autorizar (confira/clique "Verificar status" na tela de Pedidos).`;
+        textoBoleto = ` ⏳ Boleto será gerado assim que a nota autorizar (a tela de Pedidos confere sozinha, ou clique "Verificar status").`;
+        nivelMensagem = pior(nivelMensagem, "aviso");
       } else if (ehBoleto) {
         botao.textContent = "Gerando boleto(s)...";
         const resultadosBoletos = await gerarBoletosDoPedido(resultadoId);
@@ -1390,10 +1468,11 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
           textoBoleto = ` Boleto${resultadosBoletos.length > 1 ? "s" : ""} gerado${resultadosBoletos.length > 1 ? "s" : ""} com sucesso.`;
         } else {
           textoBoleto = ` ⚠️ ${falhas.length} de ${resultadosBoletos.length} boleto(s) falharam (parcela ${falhas.map(f => f.numero_parcela).join(", ")}) — confira na tela de Pedidos.`;
+          nivelMensagem = pior(nivelMensagem, "erro");
         }
       }
 
-      mensagem.className = "mensagem sucesso";
+      mensagem.className = classeMensagemPorNivel(nivelMensagem);
       mensagem.innerHTML = `Pedido nº ${resultadoId} confirmado!${textoNota}${textoBoleto} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
 
     } else if (tipoOperacao === "bonificacao") {
@@ -1409,9 +1488,10 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       });
 
       // bonificacao sempre emite nota - sem checkbox, sem forma de pagamento/boleto
-      const textoNotaBonificacao = (await emitirNotaFiscalDoPedido(resultadoId, botao)).texto;
+      const resultadoBonificacao = await emitirNotaFiscalDoPedido(resultadoId, botao);
+      const textoNotaBonificacao = resultadoBonificacao.texto;
 
-      mensagem.className = "mensagem sucesso";
+      mensagem.className = classeMensagemPorNivel(resultadoBonificacao.nivel);
       mensagem.innerHTML = `Bonificação nº ${resultadoId} confirmada!${textoNotaBonificacao} <a class="link-discreto" href="recibo-pedido.html?pedido=${resultadoId}" target="_blank">Ver / Imprimir recibo</a>`;
 
     } else if (tipoOperacao === "comodato" || tipoOperacao === "devolucao_comodato") {
@@ -1434,9 +1514,10 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       });
 
       // comodato/devolucao SEMPRE emite nota - sem checkbox, direto
-      const textoNotaEspecial = (await emitirNotaEspecialDaOperacao(resultadoId, botao)).texto;
+      const resultadoEspecial = await emitirNotaEspecialDaOperacao(resultadoId, botao);
+      const textoNotaEspecial = resultadoEspecial.texto;
 
-      mensagem.className = "mensagem sucesso";
+      mensagem.className = classeMensagemPorNivel(resultadoEspecial.nivel);
       mensagem.textContent = `${tipoOperacao === "comodato" ? "Comodato" : "Devolução de comodato"} nº ${resultadoId} registrado(a) com sucesso.${textoNotaEspecial}`;
 
     } else if (tipoOperacao === "transferencia") {
@@ -1465,13 +1546,21 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
       });
 
       let textoNotaTransferencia = "";
+      let nivelTransferencia = "ok";
       if (precisaNota) {
-        textoNotaTransferencia = (await emitirNotaEspecialDaOperacao(resultadoId, botao)).texto;
+        const resultadoTransferencia = await emitirNotaEspecialDaOperacao(resultadoId, botao);
+        textoNotaTransferencia = resultadoTransferencia.texto;
+        nivelTransferencia = resultadoTransferencia.nivel;
       }
 
-      mensagem.className = "mensagem sucesso";
+      mensagem.className = classeMensagemPorNivel(nivelTransferencia);
       mensagem.textContent = `Transferência nº ${resultadoId} registrada com sucesso.` +
         (precisaNota ? textoNotaTransferencia : " Sem necessidade de nota (só entre depósitos da Matriz).");
+    }
+
+    // aviso/erro ficam bem a vista (o formulario e' limpo logo abaixo)
+    if (mensagem.className !== "mensagem sucesso") {
+      mensagem.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 
     itensPedido = [];
@@ -1512,6 +1601,7 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     mensagem.className = "mensagem erro";
     mensagem.textContent = `Não consegui confirmar: ${erro.message}`;
   } finally {
+    emissaoEmAndamento = false;
     botao.textContent = "Confirmar Pedido";
     atualizarBotaoConfirmar();
   }
