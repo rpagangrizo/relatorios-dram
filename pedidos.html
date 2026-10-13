@@ -72,6 +72,7 @@
     font-size: 11.5px; font-weight: 700; cursor: pointer; color: var(--azul); text-decoration: none; white-space: nowrap;
   }
   .botao-nf.perigo { border-color: #E5B4AC; color: #C0392B; }
+  .botao-nf.destaque { border-color: var(--laranja); color: var(--laranja); }
   .botao-nf:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
@@ -166,19 +167,59 @@ function obterSessao() {
   }
 }
 
-async function chamarFunction(nome, corpo) {
+// chamada a uma Edge Function, agora com limite de tempo (a pagina nao fica
+// pendurada se o servidor nao responder) e tolerante a resposta que nao e'
+// JSON (pagina de erro 502/504 etc) ou a sessao expirada (401) - nesses
+// casos devolve ok=false com uma mensagem legivel em dados.erro.
+async function chamarFunction(nome, corpo, timeoutMs = 60000) {
   const sessao = obterSessao();
-  const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
-      "apikey": SUPABASE_KEY,
-    },
-    body: JSON.stringify(corpo),
-  });
-  const dados = await resposta.json();
-  return { ok: resposta.ok, dados };
+  const controlador = new AbortController();
+  const timer = setTimeout(() => controlador.abort(), timeoutMs);
+  try {
+    const resposta = await fetch(`${FUNCTIONS_URL}/${nome}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${sessao ? sessao.access_token : SUPABASE_KEY}`,
+        "apikey": SUPABASE_KEY,
+      },
+      body: JSON.stringify(corpo),
+      signal: controlador.signal,
+    });
+    let dados;
+    try {
+      dados = await resposta.json();
+    } catch {
+      dados = { erro: `Resposta inesperada do servidor (HTTP ${resposta.status}).` };
+    }
+    if (resposta.status === 401) {
+      dados.erro = "Sessão expirada. Saia do DRAM e entre de novo.";
+    } else if (!resposta.ok && !dados.erro && dados.message) {
+      dados.erro = dados.message;
+    }
+    return { ok: resposta.ok, dados };
+  } catch (erro) {
+    if (erro && erro.name === "AbortError") {
+      throw new Error(`Tempo esgotado (${timeoutMs / 1000}s) esperando a resposta de ${nome}.`);
+    }
+    throw erro;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function escaparHtml(texto) {
+  return String(texto == null ? "" : texto)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// "agora", "7 min", "2h" - ha' quanto tempo a nota foi registrada
+function tempoDecorrido(iso) {
+  if (!iso) return "";
+  const minutos = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000));
+  if (minutos < 1) return "agora";
+  if (minutos < 60) return `${minutos} min`;
+  return `${Math.floor(minutos / 60)}h${String(minutos % 60).padStart(2, "0")}`;
 }
 
 // gera o boleto de cada parcela do pedido que ainda nao tenha um boleto
@@ -214,8 +255,7 @@ async function gerarBoletosSeNecessario(pedidoId) {
 
 // consulta de novo o status da nota na Focus/SEFAZ (NUNCA reemite - so'
 // chama consultar-nota-fiscal, que so' consulta e grava o que encontrar).
-// Usada tanto pra nota ainda "processando" quanto pra nota com erro, pra
-// saber se algo mudou (ex: voce corrigiu o cadastro e quer conferir).
+// Usada pra nota "processando", "enviando" ou com falha de envio.
 async function verificarStatusNotaDoPedido(pedidoId, botao) {
   botao.disabled = true;
   botao.textContent = "Verificando...";
@@ -223,6 +263,10 @@ async function verificarStatusNotaDoPedido(pedidoId, botao) {
     const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId });
     if (!ok && dados.erro) {
       alert(`Não consegui verificar: ${dados.erro}`);
+    } else if (ok && dados.nao_encontrada && dados.mensagem) {
+      // a Focus nao conhece a nota: ou o envio e' recente (aguarde), ou foi
+      // marcada como "nao_enviada" (ai' o botao vira "Emitir NF-e")
+      alert(dados.mensagem);
     }
     // se a nota acabou de autorizar agora, aproveita e ja' gera o(s)
     // boleto(s) pendente(s) desse pedido - fecha o ciclo sem precisar
@@ -238,6 +282,86 @@ async function verificarStatusNotaDoPedido(pedidoId, botao) {
     alert(`Erro: ${erro.message}`);
     botao.disabled = false;
     botao.textContent = "Verificar status";
+  }
+}
+
+// espera a SEFAZ autorizar (consulta algumas vezes, de poucos em poucos
+// segundos) - devolve o retorno da Focus quando sai de "processando", ou
+// null se continuar processando depois das tentativas
+async function aguardarStatusNota(pedidoId, tentativas = 6, intervaloMs = 2500) {
+  for (let i = 0; i < tentativas; i++) {
+    await new Promise((resolver) => setTimeout(resolver, intervaloMs));
+    try {
+      const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId }, 40000);
+      if (ok && dados.focus && dados.focus.status && dados.focus.status !== "processando_autorizacao") {
+        return dados.focus;
+      }
+    } catch {
+      // uma consulta que falha no meio do caminho so' tenta de novo na proxima volta
+    }
+  }
+  return null;
+}
+
+// emite (ou reemite) a NF-e de um pedido direto da tela de Pedidos - cobre
+// o pedido que ficou SEM nota (nunca enviada), com falha de envio ja'
+// confirmada como "nao_enviada", ou rejeitada pela SEFAZ.
+// SEGURANCA contra nota duplicada (NF-e e' documento real): se ja' existe
+// alguma nota registrada pra esse pedido, CONFERE NA FOCUS antes - se a
+// Focus ja' tem a nota (autorizada ou processando), nao emite outra, so'
+// atualiza a tela. Alem disso a propria funcao emitir-nota-fiscal recusa
+// emissao quando ha' nota autorizada/processando/enviando/erro_envio.
+async function emitirNotaDoPedido(pedidoId, botao) {
+  if (!confirm(`Emitir a NF-e do pedido nº ${pedidoId} agora? É uma nota fiscal real.`)) return;
+  const rotuloOriginal = botao.textContent;
+  botao.disabled = true;
+  try {
+    if (notaMaisRecentePorPedido.get(pedidoId)) {
+      botao.textContent = "Conferindo na Focus...";
+      const consulta = await chamarFunction("consultar-nota-fiscal", { pedido_id: pedidoId });
+      const statusNaFocus = consulta.dados && consulta.dados.focus && consulta.dados.focus.status;
+      if (consulta.ok && statusNaFocus && statusNaFocus !== "erro_autorizacao") {
+        // a Focus ja' tem essa nota: NAO emite outra
+        if (statusNaFocus === "autorizado") await gerarBoletosSeNecessario(pedidoId);
+        alert(`Esse pedido já tem uma nota na Focus (status: ${statusNaFocus}). Atualizei a tela e não emiti outra.`);
+        await carregarPedidos();
+        return;
+      }
+      if (consulta.ok && consulta.dados.aguarde) {
+        alert(consulta.dados.mensagem);
+        botao.disabled = false;
+        botao.textContent = rotuloOriginal;
+        return;
+      }
+      if (!consulta.ok) {
+        alert(`Não consegui conferir a nota na Focus (${consulta.dados.erro || "erro desconhecido"}). Por segurança não emiti outra. Tente de novo em instantes.`);
+        botao.disabled = false;
+        botao.textContent = rotuloOriginal;
+        return;
+      }
+    }
+
+    botao.textContent = "Emitindo...";
+    const { ok, dados } = await chamarFunction("emitir-nota-fiscal", { pedido_id: pedidoId });
+    let focusFinal = dados.focus;
+    if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
+      botao.textContent = "Aguardando SEFAZ...";
+      const resultadoEspera = await aguardarStatusNota(pedidoId);
+      if (resultadoEspera) focusFinal = resultadoEspera;
+    }
+
+    if (focusFinal && focusFinal.status === "autorizado") {
+      botao.textContent = "Gerando boleto...";
+      await gerarBoletosSeNecessario(pedidoId);
+    } else if (!ok) {
+      alert(`Não consegui emitir: ${dados.erro || (focusFinal && focusFinal.mensagem_sefaz) || "erro desconhecido"}`);
+    } else if (focusFinal && focusFinal.status === "processando_autorizacao") {
+      alert("A nota foi enviada e a SEFAZ ainda está processando. A tela confere sozinha a cada minuto e gera o boleto quando autorizar.");
+    }
+    await carregarPedidos();
+  } catch (erro) {
+    alert(`Erro: ${erro.message}\n\nA nota pode ter sido enviada mesmo assim. Use "Verificar status" antes de tentar emitir de novo.`);
+    await carregarPedidos();
   }
 }
 
@@ -277,6 +401,31 @@ async function chamarSupabase(caminho) {
   });
   if (!resposta.ok) throw new Error(`Erro ${resposta.status}`);
   return resposta.json();
+}
+
+// o Supabase devolve no maximo 1000 linhas por consulta - sem paginar, o
+// historico maior que isso era cortado em silencio (pedidos/notas/boletos
+// antigos sumiam ou apareciam como "Pendente" sem ser). Esta busca em
+// paginas de 1000 ate' acabar. "caminho" ja' deve ter "?" e um "order".
+async function chamarSupabasePaginado(caminho) {
+  const tamanho = 1000;
+  let todos = [];
+  for (let deslocamento = 0; ; deslocamento += tamanho) {
+    const pagina = await chamarSupabase(`${caminho}&limit=${tamanho}&offset=${deslocamento}`);
+    todos = todos.concat(pagina);
+    if (pagina.length < tamanho) break;
+  }
+  return todos;
+}
+
+// busca por lista de ids em grupos (evita URL gigante)
+async function buscarPorIds(tabela, selecao, ids, tamanho = 150) {
+  let todos = [];
+  for (let i = 0; i < ids.length; i += tamanho) {
+    const grupo = ids.slice(i, i + tamanho);
+    todos = todos.concat(await chamarSupabase(`${tabela}?select=${selecao}&id=in.(${grupo.join(",")})`));
+  }
+  return todos;
 }
 
 function formatarMoeda(valor) {
@@ -357,11 +506,15 @@ function desmarcarBotoesPeriodo() {
   document.querySelectorAll(".botao-periodo").forEach(botao => botao.classList.remove("ativo"));
 }
 
-async function carregarPedidos() {
+// silencioso=true: recarrega por baixo dos panos (sem apagar a tabela nem
+// mostrar "Carregando") - usado pela verificacao automatica das notas
+async function carregarPedidos(silencioso = false) {
   const corpo = document.getElementById("corpo-tabela");
   const mensagem = document.getElementById("area-mensagem");
-  mensagem.innerHTML = `<div class="carregando">Carregando pedidos...</div>`;
-  corpo.innerHTML = "";
+  if (!silencioso) {
+    mensagem.innerHTML = `<div class="carregando">Carregando pedidos...</div>`;
+    corpo.innerHTML = "";
+  }
   try {
     const dataDeIso = dataBrParaIso(document.getElementById("filtro-data-de").value);
     const dataAteIso = dataBrParaIso(document.getElementById("filtro-data-ate").value);
@@ -381,33 +534,101 @@ async function carregarPedidos() {
       filtroData += `&criado_em=lt.${formatarDataISO(proximoDia)}`;
     }
 
-    pedidos = await chamarSupabase(
-      `pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,forma_pagamento,clientes(nome)${filtroData}&order=criado_em.desc`
+    const novosPedidos = await chamarSupabasePaginado(
+      `pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,forma_pagamento,clientes(nome)${filtroData}&order=criado_em.desc,id.desc`
     );
-    // busca TODAS as notas (nao so' autorizado/cancelado) - precisamos da
-    // mais recente de cada pedido pra saber se ainda esta' processando,
-    // se deu erro (e qual), ou se realmente nunca foi tentada
-    const notas = await chamarSupabase("notas_fiscais?select=id,pedido_id,status,resposta_bruta&pedido_id=not.is.null&order=criado_em.desc");
-    notaMaisRecentePorPedido = new Map();
+
+    // notas e boletos so' do periodo carregado: toda nota/boleto nasce
+    // DEPOIS do pedido, entao basta pegar o que foi criado a partir do
+    // pedido mais antigo da lista (ordenada do mais novo pro mais antigo)
+    const menorData = novosPedidos.length > 0 ? novosPedidos[novosPedidos.length - 1].criado_em : null;
+    const filtroPosterior = menorData ? `&criado_em=gte.${encodeURIComponent(menorData)}` : "";
+
+    // busca TODAS as notas do periodo (nao so' autorizado/cancelado) -
+    // precisamos da mais recente de cada pedido pra saber se ainda esta'
+    // processando, se deu erro (e qual), ou se realmente nunca foi tentada
+    const notas = menorData
+      ? await chamarSupabasePaginado(
+          `notas_fiscais?select=id,pedido_id,status,resposta_bruta,criado_em&pedido_id=not.is.null${filtroPosterior}&order=criado_em.desc,id.desc`
+        )
+      : [];
+    const novoMapaNotas = new Map();
     for (const n of notas) {
-      if (!notaMaisRecentePorPedido.has(n.pedido_id)) notaMaisRecentePorPedido.set(n.pedido_id, n);
+      if (!novoMapaNotas.has(n.pedido_id)) novoMapaNotas.set(n.pedido_id, n);
     }
 
-    const [boletosBrutos, parcelas] = await Promise.all([
-      chamarSupabase("boletos?select=id,pedido_id,pedido_parcela_id,url_boleto,url_pdf,status&status=eq.registrado&order=criado_em"),
-      chamarSupabase("pedido_parcelas?select=id,numero_parcela"),
-    ]);
+    const boletosBrutos = menorData
+      ? await chamarSupabasePaginado(
+          `boletos?select=id,pedido_id,pedido_parcela_id,url_boleto,url_pdf,status&status=eq.registrado${filtroPosterior}&order=criado_em,id`
+        )
+      : [];
+    const idsParcelas = [...new Set(boletosBrutos.map(b => b.pedido_parcela_id).filter(Boolean))];
+    const parcelas = await buscarPorIds("pedido_parcelas", "id,numero_parcela", idsParcelas);
     const numeroParcelaPorId = new Map(parcelas.map(p => [p.id, p.numero_parcela]));
-    boletosPorPedido = new Map();
+    const novoMapaBoletos = new Map();
     for (const b of boletosBrutos) {
-      if (!boletosPorPedido.has(b.pedido_id)) boletosPorPedido.set(b.pedido_id, []);
-      boletosPorPedido.get(b.pedido_id).push({ ...b, numero_parcela: numeroParcelaPorId.get(b.pedido_parcela_id) });
+      if (!novoMapaBoletos.has(b.pedido_id)) novoMapaBoletos.set(b.pedido_id, []);
+      novoMapaBoletos.get(b.pedido_id).push({ ...b, numero_parcela: numeroParcelaPorId.get(b.pedido_parcela_id) });
     }
+
+    // so' troca o estado da tela depois que TUDO foi buscado com sucesso
+    pedidos = novosPedidos;
+    notaMaisRecentePorPedido = novoMapaNotas;
+    boletosPorPedido = novoMapaBoletos;
 
     mensagem.innerHTML = "";
     desenharTabela();
+    // a cada carregamento "de verdade" (nao silencioso), logo depois confere
+    // sozinho as notas que ainda estao em andamento
+    if (!silencioso) setTimeout(verificarPendentesAutomaticamente, 1500);
   } catch (erro) {
-    mensagem.innerHTML = `<div class="erro">Não consegui carregar os pedidos: ${erro.message}</div>`;
+    if (silencioso) {
+      console.warn("Recarga silenciosa falhou:", erro);
+    } else {
+      mensagem.innerHTML = `<div class="erro">Não consegui carregar os pedidos: ${erro.message}</div>`;
+    }
+  }
+}
+
+// --- verificacao automatica: toda nota que ainda esta "em andamento"
+// (processando_autorizacao, enviando, erro_envio) e' consultada na Focus
+// sozinha, ao abrir a tela e a cada 1 minuto enquanto ela estiver aberta.
+// Se autorizou, ja' gera o(s) boleto(s). NUNCA reemite - so' consulta. Assim
+// a nota nao fica "Pendente" so' porque ninguem clicou em "Verificar status".
+const STATUS_AUTO_VERIFICAR = new Set(["processando_autorizacao", "enviando", "erro_envio"]);
+let verificandoAutomatico = false;
+
+async function verificarPendentesAutomaticamente() {
+  if (verificandoAutomatico) return;
+  verificandoAutomatico = true;
+  let algumaMudanca = false;
+  try {
+    const alvos = pedidos
+      .filter(p => p.com_nota_fiscal && p.status !== "cancelado")
+      .filter(p => {
+        const nota = notaMaisRecentePorPedido.get(p.id);
+        return nota && STATUS_AUTO_VERIFICAR.has(nota.status);
+      })
+      .slice(0, 15); // no maximo 15 consultas por rodada
+    for (const p of alvos) {
+      const statusAntes = notaMaisRecentePorPedido.get(p.id).status;
+      try {
+        const { ok, dados } = await chamarFunction("consultar-nota-fiscal", { pedido_id: p.id }, 40000);
+        if (!ok) continue;
+        const statusNaFocus = dados.focus && dados.focus.status;
+        if (statusNaFocus === "autorizado") {
+          await gerarBoletosSeNecessario(p.id);
+          algumaMudanca = true;
+        } else if ((statusNaFocus || dados.nota_status) && (statusNaFocus || dados.nota_status) !== statusAntes) {
+          algumaMudanca = true;
+        }
+      } catch {
+        // falhou nessa nota: tenta de novo na proxima rodada
+      }
+    }
+    if (algumaMudanca) await carregarPedidos(true);
+  } finally {
+    verificandoAutomatico = false;
   }
 }
 
@@ -444,6 +665,10 @@ function desenharTabela() {
 
     let notaTexto = "—";
     let botoesNota = "";
+    const botaoEmitir = (rotulo) =>
+      `<button type="button" class="botao-nf destaque" data-pedido="${p.id}" data-acao="emitir-nf">${rotulo}</button>`;
+    const botaoVerificar =
+      `<button type="button" class="botao-nf" data-pedido="${p.id}" data-acao="verificar-status">Verificar status</button>`;
     if (p.com_nota_fiscal) {
       if (statusCancelado) {
         notaTexto = "Cancelada";
@@ -462,21 +687,30 @@ function desenharTabela() {
           botoesNota += `<button type="button" class="botao-nf perigo" data-pedido="${p.id}" data-acao="cancelar-nf">Cancelar</button>`;
         } else if (nota && nota.status === "cancelado") {
           notaTexto = "Cancelada";
-        } else if (nota) {
-          // ja existe pelo menos 1 tentativa (processando, erro ou
-          // erro_autorizacao) - mostra o motivo se for erro, e oferece
-          // "Verificar status" (consulta de novo, nunca reemite)
-          if (nota.status === "erro" || nota.status === "erro_autorizacao") {
-            notaTexto = `Pendente — ${extrairMotivoErroNota(nota.resposta_bruta)}`;
-          } else {
-            notaTexto = "Pendente";
-          }
-          botoesNota += `<button type="button" class="botao-nf" data-pedido="${p.id}" data-acao="verificar-status">Verificar status</button>`;
+        } else if (!nota) {
+          // com_nota_fiscal marcado mas NENHUM registro: a emissao nunca
+          // saiu (aba fechada, falha de rede...) - agora tem botao pra emitir
+          notaTexto = "Pendente — NF-e não emitida";
+          botoesNota += botaoEmitir("Emitir NF-e");
+        } else if (nota.status === "erro" || nota.status === "erro_autorizacao") {
+          // rejeitada (SEFAZ) ou recusada na validacao: mostra o motivo.
+          // "Reemitir" confere na Focus antes, entao nunca duplica.
+          notaTexto = `Pendente — ${escaparHtml(extrairMotivoErroNota(nota.resposta_bruta))}`;
+          botoesNota += botaoEmitir("Reemitir");
+        } else if (nota.status === "nao_enviada") {
+          // a Focus confirmou que nao conhece essa nota: emitir e' seguro
+          notaTexto = "Pendente — não chegou à SEFAZ";
+          botoesNota += botaoEmitir("Emitir NF-e");
+        } else if (nota.status === "erro_envio") {
+          notaTexto = `Pendente — falha ao enviar (${tempoDecorrido(nota.criado_em)})`;
+          botoesNota += botaoVerificar;
+        } else if (nota.status === "enviando") {
+          notaTexto = `Pendente — enviando (${tempoDecorrido(nota.criado_em)})`;
+          botoesNota += botaoVerificar;
         } else {
-          // com_nota_fiscal marcado mas NENHUMA tentativa ainda - nao ha'
-          // nada pra "verificar" (isso seria emitir pela primeira vez,
-          // acao diferente e fora do escopo desse botao)
-          notaTexto = "Pendente";
+          // processando_autorizacao (ou qualquer outro status em andamento)
+          notaTexto = `Pendente — processando (${tempoDecorrido(nota.criado_em)})`;
+          botoesNota += botaoVerificar;
         }
       }
     }
@@ -518,6 +752,12 @@ function desenharTabela() {
       verificarStatusNotaDoPedido(Number(botao.dataset.pedido), botao);
     });
   });
+  corpo.querySelectorAll('[data-acao="emitir-nf"]').forEach(botao => {
+    botao.addEventListener("click", (evento) => {
+      evento.stopPropagation();
+      emitirNotaDoPedido(Number(botao.dataset.pedido), botao);
+    });
+  });
 }
 
 document.querySelectorAll(".botao-periodo").forEach(botao => {
@@ -539,6 +779,11 @@ document.getElementById("botao-limpar").addEventListener("click", () => {
 });
 
 aplicarPeriodoRapido("mes-atual"); // ao abrir a pagina, ja' comeca so' com o mes atual
+
+// enquanto a aba estiver visivel, confere as notas em andamento a cada 1 minuto
+setInterval(() => {
+  if (!document.hidden) verificarPendentesAutomaticamente();
+}, 60000);
 </script>
 </body>
 </html>
