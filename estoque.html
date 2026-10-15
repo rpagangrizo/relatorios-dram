@@ -582,11 +582,10 @@ function desenharMateriaPrima(filtro) {
   }
 
   // botao de excluir so' aparece pra admin/gerencia (producao so' visualiza,
-  // igual as outras acoes desta tela), e so' pra item SEM saldo - excluir
-  // um item que ainda tem estoque nao faz sentido (o saldo ficaria "orfao").
-  // Mesmo assim, quem realmente impede excluir um item que tenha lote ou
-  // movimentacao no historico e' o proprio banco (chave estrangeira) - o
-  // filtro por saldo aqui e' so' pra nao oferecer o botao a toa.
+  // igual as outras acoes desta tela), e so' pra item SEM saldo. Item zerado
+  // pode ser excluido mesmo com lote/movimentacao antiga no historico: a
+  // funcao excluir_item_materia_prima (no banco) apaga tudo junto e
+  // confere o saldo de novo antes, por seguranca.
   const podeExcluir = papelAtual !== "producao";
 
   let html = `<table><thead><tr><th>Item / Lote</th><th class="num">Quantidade</th><th class="num">Custo médio</th>`
@@ -715,34 +714,42 @@ async function editarLote(itemId, loteAtual) {
   }
 }
 
-// exclui o CADASTRO de um item de materia-prima (nao um lote - isso e'
-// definitivo). So' oferecido na tela quando o item esta com saldo zerado;
-// mesmo assim, se ainda existir algum lote ou movimentacao antiga
-// referenciando esse item no banco, o Postgres recusa a exclusao (chave
-// estrangeira) - nesse caso mostramos uma mensagem explicando, em vez de
-// deixar a tela quebrar.
+// exclui um item de materia-prima. So' e' oferecido na tela quando o item
+// esta com saldo zerado. A exclusao e' feita por uma funcao no banco
+// (excluir_item_materia_prima) que CONFERE de novo o saldo (estoque e
+// lotes), e se estiver zerado apaga tudo do item de uma vez - movimentacoes
+// antigas, lotes, saldo e o cadastro - guardando um registro do que foi
+// excluido (tabela itens_materia_prima_excluidos). Se ainda tiver saldo,
+// o banco recusa e nada e' apagado.
 async function excluirItemMateriaPrima(itemId, itemNome) {
   const confirmou = window.confirm(
-    `Excluir o item "${itemNome}"?\n\nEssa ação não pode ser desfeita.`
+    `Excluir o item "${itemNome}"?\n\n` +
+    `Também serão apagados os lotes e o histórico de movimentações dele. ` +
+    `Um registro da exclusão fica guardado no sistema.\n\nEssa ação não pode ser desfeita.`
   );
   if (!confirmou) return;
 
   try {
-    const removidos = await chamarSupabase(`itens_materia_prima?id=eq.${itemId}`, {
-      method: "DELETE",
-      headers: { "Prefer": "return=representation" },
+    const resposta = await chamarSupabase("rpc/excluir_item_materia_prima", {
+      method: "POST",
+      body: JSON.stringify({ p_item_id: itemId, p_pessoa: lerSessaoDram()?.email || null }),
     });
-    if (!removidos || removidos.length === 0) {
-      mostrarMensagemFlutuante("Não encontrei esse item pra excluir (id não bateu com nada no banco).", "erro");
+    if (!resposta || resposta.ok !== true) {
+      if (resposta && resposta.motivo === "com_saldo") {
+        const saldoTexto = Number(resposta.saldo || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+        mostrarMensagemFlutuante(`Não é possível excluir "${itemNome}": ainda tem ${saldoTexto} kg em estoque. Zere o saldo primeiro.`, "erro");
+      } else if (resposta && resposta.motivo === "nao_encontrado") {
+        mostrarMensagemFlutuante("Esse item não existe mais (talvez já tenha sido excluído). Atualizando a lista.", "erro");
+        await carregarMateriaPrima();
+      } else {
+        mostrarMensagemFlutuante("Não consegui excluir: resposta inesperada do sistema.", "erro");
+      }
       return;
     }
     await carregarMateriaPrima();
     mostrarMensagemFlutuante(`"${itemNome}" foi excluído.`, "sucesso");
   } catch (erro) {
-    const mensagemAmigavel = /foreign key|violates/i.test(erro.message)
-      ? `Não é possível excluir "${itemNome}": ele ainda está referenciado em algum lote ou movimentação de estoque antiga.`
-      : `Não consegui excluir: ${erro.message}`;
-    mostrarMensagemFlutuante(mensagemAmigavel, "erro");
+    mostrarMensagemFlutuante(`Não consegui excluir: ${erro.message}`, "erro");
   }
 }
 
