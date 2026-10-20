@@ -75,6 +75,10 @@
   .botao-nf.destaque { border-color: var(--laranja); color: var(--laranja); }
   .botao-nf:disabled { opacity: 0.5; cursor: not-allowed; }
 
+  .faixa-alerta { background: #FFF4E5; border: 1.5px solid var(--laranja); color: #7A3E12; border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; font-size: 13.5px; }
+  .faixa-alerta strong { color: #B24A14; }
+  .faixa-alerta .botao-nf { margin-left: 6px; }
+
   .vazio, .carregando, .erro { padding: 30px 16px; text-align: center; color: var(--texto-suave); font-size: 14px; }
   .erro { color: #C0392B; }
   .rodape { text-align: center; color: #93A0A8; font-size: 11.5px; margin-top: 20px; }
@@ -141,6 +145,8 @@
       <button class="botao" id="botao-limpar">Limpar filtros</button>
     </div>
   </div>
+
+  <div id="faixa-boletos-pendentes"></div>
 
   <div class="cartao-secao">
     <table>
@@ -222,35 +228,142 @@ function tempoDecorrido(iso) {
   return `${Math.floor(minutos / 60)}h${String(minutos % 60).padStart(2, "0")}`;
 }
 
+// --- boletos: conferencia e geracao --------------------------------------
+// Um pedido de boleto so' esta' "completo" quando TODAS as parcelas tem boleto
+// registrado. A geracao e' feita por esta tela (alem da tela de novo pedido)
+// e e' SEGURA contra repeticao: a Edge Function emitir-boleto devolve o boleto
+// existente se a parcela ja' tem um, entao chamar de novo nunca duplica.
+let parcelasPorPedido = new Map();      // pedido_id -> [{id, numero_parcela, status}]
+const boletoEmAndamento = new Set();     // pedidos com geracao em curso (evita chamada dupla na tela)
+const tentativasAutomaticas = new Map(); // pedido_id -> quantas vezes a tela ja' tentou sozinha
+const MAX_TENTATIVAS_AUTOMATICAS = 3;
+const JANELA_AUTOMATICA_HORAS = 48;      // so' gera sozinho pedido recente; mais antigo so' avisa + botao
+const ESPERA_MINIMA_AUTOMATICA_MS = 3 * 60 * 1000; // da' tempo da tela de novo pedido terminar o dela
+
+// parcelas (de pedidos de boleto) que ainda nao tem boleto registrado
+function parcelasSemBoleto(pedidoId) {
+  const registrados = new Set((boletosPorPedido.get(pedidoId) || []).map(b => b.pedido_parcela_id));
+  return (parcelasPorPedido.get(pedidoId) || []).filter(
+    pc => pc.status === "aberto" && !registrados.has(pc.id)
+  );
+}
+
+// o pedido pode receber boleto agora? (boleto, nao cancelado, venda, e - se
+// tem nota fiscal - com nota autorizada, porque o numero do boleto usa o da nota)
+function pedidoPodeGerarBoleto(p) {
+  if (p.forma_pagamento !== "boleto" || p.status === "cancelado") return false;
+  if (p.tipo && p.tipo !== "venda") return false;
+  if (p.com_nota_fiscal) {
+    const nota = notaMaisRecentePorPedido.get(p.id);
+    if (!nota || nota.status !== "autorizado") return false;
+  }
+  return true;
+}
+
 // gera o boleto de cada parcela do pedido que ainda nao tenha um boleto
-// registrado - usado depois que a nota autoriza (na hora, ou tarde, via
-// "Verificar status"), pra fechar o ciclo sozinho sem precisar rodar nada
-// na mao no painel do Supabase. So' mexe em pedido com forma_pagamento
-// boleto - resto (pix, deposito, sem forma) nao tem boleto pra gerar.
+// registrado. Devolve a lista de resultados (com o motivo quando falha) ou
+// null se nao havia nada a fazer.
 async function gerarBoletosSeNecessario(pedidoId) {
   const pedido = pedidos.find(p => p.id === pedidoId);
   if (!pedido || pedido.forma_pagamento !== "boleto") return null;
+  if (boletoEmAndamento.has(pedidoId)) return null;
+  boletoEmAndamento.add(pedidoId);
+  try {
+    // consulta fresca (nao confia so' no que a tela carregou)
+    const parcelas = await chamarSupabase(`pedido_parcelas?pedido_id=eq.${pedidoId}&status=eq.aberto&select=id,numero_parcela&order=numero_parcela`);
+    if (parcelas.length === 0) return null;
 
-  const parcelas = await chamarSupabase(`pedido_parcelas?pedido_id=eq.${pedidoId}&select=id,numero_parcela`);
-  if (parcelas.length === 0) return null;
+    const boletosExistentes = await chamarSupabase(
+      `boletos?pedido_id=eq.${pedidoId}&status=eq.registrado&select=pedido_parcela_id`
+    );
+    const parcelasComBoleto = new Set(boletosExistentes.map(b => b.pedido_parcela_id));
+    const parcelasFaltando = parcelas.filter(p => !parcelasComBoleto.has(p.id));
+    if (parcelasFaltando.length === 0) return null;
 
-  const boletosExistentes = await chamarSupabase(
-    `boletos?pedido_id=eq.${pedidoId}&status=eq.registrado&select=pedido_parcela_id`
-  );
-  const parcelasComBoleto = new Set(boletosExistentes.map(b => b.pedido_parcela_id));
-  const parcelasFaltando = parcelas.filter(p => !parcelasComBoleto.has(p.id));
-  if (parcelasFaltando.length === 0) return null;
-
-  const resultados = [];
-  for (const parcela of parcelasFaltando) {
-    try {
-      const { ok } = await chamarFunction("emitir-boleto", { pedido_parcela_id: parcela.id });
-      resultados.push({ numero_parcela: parcela.numero_parcela, ok });
-    } catch {
-      resultados.push({ numero_parcela: parcela.numero_parcela, ok: false });
+    const resultados = [];
+    for (const parcela of parcelasFaltando) {
+      try {
+        const { ok, dados } = await chamarFunction("emitir-boleto", { pedido_parcela_id: parcela.id });
+        resultados.push({ numero_parcela: parcela.numero_parcela, ok, erro: ok ? null : (dados.erro || JSON.stringify(dados).slice(0, 200)) });
+      } catch (erro) {
+        resultados.push({ numero_parcela: parcela.numero_parcela, ok: false, erro: erro.message });
+      }
     }
+    return resultados;
+  } finally {
+    boletoEmAndamento.delete(pedidoId);
   }
-  return resultados;
+}
+
+// botao "Gerar boleto" da linha / da faixa de aviso
+async function gerarBoletoManual(pedidoId, botao) {
+  const rotulo = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = "Gerando...";
+  try {
+    const resultados = await gerarBoletosSeNecessario(pedidoId);
+    const falhas = (resultados || []).filter(r => !r.ok);
+    if (falhas.length > 0) {
+      alert(`Pedido nº ${pedidoId}: ${falhas.length} boleto(s) não saíram.\n\n` +
+        falhas.map(f => `Parcela ${f.numero_parcela}: ${f.erro}`).join("\n"));
+    }
+    await carregarPedidos(true);
+  } catch (erro) {
+    alert(`Erro ao gerar o boleto: ${erro.message}`);
+    botao.disabled = false;
+    botao.textContent = rotulo;
+  }
+}
+
+// pedidos do periodo carregado que estao sem algum boleto (e podem receber)
+function pedidosComBoletoPendente() {
+  return pedidos.filter(p => pedidoPodeGerarBoleto(p) && parcelasSemBoleto(p.id).length > 0);
+}
+
+// faixa de aviso no topo: nenhum pedido de boleto sem boleto passa despercebido
+function desenharFaixaBoletosPendentes() {
+  const area = document.getElementById("faixa-boletos-pendentes");
+  // pedido com menos de 3 min ainda pode estar sendo finalizado pela tela de novo pedido: nao alarma
+  const pendentes = pedidosComBoletoPendente().filter(
+    p => Date.now() - new Date(p.criado_em).getTime() >= ESPERA_MINIMA_AUTOMATICA_MS
+  );
+  if (pendentes.length === 0) { area.innerHTML = ""; return; }
+  area.innerHTML = `<div class="faixa-alerta">
+    <strong>⚠️ ${pendentes.length} pedido(s) de boleto sem boleto gerado:</strong>
+    ${pendentes.map(p => `Nº ${p.id}<button type="button" class="botao-nf destaque" data-pedido="${p.id}" data-acao="gerar-boleto">Gerar boleto</button>`).join(" &nbsp; ")}
+  </div>`;
+  area.querySelectorAll('[data-acao="gerar-boleto"]').forEach(botao => {
+    botao.addEventListener("click", () => gerarBoletoManual(Number(botao.dataset.pedido), botao));
+  });
+}
+
+// geracao automatica: so' pedido recente (ultimas 48h), com pelo menos 3 min
+// de vida (para nao disputar com a tela de novo pedido), no maximo 3 tentativas
+// por pedido nesta sessao da tela. Pedido mais antigo: so' aviso + botao.
+let conferindoBoletos = false;
+async function conferirBoletosPendentesAutomaticamente() {
+  if (conferindoBoletos) return;
+  conferindoBoletos = true;
+  try {
+    const agora = Date.now();
+    const alvos = pedidosComBoletoPendente().filter(p => {
+      const idade = agora - new Date(p.criado_em).getTime();
+      return idade >= ESPERA_MINIMA_AUTOMATICA_MS &&
+        idade <= JANELA_AUTOMATICA_HORAS * 3600 * 1000 &&
+        (tentativasAutomaticas.get(p.id) || 0) < MAX_TENTATIVAS_AUTOMATICAS;
+    }).slice(0, 5);
+    let mudou = false;
+    for (const p of alvos) {
+      tentativasAutomaticas.set(p.id, (tentativasAutomaticas.get(p.id) || 0) + 1);
+      const resultados = await gerarBoletosSeNecessario(p.id);
+      if (resultados && resultados.some(r => r.ok)) mudou = true;
+    }
+    if (mudou) await carregarPedidos(true);
+  } catch (erro) {
+    console.warn("Conferência de boletos falhou:", erro);
+  } finally {
+    conferindoBoletos = false;
+  }
 }
 
 // consulta de novo o status da nota na Focus/SEFAZ (NUNCA reemite - so'
@@ -535,7 +648,7 @@ async function carregarPedidos(silencioso = false) {
     }
 
     const novosPedidos = await chamarSupabasePaginado(
-      `pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,forma_pagamento,clientes(nome)${filtroData}&order=criado_em.desc,id.desc`
+      `pedidos?select=id,total,criado_em,pessoa,status,com_nota_fiscal,forma_pagamento,tipo,clientes(nome)${filtroData}&order=criado_em.desc,id.desc`
     );
 
     // notas e boletos so' do periodo carregado: toda nota/boleto nasce
@@ -571,16 +684,33 @@ async function carregarPedidos(silencioso = false) {
       novoMapaBoletos.get(b.pedido_id).push({ ...b, numero_parcela: numeroParcelaPorId.get(b.pedido_parcela_id) });
     }
 
+    // parcelas dos pedidos de boleto (pra saber quais ainda estao sem boleto)
+    const idsPedidosBoleto = novosPedidos.filter(p => p.forma_pagamento === "boleto").map(p => p.id);
+    const novoMapaParcelas = new Map();
+    for (let i = 0; i < idsPedidosBoleto.length; i += 150) {
+      const grupo = idsPedidosBoleto.slice(i, i + 150);
+      const linhas = await chamarSupabase(`pedido_parcelas?select=id,pedido_id,numero_parcela,status&pedido_id=in.(${grupo.join(",")})`);
+      for (const l of linhas) {
+        if (!novoMapaParcelas.has(l.pedido_id)) novoMapaParcelas.set(l.pedido_id, []);
+        novoMapaParcelas.get(l.pedido_id).push(l);
+      }
+    }
+
     // so' troca o estado da tela depois que TUDO foi buscado com sucesso
+    parcelasPorPedido = novoMapaParcelas;
     pedidos = novosPedidos;
     notaMaisRecentePorPedido = novoMapaNotas;
     boletosPorPedido = novoMapaBoletos;
 
     mensagem.innerHTML = "";
     desenharTabela();
+    desenharFaixaBoletosPendentes();
     // a cada carregamento "de verdade" (nao silencioso), logo depois confere
     // sozinho as notas que ainda estao em andamento
-    if (!silencioso) setTimeout(verificarPendentesAutomaticamente, 1500);
+    if (!silencioso) {
+      setTimeout(verificarPendentesAutomaticamente, 1500);
+      setTimeout(conferirBoletosPendentesAutomaticamente, 4000);
+    }
   } catch (erro) {
     if (silencioso) {
       console.warn("Recarga silenciosa falhou:", erro);
@@ -716,11 +846,16 @@ function desenharTabela() {
     }
 
     const boletosDoPedido = boletosPorPedido.get(p.id) || [];
-    const botoesBoleto = boletosDoPedido.length === 0
+    let botoesBoleto = boletosDoPedido.length === 0
       ? "—"
       : boletosDoPedido.map(b =>
           `<a class="botao-nf" href="${b.url_pdf || b.url_boleto}" target="_blank" rel="noopener">${boletosDoPedido.length > 1 ? `Parcela ${b.numero_parcela || "?"}` : "Ver Boleto"}</a>`
         ).join("");
+    // pedido de boleto com parcela sem boleto: botao pra gerar na hora
+    if (pedidoPodeGerarBoleto(p) && parcelasSemBoleto(p.id).length > 0) {
+      botoesBoleto = (boletosDoPedido.length === 0 ? "" : botoesBoleto) +
+        `<button type="button" class="botao-nf destaque" data-pedido="${p.id}" data-acao="gerar-boleto-linha">Gerar boleto</button>`;
+    }
 
     return `<tr data-id="${p.id}">
       <td class="numero-pedido">Nº ${p.id}</td>
@@ -750,6 +885,12 @@ function desenharTabela() {
     botao.addEventListener("click", (evento) => {
       evento.stopPropagation();
       verificarStatusNotaDoPedido(Number(botao.dataset.pedido), botao);
+    });
+  });
+  corpo.querySelectorAll('[data-acao="gerar-boleto-linha"]').forEach(botao => {
+    botao.addEventListener("click", (evento) => {
+      evento.stopPropagation();
+      gerarBoletoManual(Number(botao.dataset.pedido), botao);
     });
   });
   corpo.querySelectorAll('[data-acao="emitir-nf"]').forEach(botao => {
@@ -782,7 +923,10 @@ aplicarPeriodoRapido("mes-atual"); // ao abrir a pagina, ja' comeca so' com o me
 
 // enquanto a aba estiver visivel, confere as notas em andamento a cada 1 minuto
 setInterval(() => {
-  if (!document.hidden) verificarPendentesAutomaticamente();
+  if (!document.hidden) {
+    verificarPendentesAutomaticamente();
+    conferirBoletosPendentesAutomaticamente();
+  }
 }, 60000);
 </script>
 </body>
