@@ -472,6 +472,11 @@ window.addEventListener("beforeunload", (evento) => {
 // ate' alguem lembrar de rodar manualmente. Se algum boleto falhar, nao
 // desfaz o pedido (a venda ja aconteceu) - so' avisa qual parcela precisa
 // de atencao manual.
+function escaparHtmlBoleto(texto) {
+  return String(texto == null ? "" : texto)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 async function gerarBoletosDoPedido(pedidoId) {
   const parcelas = await chamarSupabase(`pedido_parcelas?pedido_id=eq.${pedidoId}&select=id,numero_parcela`);
   const resultados = [];
@@ -1467,7 +1472,8 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
         } else if (falhas.length === 0) {
           textoBoleto = ` Boleto${resultadosBoletos.length > 1 ? "s" : ""} gerado${resultadosBoletos.length > 1 ? "s" : ""} com sucesso.`;
         } else {
-          textoBoleto = ` ⚠️ ${falhas.length} de ${resultadosBoletos.length} boleto(s) falharam (parcela ${falhas.map(f => f.numero_parcela).join(", ")}) — confira na tela de Pedidos.`;
+          const motivos = falhas.map(f => `parcela ${f.numero_parcela}: ${escaparHtmlBoleto(f.erro || "erro desconhecido")}`).join(" | ");
+          textoBoleto = ` ⚠️ ${falhas.length} de ${resultadosBoletos.length} boleto(s) NÃO saíram (${motivos}). Abra a tela de Pedidos: ela mostra o aviso e tem o botão "Gerar boleto".`;
           nivelMensagem = pior(nivelMensagem, "erro");
         }
       }
