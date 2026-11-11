@@ -378,6 +378,21 @@
         <p class="ajuda-nota-fiscal">Se marcar "Emitir nota fiscal", esse texto vai junto no campo de Informações Complementares da nota.</p>
       </div>
 
+      <div class="cartao" id="cartao-af-filial">
+        <div class="titulo-cartao">AF e Filial (opcional)</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap">
+          <div style="flex:1; min-width:140px">
+            <label for="campo-af" style="font-size:13px; color:#555">Nº da AF</label>
+            <input type="text" id="campo-af" inputmode="numeric" maxlength="10" placeholder="até 10 dígitos" autocomplete="off">
+          </div>
+          <div style="flex:1; min-width:140px">
+            <label for="campo-filial" style="font-size:13px; color:#555">Filial</label>
+            <input type="text" id="campo-filial" inputmode="numeric" maxlength="4" placeholder="até 4 dígitos" autocomplete="off">
+          </div>
+        </div>
+        <p class="ajuda-nota-fiscal">Só números. Se marcar "Emitir nota fiscal": a AF vai em cada produto da nota e também nas Informações Complementares; a Filial vai no campo livre do contribuinte. Deixe em branco quando não se aplicar.</p>
+      </div>
+
     </div>
   </div>
 
@@ -695,6 +710,8 @@ async function aplicarTipoOperacaoNaTela() {
   document.getElementById("select-deposito-destino").value = "";
   document.getElementById("cartao-desconto-boleto").style.display = "none";
   document.getElementById("campo-observacoes").value = "";
+  document.getElementById("campo-af").value = "";
+  document.getElementById("campo-filial").value = "";
   document.getElementById("campo-frete").value = "";
   document.getElementById("campo-busca-transportadora").value = "";
   document.getElementById("caixa-transportadora-selecionada").style.display = "none";
@@ -1288,6 +1305,13 @@ function atualizarBotaoConfirmar() {
   document.getElementById("botao-confirmar").disabled = !tudoPreenchido;
 }
 
+// AF e Filial: aceitam so' numeros (tira qualquer outro caractere ao digitar/colar)
+["campo-af", "campo-filial"].forEach((idCampo) => {
+  document.getElementById(idCampo).addEventListener("input", (evento) => {
+    evento.target.value = evento.target.value.replace(/\D/g, "");
+  });
+});
+
 // emite a nota fiscal de um pedido ja confirmado, esperando o resultado
 // final se a SEFAZ demorar (usa aguardarStatusFinalNota). Devolve o texto
 // pronto pra concatenar na mensagem de sucesso/aviso - usada tanto pela
@@ -1296,7 +1320,12 @@ function atualizarBotaoConfirmar() {
 async function emitirNotaFiscalDoPedido(pedidoId, botao) {
   botao.textContent = "Emitindo nota fiscal...";
   try {
-    const { ok, dados } = await chamarFunction("emitir-nota-fiscal", { pedido_id: pedidoId });
+    const corpoEmissao = { pedido_id: pedidoId };
+    const afDigitada = document.getElementById("campo-af").value.trim();
+    const filialDigitada = document.getElementById("campo-filial").value.trim();
+    if (afDigitada) corpoEmissao.af_numero = afDigitada;
+    if (filialDigitada) corpoEmissao.filial_codigo = filialDigitada;
+    const { ok, dados } = await chamarFunction("emitir-nota-fiscal", corpoEmissao);
     let focusFinal = dados.focus;
 
     if (ok && focusFinal && focusFinal.status === "processando_autorizacao") {
@@ -1586,6 +1615,8 @@ document.getElementById("botao-confirmar").addEventListener("click", async () =>
     document.getElementById("cartao-parcelas").classList.add("desabilitado");
     document.getElementById("campo-emite-nota").checked = false;
     document.getElementById("campo-observacoes").value = "";
+    document.getElementById("campo-af").value = "";
+    document.getElementById("campo-filial").value = "";
     document.getElementById("campo-frete").value = "";
     document.getElementById("campo-descricao-equipamento").value = "";
     document.getElementById("campo-valor-equipamento").value = "";
